@@ -1,0 +1,107 @@
+# bash completion for taf
+
+_taf_complete()
+{
+    local cur prev cmd commands opts
+    COMPREPLY=()
+
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+    commands="new check compile build run publish update search info install uninstall list which doctor config history help version"
+
+    if [[ ${COMP_CWORD} -eq 1 ]]; then
+        COMPREPLY=( $(compgen -W "-h --help help -v --version version ${commands}" -- "$cur") )
+        return 0
+    fi
+
+    cmd="${COMP_WORDS[1]}"
+
+    case "$prev" in
+        --backend)
+            case "$cmd" in
+                build) COMPREPLY=( $(compgen -W "docker podman" -- "$cur") ) ;;
+                run)   COMPREPLY=( $(compgen -W "docker podman apptainer" -- "$cur") ) ;;
+            esac
+            return 0
+            ;;
+        --license|-l)
+            COMPREPLY=( $(compgen -W "Apache-2.0 MIT BSD-2-Clause BSD-3-Clause GPL-3.0 LGPL-3.0 AGPL-3.0 Unlicense" -- "$cur") )
+            return 0
+            ;;
+        --release|-r)
+            COMPREPLY=( $(compgen -W "1 2 3" -- "$cur") )
+            return 0
+            ;;
+        --version|-v)
+            [[ "$cmd" == "new" ]] && COMPREPLY=( $(compgen -W "0.1.0 1.0.0" -- "$cur") )
+            return 0
+            ;;
+    esac
+
+    case "$cmd" in
+        new)
+            opts="-t --tool -f --flow -v --version -r --release -l --license -g --repo -i --image -d --docker --no-actions -h --help"
+            ;;
+        check)
+            opts="-h --help"
+            ;;
+        compile)
+            opts="-h --help --"
+            ;;
+        build)
+            opts="--image --docker --all --backend -h --help"
+            ;;
+        run)
+            opts="--backend -h --help --"
+            ;;
+        publish)
+            opts="--dry-run --yes --build --latest --pre --create-repo --public --private --prompt -h --help"
+            ;;
+        update)
+            opts="--user --system --url -y --yes -h --help"
+            ;;
+        search)
+            opts="--user --system --json --limit -h --help"
+            ;;
+        info)
+            opts="--user --system --json -h --help"
+            ;;
+        install)
+            opts="--user --system --dry-run --force --prompt -h --help"
+            ;;
+        uninstall)
+            opts="--user --system --dry-run --force -h --help"
+            ;;
+        list)
+            opts="--local --installed --online --index --user --system --json --limit -h --help"
+            ;;
+        which)
+            opts="--user --system --json -h --help"
+            ;;
+        doctor)
+            opts="--init --user --system -h --help"
+            ;;
+        config)
+            opts="--user --system -h --help"
+            ;;
+        history)
+            opts="--last --id --json --path --clear -h --help"
+            ;;
+        help|version|-h|--help|-v|--version)
+            opts=""
+            ;;
+        *)
+            opts="$commands"
+            ;;
+    esac
+
+    if [[ "$cur" == -* ]]; then
+        COMPREPLY=( $(compgen -W "$opts" -- "$cur") )
+    elif [[ "$cmd" == "compile" || "$cmd" == "run" ]]; then
+        COMPREPLY=( $(compgen -f -- "$cur") )
+    else
+        COMPREPLY=( $(compgen -W "$opts" -- "$cur") )
+    fi
+}
+
+complete -F _taf_complete taf

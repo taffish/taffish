@@ -1,0 +1,21 @@
+TAFFISH Binary Distribution License
+
+Copyright (c) 2026 Kaiyuan Han.
+All rights reserved.
+
+This repository distributes prebuilt TAFFISH binaries and related runtime files.
+
+Permission is granted to download and use the distributed binaries for personal,
+academic, and internal organizational purposes.
+
+Without prior written permission from the copyright holder, you may not:
+- modify, reverse engineer, or create derivative works from the distributed binaries;
+- redistribute the binaries as part of a commercial product or hosted service;
+- remove copyright or attribution notices.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

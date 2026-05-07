@@ -1,0 +1,172 @@
+#compdef taf
+
+_taf() {
+  local -a commands
+  commands=(
+    'new:Create a new TAFFISH app project'
+    'check:Check current TAFFISH app project'
+    'compile:Compile current project and print shell code'
+    'build:Build current project into taf-command'
+    'run:Compile and run current project'
+    'publish:Publish current project to GitHub'
+    'update:Update local TAFFISH index'
+    'search:Search apps from local index'
+    'info:Show app information'
+    'install:Install apps from TAFFISH-HUB'
+    'uninstall:Uninstall local apps'
+    'list:List installed or indexed apps'
+    'which:Show paths and metadata'
+    'doctor:Check or initialize TAFFISH environment'
+    'config:Show TAFFISH config'
+    'history:Show or clear local run history'
+    'help:Show help'
+    'version:Show version'
+  )
+
+  if (( CURRENT == 2 )); then
+    _describe -t commands 'taf command' commands
+    return
+  fi
+
+  local cmd
+  cmd="${words[2]}"
+
+  case "$cmd" in
+    new)
+      _arguments \
+        '(-h --help)'{-h,--help}'[show help]' \
+        '(-t --tool -f --flow)'{-t,--tool}'[create a tool project]' \
+        '(-t --tool -f --flow)'{-f,--flow}'[create a flow project]' \
+        '(-v --version)'{-v,--version}'[set version]:version:' \
+        '(-r --release)'{-r,--release}'[set release]:release:' \
+        '(-l --license)'{-l,--license}'[set license]:license:(Apache-2.0 MIT BSD-2-Clause BSD-3-Clause GPL-3.0 LGPL-3.0 AGPL-3.0 Unlicense)' \
+        '(-g --repo)'{-g,--repo}'[set GitHub repository URL]:url:' \
+        '(-i --image)'{-i,--image}'[set container image]:image:' \
+        '(-d --docker)'{-d,--docker}'[create Dockerfile and workflow]' \
+        '--no-actions[do not create GitHub Actions workflow]' \
+        '*:app name:'
+      ;;
+    check)
+      _arguments '(-h --help)'{-h,--help}'[show help]'
+      ;;
+    compile)
+      _arguments '(-h --help)'{-h,--help}'[show help]' '--[pass following args to app]' '*:argument:'
+      ;;
+    build)
+      _arguments \
+        '(-h --help)'{-h,--help}'[show help]' \
+        '(- --image --docker --all)'{--image,--docker}'[build container image only]' \
+        '(- --image --docker --all)--all[build command and image]' \
+        '--backend[select image backend]:backend:(docker podman)'
+      ;;
+    run)
+      _arguments \
+        '(-h --help)'{-h,--help}'[show help]' \
+        '--backend[force container backend]:backend:(docker podman apptainer)' \
+        '--[pass following args to app]' \
+        '*:argument:'
+      ;;
+    publish)
+      _arguments \
+        '(-h --help)'{-h,--help}'[show help]' \
+        '(- --dry-run --yes)--dry-run[print publish plan only]' \
+        '(- --dry-run --yes)--yes[commit, tag and push]' \
+        '--build[build command wrapper before publishing]' \
+        '(- --latest --pre)--latest[require newer than remote latest]' \
+        '(- --latest --pre)--pre[allow non-latest prerelease]' \
+        '--create-repo[create repository if missing]' \
+        '(- --public --private)--public[create repository as public]' \
+        '(- --public --private)--private[create repository as private]' \
+        '--prompt[allow git credential prompts]'
+      ;;
+    update)
+      _arguments \
+        '(-h --help)'{-h,--help}'[show help]' \
+        '(- --user --system)--user[update user index]' \
+        '(- --user --system)--system[update system index]' \
+        '--url[index URL or local index file]:index:_files' \
+        '(-y --yes)'{-y,--yes}'[non-interactive compatibility]'
+      ;;
+    search)
+      _arguments \
+        '(-h --help)'{-h,--help}'[show help]' \
+        '(- --user --system)--user[read user index]' \
+        '(- --user --system)--system[read system index]' \
+        '--json[print JSON]' \
+        '--limit[result limit]:limit:' \
+        '*:keyword:'
+      ;;
+    info)
+      _arguments \
+        '(-h --help)'{-h,--help}'[show help]' \
+        '(- --user --system)--user[read user index]' \
+        '(- --user --system)--system[read system index]' \
+        '--json[print JSON]' \
+        '*:app or command:'
+      ;;
+    install)
+      _arguments \
+        '(-h --help)'{-h,--help}'[show help]' \
+        '(- --user --system)--user[install into user home]' \
+        '(- --user --system)--system[install into system home]' \
+        '--dry-run[print plan only]' \
+        '--force[replace existing version]' \
+        '--prompt[allow git credential prompts]' \
+        '*:app or command:'
+      ;;
+    uninstall)
+      _arguments \
+        '(-h --help)'{-h,--help}'[show help]' \
+        '(- --user --system)--user[uninstall from user home]' \
+        '(- --user --system)--system[uninstall from system home]' \
+        '--dry-run[print plan only]' \
+        '--force[do not fail when missing]' \
+        '*:app or command:'
+      ;;
+    list)
+      _arguments \
+        '(-h --help)'{-h,--help}'[show help]' \
+        '(- --local --installed --online --index)'{--local,--installed}'[list locally installed apps]' \
+        '(- --local --installed --online --index)'{--online,--index}'[list indexed apps]' \
+        '(- --user --system)--user[read user home]' \
+        '(- --user --system)--system[read system home]' \
+        '--json[print JSON]' \
+        '--limit[result limit]:limit:'
+      ;;
+    which)
+      _arguments \
+        '(-h --help)'{-h,--help}'[show help]' \
+        '(- --user --system)--user[search user home]' \
+        '(- --user --system)--system[search system home]' \
+        '--json[print JSON]' \
+        '*:app or command:'
+      ;;
+    doctor)
+      _arguments \
+        '(-h --help)'{-h,--help}'[show help]' \
+        '--init[create missing TAFFISH home directories]' \
+        '(- --user --system)--user[check or initialize user home]' \
+        '(- --user --system)--system[check or initialize system home]'
+      ;;
+    config)
+      _arguments \
+        '(-h --help)'{-h,--help}'[show help]' \
+        '(- --user --system)--user[show user paths]' \
+        '(- --user --system)--system[show system paths]'
+      ;;
+    history)
+      _arguments \
+        '(-h --help)'{-h,--help}'[show help]' \
+        '--last[show last N events]:count:' \
+        '--id[show one event by id]:run id:' \
+        '--json[print raw JSONL]' \
+        '--path[print history path]' \
+        '--clear[clear history file]'
+      ;;
+    *)
+      _message 'taf command'
+      ;;
+  esac
+}
+
+_taf "$@"

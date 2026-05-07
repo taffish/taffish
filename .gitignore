@@ -1,0 +1,35 @@
+# Binary distribution repository for TAFFISH.
+# Ignore everything by default, then whitelist distribution artifacts.
+*
+
+# Root metadata
+!.gitignore
+!README.md
+!LICENSE
+
+# Installer (single-file entry)
+!install/
+install/*
+!install/install-taffish.sh
+!install/README.md
+
+# Release payload
+!target/
+target/*
+!target/taf-*
+!target/taffish-*
+
+# Optional checksum manifests
+!checksums/
+!checksums/*
+
+# Shell completion and vim syntax files
+!completion/
+!completion/**/*
+!vim-highlight/
+!vim-highlight/**/*
+
+# Optional GitHub workflow files
+!.github/
+!.github/workflows/
+!.github/workflows/*

@@ -1,0 +1,16 @@
+# bash completion for taffish
+
+_taffish_complete()
+{
+    local cur
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+
+    if [[ "$cur" == -* ]]; then
+        COMPREPLY=( $(compgen -W "-h --help -v --version --" -- "$cur") )
+    else
+        COMPREPLY=( $(compgen -f -X '!*.taf' -- "$cur") )
+    fi
+}
+
+complete -F _taffish_complete taffish
