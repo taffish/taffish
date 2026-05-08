@@ -13,6 +13,7 @@ assets for supported platforms.
 
 ## Table of Contents
 
+- [TAFFISH Ecosystem](#taffish-ecosystem)
 - [Supported Platforms](#supported-platforms)
 - [Quick Install](#quick-install)
 - [System Requirements](#system-requirements)
@@ -32,6 +33,24 @@ assets for supported platforms.
 - [Troubleshooting](#troubleshooting)
 - [Release Interface](#release-interface)
 - [Project Status](#project-status)
+
+## TAFFISH Ecosystem
+
+TAFFISH is organized as several GitHub repositories and one static web Hub:
+
+| Resource | Purpose |
+| --- | --- |
+| [taffish/taffish](https://github.com/taffish/taffish) | This repository. Binary distribution for the local `taf` and `taffish` commands. |
+| [TAFFISH Hub](https://taffish.github.io) | Web registry for browsing available TAFFISH apps, tools, flows, versions, dependencies, and install commands. |
+| [taffish/taffish-docs](https://github.com/taffish/taffish-docs) | Developer documentation for the TAFFISH language, app projects, Hub architecture, containers, dependencies, `taffish.toml`, and index schema. |
+| [taffish/taffish-index](https://github.com/taffish/taffish-index) | Static package index consumed by `taf update`, `taf search`, `taf info`, and `taf install`. |
+| [taffish/taffish.github.io](https://github.com/taffish/taffish.github.io) | Source repository for the web Hub. |
+| [taffish/.github](https://github.com/taffish/.github) | Organization profile and high-level project overview. |
+
+The current Hub design is intentionally GitHub-based: each TAFFISH app lives in
+its own repository, release tags identify immutable app versions, app
+repositories build their own container images, and `taffish-index` publishes the
+static JSON index used by local `taf` commands.
 
 ## Supported Platforms
 

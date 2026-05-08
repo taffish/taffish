@@ -11,6 +11,7 @@ TAFFISH 是 TAFFISH 生态系统的本地命令行部分：
 
 ## 目录
 
+- [TAFFISH 生态入口](#taffish-生态入口)
 - [支持平台](#支持平台)
 - [快速安装](#快速安装)
 - [系统需求](#系统需求)
@@ -30,6 +31,23 @@ TAFFISH 是 TAFFISH 生态系统的本地命令行部分：
 - [故障排查](#故障排查)
 - [Release 接口](#release-接口)
 - [项目状态](#项目状态)
+
+## TAFFISH 生态入口
+
+TAFFISH 当前由多个 GitHub 仓库和一个静态网页版 Hub 共同组成：
+
+| 资源 | 作用 |
+| --- | --- |
+| [taffish/taffish](https://github.com/taffish/taffish) | 当前仓库。本地 `taf` 和 `taffish` 命令的二进制分发仓库。 |
+| [TAFFISH Hub](https://taffish.github.io) | 网页版 app registry，用来浏览当前可用的 TAFFISH apps、tools、flows、版本、依赖和安装命令。 |
+| [taffish/taffish-docs](https://github.com/taffish/taffish-docs) | 开发者文档，覆盖 TAFFISH 语言、app 项目、Hub 架构、容器、依赖、`taffish.toml` 和 index schema。 |
+| [taffish/taffish-index](https://github.com/taffish/taffish-index) | 静态 package index，供 `taf update`、`taf search`、`taf info` 和 `taf install` 使用。 |
+| [taffish/taffish.github.io](https://github.com/taffish/taffish.github.io) | 网页版 Hub 的源码仓库。 |
+| [taffish/.github](https://github.com/taffish/.github) | GitHub 组织首页和项目总览。 |
+
+当前 Hub 设计有意保持 GitHub-based：每个 TAFFISH app 都是一个独立仓库，
+release tag 标识不可变 app 版本，app 仓库各自构建容器镜像，
+`taffish-index` 发布静态 JSON 索引，本地 `taf` 命令消费这个索引。
 
 ## 支持平台
 
