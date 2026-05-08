@@ -10,7 +10,7 @@ TAFFISH_INSTALL_NO_UPDATE=${TAFFISH_INSTALL_NO_UPDATE:-0}
 TAFFISH_INSTALL_NO_DOCTOR=${TAFFISH_INSTALL_NO_DOCTOR:-0}
 
 REPO=taffish/taffish
-VERSION=0.1.1
+VERSION=0.1.2
 ARCHIVE=
 URL=
 SHARE_URL=
@@ -598,7 +598,7 @@ Options:
   --bin-dir DIR             Override executable install directory
   --taffish-home DIR        Override TAFFISH runtime home
   --repo OWNER/REPO         GitHub repository [taffish/taffish]
-  --version VERSION         Release version [0.1.1]
+  --version VERSION         Release version [0.1.2]
   --os OS                   Override target OS (darwin|macos|linux)
   --arch ARCH               Override target arch (amd64|x86_64|arm64|aarch64)
   --taf-url URL             Override taf binary URL

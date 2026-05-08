@@ -5,6 +5,7 @@
 # Root metadata
 !.gitignore
 !README.md
+!README-CN.md
 !LICENSE
 
 # Installer (single-file entry)
