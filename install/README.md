@@ -61,13 +61,13 @@ curl -fsSL https://github.com/taffish/taffish/releases/latest/download/install-t
 Pinned release:
 
 ```sh
-curl -fsSL https://github.com/taffish/taffish/releases/download/v0.1.0/install-taffish.sh | sh -s -- --version 0.1.0 --user
+curl -fsSL https://github.com/taffish/taffish/releases/download/v0.1.1/install-taffish.sh | sh -s -- --version 0.1.1 --user
 ```
 
 Install from a local tarball:
 
 ```sh
-sh install/install-taffish.sh --user --archive ./taffish-0.1.0-target.tar.gz
+sh install/install-taffish.sh --user --archive ./taffish-0.1.1-target.tar.gz
 ```
 
 Install from an explicit URL:

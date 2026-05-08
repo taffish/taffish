@@ -25,7 +25,7 @@ curl -fsSL https://github.com/taffish/taffish/releases/latest/download/install-t
 Pinned release install:
 
 ```sh
-curl -fsSL https://github.com/taffish/taffish/releases/download/v0.1.0/install-taffish.sh | sh -s -- --version 0.1.0 --user
+curl -fsSL https://github.com/taffish/taffish/releases/download/v0.1.1/install-taffish.sh | sh -s -- --version 0.1.1 --user
 ```
 
 ## Local/Offline Install
@@ -33,7 +33,7 @@ curl -fsSL https://github.com/taffish/taffish/releases/download/v0.1.0/install-t
 From a downloaded release tarball:
 
 ```sh
-sh install/install-taffish.sh --archive ./taffish-0.1.0-target.tar.gz --user
+sh install/install-taffish.sh --archive ./taffish-0.1.1-target.tar.gz --user
 ```
 
 ## Release Interface
