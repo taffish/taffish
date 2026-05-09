@@ -100,7 +100,7 @@ Pinned version install. The installer may come from `main`, but downloaded
 files are pinned to the selected git tag:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sh -s -- --version 0.2.0 --user
+curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sh -s -- --version 0.2.1 --user
 ```
 
 ### For Users in China
@@ -125,7 +125,7 @@ curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffis
 Pinned version install:
 
 ```sh
-curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffish.gitee.sh | sh -s -- --version 0.2.0 --user
+curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffish.gitee.sh | sh -s -- --version 0.2.1 --user
 ```
 
 To force the installer to replace an existing config with the Gitee/China
@@ -282,7 +282,7 @@ curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/instal
 
 ## Runtime Config and Mirrors
 
-TAFFISH `0.2.0` adds a small runtime config file for stable mirror/custom
+TAFFISH `0.2.1` adds a small runtime config file for stable mirror/custom
 source support. The default config paths are:
 
 ```text
@@ -350,7 +350,7 @@ and the same TAFFISH index schema.
 --bin-dir DIR             Override executable install directory
 --taffish-home DIR        Override TAFFISH runtime home
 --repo OWNER/REPO         GitHub repository [taffish/taffish]
---version VERSION         Release version [0.2.0]
+--version VERSION         Release version [0.2.1]
 --provider PROVIDER       Raw provider: github or gitee [github]
 --raw-base-url URL        Override raw base URL pointing at a fixed tag
 --os OS                   Override target OS (darwin|macos|linux)
@@ -379,7 +379,7 @@ curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/instal
 From a downloaded release bundle:
 
 ```sh
-sh install/install-taffish.sh --archive ./taffish-0.2.0-target.tar.gz --user
+sh install/install-taffish.sh --archive ./taffish-0.2.1-target.tar.gz --user
 ```
 
 From an explicit bundle URL:

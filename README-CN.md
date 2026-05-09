@@ -93,7 +93,7 @@ curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/instal
 固定版本安装。安装器本身可以来自 `main`，实际下载内容会固定到指定 git tag：
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sh -s -- --version 0.2.0 --user
+curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sh -s -- --version 0.2.1 --user
 ```
 
 ### 中国地区用户
@@ -115,7 +115,7 @@ curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffis
 固定版本安装：
 
 ```sh
-curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffish.gitee.sh | sh -s -- --version 0.2.0 --user
+curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffish.gitee.sh | sh -s -- --version 0.2.1 --user
 ```
 
 如果需要强制把已有配置覆盖为 Gitee/中国镜像配置，添加 `--force-config`：
@@ -263,7 +263,7 @@ curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffis
 
 ## 运行时配置和镜像源
 
-TAFFISH `0.2.0` 添加了一个很小的运行时配置文件，用来稳定支持镜像源和自定义源。默认配置路径是：
+TAFFISH `0.2.1` 添加了一个很小的运行时配置文件，用来稳定支持镜像源和自定义源。默认配置路径是：
 
 ```text
 用户级 = ~/.local/share/taffish/config.toml
@@ -325,7 +325,7 @@ enabled = true
 --bin-dir DIR             覆盖可执行文件安装目录
 --taffish-home DIR        覆盖 TAFFISH 运行时 home
 --repo OWNER/REPO         GitHub 仓库 [taffish/taffish]
---version VERSION         Release 版本 [0.2.0]
+--version VERSION         Release 版本 [0.2.1]
 --provider PROVIDER       Raw 提供方：github 或 gitee [github]
 --raw-base-url URL        覆盖 raw base URL，应指向固定 tag
 --os OS                   覆盖目标 OS (darwin|macos|linux)
@@ -354,7 +354,7 @@ curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffis
 从已下载的 release bundle 安装：
 
 ```sh
-sh install/install-taffish.sh --archive ./taffish-0.2.0-target.tar.gz --user
+sh install/install-taffish.sh --archive ./taffish-0.2.1-target.tar.gz --user
 ```
 
 从显式 bundle URL 安装：
