@@ -8,9 +8,13 @@ TAFFISH_INSTALL_BIN_DIR=${TAFFISH_INSTALL_BIN_DIR:-}
 TAFFISH_INSTALL_HOME=${TAFFISH_INSTALL_HOME:-}
 TAFFISH_INSTALL_NO_UPDATE=${TAFFISH_INSTALL_NO_UPDATE:-0}
 TAFFISH_INSTALL_NO_DOCTOR=${TAFFISH_INSTALL_NO_DOCTOR:-0}
+TAFFISH_INSTALL_PROVIDER=${TAFFISH_INSTALL_PROVIDER:-github}
+TAFFISH_INSTALL_RAW_BASE_URL=${TAFFISH_INSTALL_RAW_BASE_URL:-}
+TAFFISH_INSTALL_CONFIG_PROFILE=${TAFFISH_INSTALL_CONFIG_PROFILE:-}
+TAFFISH_INSTALL_CONFIG_FORCE=${TAFFISH_INSTALL_CONFIG_FORCE:-0}
 
 REPO=taffish/taffish
-VERSION=0.1.2
+VERSION=0.2.0
 ARCHIVE=
 URL=
 SHARE_URL=
@@ -42,6 +46,45 @@ taffish_need_command() {
 
 taffish_to_lower() {
     printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
+}
+
+taffish_strip_trailing_slash() {
+    _taf_value=$1
+    while [ "${_taf_value%/}" != "$_taf_value" ]; do
+        _taf_value=${_taf_value%/}
+    done
+    printf '%s\n' "$_taf_value"
+}
+
+taffish_version_tag() {
+    case "$VERSION" in
+        v*) printf '%s\n' "$VERSION" ;;
+        *)  printf 'v%s\n' "$VERSION" ;;
+    esac
+}
+
+taffish_version_plain() {
+    case "$VERSION" in
+        v*) printf '%s\n' "${VERSION#v}" ;;
+        *)  printf '%s\n' "$VERSION" ;;
+    esac
+}
+
+taffish_normalize_provider() {
+    _taf_provider=$(taffish_to_lower "$1")
+    case "$_taf_provider" in
+        github|gitee) printf '%s\n' "$_taf_provider" ;;
+        *) taffish_die "unsupported provider: $1 (expected: github|gitee)" ;;
+    esac
+}
+
+taffish_normalize_config_profile() {
+    _taf_profile=$(taffish_to_lower "$1")
+    case "$_taf_profile" in
+        ""|none|off) printf '%s\n' "" ;;
+        github|china) printf '%s\n' "$_taf_profile" ;;
+        *) taffish_die "unsupported config profile: $1 (expected: github|china|none)" ;;
+    esac
 }
 
 taffish_normalize_target_os() {
@@ -402,6 +445,25 @@ taffish_post_install() {
         fi
     fi
 
+    if [ -n "$TAFFISH_INSTALL_CONFIG_PROFILE" ]; then
+        _taf_config_force_arg=
+        if [ "$TAFFISH_INSTALL_CONFIG_FORCE" = "1" ]; then
+            _taf_config_force_arg=--force
+        fi
+        if [ "$TAFFISH_INSTALL_SCOPE" = "system" ]; then
+            # shellcheck disable=SC2086
+            TAFFISH_SYSTEM_HOME=$TAFFISH_INSTALL_HOME \
+            TAFFISH_SYSTEM_BIN_DIR=$TAFFISH_INSTALL_BIN_DIR \
+                "$TAFFISH_INSTALL_BIN_DIR/taf" config init --system "--$TAFFISH_INSTALL_CONFIG_PROFILE" $_taf_config_force_arg || \
+                taffish_warn "taf config init --system --$TAFFISH_INSTALL_CONFIG_PROFILE failed"
+        else
+            # shellcheck disable=SC2086
+            TAFFISH_USER_HOME=$TAFFISH_INSTALL_HOME \
+                "$TAFFISH_INSTALL_BIN_DIR/taf" config init --user "--$TAFFISH_INSTALL_CONFIG_PROFILE" $_taf_config_force_arg || \
+                taffish_warn "taf config init --user --$TAFFISH_INSTALL_CONFIG_PROFILE failed"
+        fi
+    fi
+
     if [ "$TAFFISH_INSTALL_NO_UPDATE" != "1" ]; then
         if [ "$TAFFISH_INSTALL_SCOPE" = "system" ]; then
             TAFFISH_SYSTEM_HOME=$TAFFISH_INSTALL_HOME \
@@ -473,32 +535,64 @@ taffish_install_from_stage() {
     taffish_print_post_install_notes
 }
 
-taffish_release_asset_url() {
-    _taf_asset=$1
-    printf '%s\n' "https://github.com/$REPO/releases/download/v$VERSION/$_taf_asset"
+taffish_raw_base_url() {
+    if [ -n "$TAFFISH_INSTALL_RAW_BASE_URL" ]; then
+        taffish_strip_trailing_slash "$TAFFISH_INSTALL_RAW_BASE_URL"
+        return 0
+    fi
+
+    _taf_tag=$(taffish_version_tag)
+    case "$TAFFISH_INSTALL_PROVIDER" in
+        github)
+            printf '%s\n' "https://raw.githubusercontent.com/$REPO/$_taf_tag"
+            ;;
+        gitee)
+            printf '%s\n' "https://gitee.com/$REPO/raw/$_taf_tag"
+            ;;
+        *)
+            taffish_die "unsupported provider: $TAFFISH_INSTALL_PROVIDER"
+            ;;
+    esac
+}
+
+taffish_raw_file_url() {
+    _taf_path=$1
+    printf '%s/%s\n' "$(taffish_raw_base_url)" "$_taf_path"
 }
 
 taffish_tag_archive_url() {
-    printf '%s\n' "https://github.com/$REPO/archive/refs/tags/v$VERSION.tar.gz"
+    _taf_tag=$(taffish_version_tag)
+    case "$TAFFISH_INSTALL_PROVIDER" in
+        github)
+            printf '%s\n' "https://github.com/$REPO/archive/refs/tags/$_taf_tag.tar.gz"
+            ;;
+        gitee)
+            printf '%s\n' "https://gitee.com/$REPO/repository/archive/$_taf_tag.tar.gz"
+            ;;
+        *)
+            taffish_die "unsupported provider: $TAFFISH_INSTALL_PROVIDER"
+            ;;
+    esac
 }
 
-taffish_try_download_release_binary() {
+taffish_try_download_raw_binary() {
     _taf_name=$1
     _taf_out=$2
     _taf_os=$(taffish_detect_target_os)
     _taf_arch=$(taffish_detect_target_arch)
+    _taf_version_plain=$(taffish_version_plain)
 
     for _taf_os_alias in $(taffish_target_os_aliases "$_taf_os"); do
         for _taf_arch_alias in $(taffish_target_arch_aliases "$_taf_arch"); do
-            _taf_asset="$_taf_name-$_taf_os_alias-$_taf_arch_alias-$VERSION"
-            _taf_url=$(taffish_release_asset_url "$_taf_asset")
+            _taf_asset="$_taf_name-$_taf_os_alias-$_taf_arch_alias-$_taf_version_plain"
+            _taf_url=$(taffish_raw_file_url "target/$_taf_asset")
             taffish_info "trying $_taf_url"
             if taffish_try_download_file "$_taf_url" "$_taf_out"; then
                 return 0
             fi
 
             _taf_asset="$_taf_name-$_taf_os_alias-$_taf_arch_alias"
-            _taf_url=$(taffish_release_asset_url "$_taf_asset")
+            _taf_url=$(taffish_raw_file_url "target/$_taf_asset")
             taffish_info "trying $_taf_url"
             if taffish_try_download_file "$_taf_url" "$_taf_out"; then
                 return 0
@@ -507,6 +601,49 @@ taffish_try_download_release_binary() {
     done
 
     return 1
+}
+
+taffish_install_raw_optional_file() {
+    _taf_path=$1
+    _taf_dst=$2
+    _taf_tmp="$TMPDIR_INSTALL/raw-file"
+    _taf_url=$(taffish_raw_file_url "$_taf_path")
+    if taffish_try_download_file "$_taf_url" "$_taf_tmp"; then
+        taffish_install_file "$_taf_tmp" "$_taf_dst" 0644
+        return 0
+    fi
+    taffish_warn "optional file not available: $_taf_url"
+    return 0
+}
+
+taffish_install_raw_share_files() {
+    taffish_install_raw_optional_file \
+        "completion/bash/taf" \
+        "$TAFFISH_INSTALL_HOME/share/completions/bash/taf"
+    taffish_install_raw_optional_file \
+        "completion/bash/taffish" \
+        "$TAFFISH_INSTALL_HOME/share/completions/bash/taffish"
+    taffish_install_raw_optional_file \
+        "completion/zsh/_taf" \
+        "$TAFFISH_INSTALL_HOME/share/completions/zsh/_taf"
+    taffish_install_raw_optional_file \
+        "completion/zsh/_taffish" \
+        "$TAFFISH_INSTALL_HOME/share/completions/zsh/_taffish"
+    taffish_install_raw_optional_file \
+        "completion/fish/taf.fish" \
+        "$TAFFISH_INSTALL_HOME/share/completions/fish/taf.fish"
+    taffish_install_raw_optional_file \
+        "completion/fish/taffish.fish" \
+        "$TAFFISH_INSTALL_HOME/share/completions/fish/taffish.fish"
+    taffish_install_raw_optional_file \
+        "vim-highlight/syntax/taf.vim" \
+        "$TAFFISH_INSTALL_HOME/share/vim/syntax/taf.vim"
+    taffish_install_raw_optional_file \
+        "vim-highlight/syntax/old-taf.vim" \
+        "$TAFFISH_INSTALL_HOME/share/vim/syntax/old-taf.vim"
+    taffish_install_raw_optional_file \
+        "vim-highlight/ftdetect/taf.vim" \
+        "$TAFFISH_INSTALL_HOME/share/vim/ftdetect/taf.vim"
 }
 
 taffish_first_subdir() {
@@ -519,11 +656,13 @@ taffish_first_subdir() {
     return 1
 }
 
-taffish_install_from_release_assets() {
+taffish_install_from_remote_raw() {
     taffish_resolve_install_paths
     taffish_info "install scope: $TAFFISH_INSTALL_SCOPE"
     taffish_info "bin dir      : $TAFFISH_INSTALL_BIN_DIR"
     taffish_info "TAFFISH home : $TAFFISH_INSTALL_HOME"
+    taffish_info "provider     : $TAFFISH_INSTALL_PROVIDER"
+    taffish_info "source tag   : $(taffish_version_tag)"
 
     taffish_make_required_dirs
 
@@ -536,44 +675,42 @@ taffish_install_from_release_assets() {
     if [ -n "$TAF_URL" ]; then
         taffish_download_file "$TAF_URL" "$_taf_taf_tmp"
     else
-        taffish_try_download_release_binary "taf" "$_taf_taf_tmp" || \
-            taffish_die "can't find matching taf binary asset in release v$VERSION"
+        taffish_try_download_raw_binary "taf" "$_taf_taf_tmp" || \
+            taffish_die "can't find matching taf binary under $(taffish_raw_file_url target)"
     fi
 
     if [ -n "$TAFFISH_URL" ]; then
         taffish_download_file "$TAFFISH_URL" "$_taf_taffish_tmp"
     else
-        taffish_try_download_release_binary "taffish" "$_taf_taffish_tmp" || \
-            taffish_die "can't find matching taffish binary asset in release v$VERSION"
+        taffish_try_download_raw_binary "taffish" "$_taf_taffish_tmp" || \
+            taffish_die "can't find matching taffish binary under $(taffish_raw_file_url target)"
     fi
 
     taffish_install_file "$_taf_taf_tmp" "$TAFFISH_INSTALL_BIN_DIR/taf" 0755
     taffish_install_file "$_taf_taffish_tmp" "$TAFFISH_INSTALL_BIN_DIR/taffish" 0755
 
     if [ -n "$SHARE_URL" ]; then
-        _taf_share_url=$SHARE_URL
+        _taf_share_archive="$TMPDIR_INSTALL/share.tar.gz"
+        taffish_download_file "$SHARE_URL" "$_taf_share_archive"
+
+        _taf_share_extract="$TMPDIR_INSTALL/share-extract"
+        mkdir -p "$_taf_share_extract" || taffish_die "failed to create temp share dir"
+        tar -xzf "$_taf_share_archive" -C "$_taf_share_extract" || \
+            taffish_die "failed to extract share archive: $SHARE_URL"
+
+        _taf_share_root=$(taffish_first_subdir "$_taf_share_extract" || true)
+        if [ -z "$_taf_share_root" ]; then
+            _taf_share_root=$_taf_share_extract
+        fi
+
+        taffish_copy_tree_files "$_taf_share_root/completion/bash" "$TAFFISH_INSTALL_HOME/share/completions/bash"
+        taffish_copy_tree_files "$_taf_share_root/completion/zsh" "$TAFFISH_INSTALL_HOME/share/completions/zsh"
+        taffish_copy_tree_files "$_taf_share_root/completion/fish" "$TAFFISH_INSTALL_HOME/share/completions/fish"
+        taffish_copy_tree_files "$_taf_share_root/vim-highlight/syntax" "$TAFFISH_INSTALL_HOME/share/vim/syntax"
+        taffish_copy_tree_files "$_taf_share_root/vim-highlight/ftdetect" "$TAFFISH_INSTALL_HOME/share/vim/ftdetect"
     else
-        _taf_share_url=$(taffish_tag_archive_url)
+        taffish_install_raw_share_files
     fi
-
-    _taf_share_archive="$TMPDIR_INSTALL/share.tar.gz"
-    taffish_download_file "$_taf_share_url" "$_taf_share_archive"
-
-    _taf_share_extract="$TMPDIR_INSTALL/share-extract"
-    mkdir -p "$_taf_share_extract" || taffish_die "failed to create temp share dir"
-    tar -xzf "$_taf_share_archive" -C "$_taf_share_extract" || \
-        taffish_die "failed to extract share archive: $_taf_share_url"
-
-    _taf_share_root=$(taffish_first_subdir "$_taf_share_extract" || true)
-    if [ -z "$_taf_share_root" ]; then
-        _taf_share_root=$_taf_share_extract
-    fi
-
-    taffish_copy_tree_files "$_taf_share_root/completion/bash" "$TAFFISH_INSTALL_HOME/share/completions/bash"
-    taffish_copy_tree_files "$_taf_share_root/completion/zsh" "$TAFFISH_INSTALL_HOME/share/completions/zsh"
-    taffish_copy_tree_files "$_taf_share_root/completion/fish" "$TAFFISH_INSTALL_HOME/share/completions/fish"
-    taffish_copy_tree_files "$_taf_share_root/vim-highlight/syntax" "$TAFFISH_INSTALL_HOME/share/vim/syntax"
-    taffish_copy_tree_files "$_taf_share_root/vim-highlight/ftdetect" "$TAFFISH_INSTALL_HOME/share/vim/ftdetect"
 
     taffish_post_install
     taffish_print_post_install_notes
@@ -584,11 +721,11 @@ usage() {
 Usage:
   install-taffish.sh [OPTIONS]
 
-Install TAFFISH from release binary assets.
+Install TAFFISH from raw files under a fixed git tag.
 
 Default mode (no --archive/--url):
-  - download taf/taffish binaries from GitHub release assets
-  - download completion/vim files from tag archive
+  - download taf/taffish binaries from target/ under tag v<version>
+  - download completion/vim files from the same tag
 
 Options:
   --user                    Install for current user [default]
@@ -598,15 +735,20 @@ Options:
   --bin-dir DIR             Override executable install directory
   --taffish-home DIR        Override TAFFISH runtime home
   --repo OWNER/REPO         GitHub repository [taffish/taffish]
-  --version VERSION         Release version [0.1.2]
+  --version VERSION         Release version [0.2.0]
+  --provider PROVIDER       Raw provider: github or gitee [github]
+  --raw-base-url URL        Override raw base URL. It should point at a tag,
+                            for example .../raw/v0.2.0
   --os OS                   Override target OS (darwin|macos|linux)
   --arch ARCH               Override target arch (amd64|x86_64|arm64|aarch64)
   --taf-url URL             Override taf binary URL
   --taffish-url URL         Override taffish binary URL
-  --share-url URL           Share archive URL (completion/vim). Default:
-                            https://github.com/<repo>/archive/refs/tags/v<version>.tar.gz
+  --share-url URL           Override completion/vim source with tar.gz archive
   --url URL                 Download full bundle tarball from explicit URL
   --archive FILE            Install from local tar.gz archive
+  --config-profile PROFILE  Initialize taf config profile after install:
+                            github, china, or none [none]
+  --force-config            Replace existing config during config init
   --no-update               Do not run taf update after install
   --no-doctor               Do not run taf doctor --init after install
   -h, --help                Show this help
@@ -617,12 +759,13 @@ Release tarball layout:
   completion/
   vim-highlight/
 
-Default release URLs:
-  https://github.com/<repo>/releases/download/v<version>/
-    taf-<os>-<arch>-<version>
-    taffish-<os>-<arch>-<version>
-  and:
-    https://github.com/<repo>/archive/refs/tags/v<version>.tar.gz
+Default GitHub raw URLs:
+  https://raw.githubusercontent.com/<repo>/v<version>/target/taf-<os>-<arch>-<version>
+  https://raw.githubusercontent.com/<repo>/v<version>/target/taffish-<os>-<arch>-<version>
+
+Default Gitee raw URLs:
+  https://gitee.com/<repo>/raw/v<version>/target/taf-<os>-<arch>-<version>
+  https://gitee.com/<repo>/raw/v<version>/target/taffish-<os>-<arch>-<version>
 
 Bundle mode (--archive or --url):
   Stage must include target/ with binaries and optional completion/vim files.
@@ -664,6 +807,16 @@ while [ "$#" -gt 0 ]; do
             VERSION=$2
             shift 2
             ;;
+        --provider)
+            [ "$#" -ge 2 ] || taffish_die "--provider requires a value"
+            TAFFISH_INSTALL_PROVIDER=$2
+            shift 2
+            ;;
+        --raw-base-url)
+            [ "$#" -ge 2 ] || taffish_die "--raw-base-url requires a value"
+            TAFFISH_INSTALL_RAW_BASE_URL=$2
+            shift 2
+            ;;
         --os)
             [ "$#" -ge 2 ] || taffish_die "--os requires a value"
             TARGET_OS_OVERRIDE=$2
@@ -699,6 +852,15 @@ while [ "$#" -gt 0 ]; do
             ARCHIVE=$2
             shift 2
             ;;
+        --config-profile)
+            [ "$#" -ge 2 ] || taffish_die "--config-profile requires a value"
+            TAFFISH_INSTALL_CONFIG_PROFILE=$2
+            shift 2
+            ;;
+        --force-config)
+            TAFFISH_INSTALL_CONFIG_FORCE=1
+            shift
+            ;;
         --no-update)
             TAFFISH_INSTALL_NO_UPDATE=1
             shift
@@ -717,6 +879,9 @@ while [ "$#" -gt 0 ]; do
     esac
 done
 
+TAFFISH_INSTALL_PROVIDER=$(taffish_normalize_provider "$TAFFISH_INSTALL_PROVIDER")
+TAFFISH_INSTALL_CONFIG_PROFILE=$(taffish_normalize_config_profile "$TAFFISH_INSTALL_CONFIG_PROFILE")
+[ -n "$TAFFISH_INSTALL_RAW_BASE_URL" ] && TAFFISH_INSTALL_RAW_BASE_URL=$(taffish_strip_trailing_slash "$TAFFISH_INSTALL_RAW_BASE_URL")
 [ -n "$TARGET_OS_OVERRIDE" ] && TARGET_OS_OVERRIDE=$(taffish_normalize_target_os "$TARGET_OS_OVERRIDE")
 [ -n "$TARGET_ARCH_OVERRIDE" ] && TARGET_ARCH_OVERRIDE=$(taffish_normalize_target_arch "$TARGET_ARCH_OVERRIDE")
 
@@ -749,5 +914,5 @@ if [ -n "$ARCHIVE" ] || [ -n "$URL" ]; then
     tar -xzf "$TARBALL" -C "$STAGE_PARENT" || taffish_die "failed to unpack tarball"
     taffish_install_from_stage "$STAGE_PARENT"
 else
-    taffish_install_from_release_assets
+    taffish_install_from_remote_raw
 fi

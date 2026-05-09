@@ -12,6 +12,7 @@
 !install/
 install/*
 !install/install-taffish.sh
+!install/install-taffish.gitee.sh
 !install/README.md
 
 # Release payload

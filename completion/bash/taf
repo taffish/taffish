@@ -82,7 +82,7 @@ _taf_complete()
             opts="--init --user --system -h --help"
             ;;
         config)
-            opts="--user --system -h --help"
+            opts="show path init -u --user -s --system --github --china -f --force -h --help"
             ;;
         history)
             opts="--last --id --json --path --clear -h --help"

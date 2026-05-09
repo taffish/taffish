@@ -151,8 +151,12 @@ _taf() {
     config)
       _arguments \
         '(-h --help)'{-h,--help}'[show help]' \
-        '(- --user --system)--user[show user paths]' \
-        '(- --user --system)--system[show system paths]'
+        '1:config action:(show path init)' \
+        '(- --user --system)'{-u,--user}'[use user scope]' \
+        '(- --user --system)'{-s,--system}'[use system scope]' \
+        '(- --github --china)--github[initialize GitHub/default profile]' \
+        '(- --github --china)--china[initialize China mirror profile template]' \
+        '(-f --force)'{-f,--force}'[replace existing config during init]'
       ;;
     history)
       _arguments \

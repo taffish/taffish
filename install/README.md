@@ -1,10 +1,11 @@
 # TAFFISH installer
 
-This directory contains the POSIX `sh` installer for TAFFISH binary releases.
+This directory contains the POSIX `sh` installers for TAFFISH binary releases.
 
 ## Files
 
-- `install-taffish.sh`: single-file installer for release binaries (curl entry).
+- `install-taffish.sh`: GitHub/default raw installer.
+- `install-taffish.gitee.sh`: Gitee/China raw installer.
 
 Bundle mode layout (`--archive` / `--url`):
 
@@ -50,24 +51,30 @@ TAFFISH_SYSTEM_HOME
 TAFFISH_SYSTEM_BIN_DIR
 ```
 
-## Install From Binary Release
+## Install From Raw Installer
 
-Recommended:
+Default GitHub install:
 
 ```sh
-curl -fsSL https://github.com/taffish/taffish/releases/latest/download/install-taffish.sh | sh -s -- --user
+curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sh -s -- --user
 ```
 
-Pinned release:
+China/Gitee install:
 
 ```sh
-curl -fsSL https://github.com/taffish/taffish/releases/download/v0.1.2/install-taffish.sh | sh -s -- --version 0.1.2 --user
+curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffish.gitee.sh | sh -s -- --user
+```
+
+Pinned version:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sh -s -- --version 0.2.0 --user
 ```
 
 Install from a local tarball:
 
 ```sh
-sh install/install-taffish.sh --user --archive ./taffish-0.1.2-target.tar.gz
+sh install/install-taffish.sh --user --archive ./taffish-0.2.0-target.tar.gz
 ```
 
 Install from an explicit URL:
@@ -78,11 +85,11 @@ sh install/install-taffish.sh --user --url https://example.org/taffish.tar.gz
 
 Default mode (without `--archive`/`--url`) downloads:
 
-- `taf-<os>-<arch>-<version>` and `taffish-<os>-<arch>-<version>` from release assets
-- completion and vim files from:
-  `https://github.com/<repo>/archive/refs/tags/v<version>.tar.gz`
+- `taf-<os>-<arch>-<version>` and `taffish-<os>-<arch>-<version>` from `target/` under `v<version>`
+- completion and vim files from the same tag
 
-Use `--share-url` to override the tag archive URL.
+Use `--provider github|gitee` or `--raw-base-url` to select another raw source.
+Use `--share-url` to override the completion/vim source with a tar.gz archive.
 Use `--taf-url` / `--taffish-url` to override binary asset URLs.
 Use `--os` / `--arch` to override platform detection.
 
@@ -94,6 +101,10 @@ Use `--os` / `--arch` to override platform detection.
 --prefix DIR
 --bin-dir DIR
 --taffish-home DIR
+--provider github|gitee
+--raw-base-url URL
+--config-profile github|china|none
+--force-config
 --os OS
 --arch ARCH
 --no-update

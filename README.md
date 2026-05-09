@@ -4,22 +4,26 @@
 
 TAFFISH is the local command-line part of the TAFFISH ecosystem:
 
-- `taffish`: compile and run `.taf` programs.
+- `taffish`: compile `.taf` programs to shell.
 - `taf`: manage TAFFISH app projects and local TAFFISH Hub packages.
 
-This repository currently distributes prebuilt binaries only. The public release
-contains the installer, shell completion files, Vim syntax files, and binary
-assets for supported platforms.
+This repository currently distributes prebuilt binaries only. It contains the
+installers, shell completion files, Vim syntax files, and binary assets for
+supported platforms.
 
 ## Table of Contents
 
 - [TAFFISH Ecosystem](#taffish-ecosystem)
 - [Supported Platforms](#supported-platforms)
 - [Quick Install](#quick-install)
+  - [Standard Install](#standard-install)
+  - [For Users in China](#for-users-in-china)
+  - [Verify Installation](#verify-installation)
 - [System Requirements](#system-requirements)
   - [macOS Dependencies](#macos-dependencies)
   - [Linux Dependencies](#linux-dependencies)
 - [Install Paths](#install-paths)
+- [Runtime Config and Mirrors](#runtime-config-and-mirrors)
 - [Installer Options](#installer-options)
 - [Local or Offline Install](#local-or-offline-install)
 - [Container Backends](#container-backends)
@@ -54,7 +58,7 @@ static JSON index used by local `taf` commands.
 
 ## Supported Platforms
 
-Current release assets:
+Current binary assets:
 
 | Platform | Asset suffix | Build backend | Notes |
 | --- | --- | --- | --- |
@@ -69,27 +73,69 @@ Not currently provided:
 - Alpine/musl Linux binary assets
 
 You can force platform selection with `--os` and `--arch`, but the selected
-binary must exist in the release assets.
+binary must exist under `target/` for the selected version.
 
 ## Quick Install
 
-User install, recommended for normal users:
+### Standard Install
+
+If you are in China or GitHub raw URLs are slow or blocked, use the
+[China/Gitee install](#for-users-in-china) instead.
+
+User install, recommended for normal users. It installs `taf` and `taffish`
+for the current user only, without administrator permission:
 
 ```sh
-curl -fsSL https://github.com/taffish/taffish/releases/latest/download/install-taffish.sh | sh -s -- --user
+curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sh -s -- --user
 ```
 
-System install, recommended for shared servers:
+System install, recommended for shared servers. It requires administrator
+permission and installs the commands for all users on the machine:
 
 ```sh
-curl -fsSL https://github.com/taffish/taffish/releases/latest/download/install-taffish.sh | sudo sh -s -- --system
+curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sudo sh -s -- --system
 ```
 
-Pinned release install:
+Pinned version install. The installer may come from `main`, but downloaded
+files are pinned to the selected git tag:
 
 ```sh
-curl -fsSL https://github.com/taffish/taffish/releases/download/v0.1.2/install-taffish.sh | sh -s -- --version 0.1.2 --user
+curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sh -s -- --version 0.2.0 --user
 ```
+
+### For Users in China
+
+GitHub raw URLs may be slow or blocked in China. The Gitee installer downloads
+files from the Gitee mirror and initializes the China mirror config when no
+config exists.
+
+User install:
+
+```sh
+curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffish.gitee.sh | sh -s -- --user
+```
+
+System install for all users on a shared machine, requiring administrator
+permission:
+
+```sh
+curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffish.gitee.sh | sudo sh -s -- --system
+```
+
+Pinned version install:
+
+```sh
+curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffish.gitee.sh | sh -s -- --version 0.2.0 --user
+```
+
+To force the installer to replace an existing config with the Gitee/China
+profile, add `--force-config`:
+
+```sh
+curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffish.gitee.sh | sh -s -- --user --force-config
+```
+
+### Verify Installation
 
 After installation, verify:
 
@@ -216,22 +262,83 @@ Relevant environment variables:
 TAFFISH_USER_HOME        Override user TAFFISH home
 TAFFISH_SYSTEM_HOME      Override system TAFFISH home
 TAFFISH_SYSTEM_BIN_DIR   Override system command bin dir
+TAFFISH_CONFIG           Use an explicit config.toml file
 TAFFISH_INDEX_URL        Override default index URL for taf update
 ```
 
 Example custom user install:
 
 ```sh
-curl -fsSL https://github.com/taffish/taffish/releases/latest/download/install-taffish.sh \
+curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh \
   | sh -s -- --user --bin-dir "$HOME/bin" --taffish-home "$HOME/.taffish"
 ```
 
 Example custom prefix install:
 
 ```sh
-curl -fsSL https://github.com/taffish/taffish/releases/latest/download/install-taffish.sh \
+curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh \
   | sh -s -- --prefix "$HOME/opt/taffish"
 ```
+
+## Runtime Config and Mirrors
+
+TAFFISH `0.2.0` adds a small runtime config file for stable mirror/custom
+source support. The default config paths are:
+
+```text
+user   = ~/.local/share/taffish/config.toml
+system = /opt/taffish/config.toml
+```
+
+Inspect the effective config:
+
+```sh
+taf config
+taf config path
+```
+
+Initialize the default GitHub profile:
+
+```sh
+taf config init --github
+```
+
+Initialize the China mirror profile template:
+
+```sh
+taf config init --china --force
+taf update
+```
+
+The generated China template is intentionally simple:
+
+```toml
+schema_version = "taffish.config/v1"
+profile = "china"
+language = "en"
+
+[index]
+url = "https://gitee.com/taffish-org/taffish-index/raw/main/index/index.json"
+
+[[source.rewrite]]
+from = "https://github.com/taffish/"
+to = "https://gitee.com/taffish-org/"
+enabled = true
+```
+
+Meaning:
+
+- `[index].url` controls where `taf update` downloads the static index from.
+- `[[source.rewrite]]` rewrites canonical source URLs when `taf install`
+  clones app repositories.
+- `taf publish` remains GitHub-only; mirrors are read/install paths, not a
+  publishing target.
+- `taf update --url <INDEX-URL>` and `TAFFISH_INDEX_URL` still work as
+  one-off overrides.
+
+If your mirror organization or internal Git service uses different paths, edit
+`config.toml` directly. The mirror must provide compatible repositories, tags,
+and the same TAFFISH index schema.
 
 ## Installer Options
 
@@ -243,14 +350,18 @@ curl -fsSL https://github.com/taffish/taffish/releases/latest/download/install-t
 --bin-dir DIR             Override executable install directory
 --taffish-home DIR        Override TAFFISH runtime home
 --repo OWNER/REPO         GitHub repository [taffish/taffish]
---version VERSION         Release version [0.1.2]
+--version VERSION         Release version [0.2.0]
+--provider PROVIDER       Raw provider: github or gitee [github]
+--raw-base-url URL        Override raw base URL pointing at a fixed tag
 --os OS                   Override target OS (darwin|macos|linux)
 --arch ARCH               Override target arch (amd64|x86_64|arm64|aarch64)
 --taf-url URL             Override taf binary URL
 --taffish-url URL         Override taffish binary URL
---share-url URL           Override completion/vim archive URL
+--share-url URL           Override completion/vim source with tar.gz archive
 --url URL                 Download full bundle tarball from explicit URL
 --archive FILE            Install from local tar.gz archive
+--config-profile PROFILE  Initialize config profile: github, china, or none
+--force-config            Replace existing config during config init
 --no-update               Do not run taf update after install
 --no-doctor               Do not run taf doctor --init after install
 -h, --help                Show installer help
@@ -259,7 +370,7 @@ curl -fsSL https://github.com/taffish/taffish/releases/latest/download/install-t
 Manual platform override example:
 
 ```sh
-curl -fsSL https://github.com/taffish/taffish/releases/latest/download/install-taffish.sh \
+curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh \
   | sh -s -- --user --os linux --arch amd64
 ```
 
@@ -268,7 +379,7 @@ curl -fsSL https://github.com/taffish/taffish/releases/latest/download/install-t
 From a downloaded release bundle:
 
 ```sh
-sh install/install-taffish.sh --archive ./taffish-0.1.2-target.tar.gz --user
+sh install/install-taffish.sh --archive ./taffish-0.2.0-target.tar.gz --user
 ```
 
 From an explicit bundle URL:
@@ -578,6 +689,13 @@ Retry later, set a proxy, or use a custom index URL:
 taf update --url <INDEX-URL>
 ```
 
+For a persistent mirror config:
+
+```sh
+taf config init --china --force
+taf update
+```
+
 ### macOS says `libzstd.1.dylib` is missing
 
 Install Homebrew `zstd`:
@@ -612,17 +730,23 @@ sudo usermod -aG docker "$USER"
 
 ## Release Interface
 
-The installer expects release assets like:
+The raw installer is usually downloaded from `main`, but it installs files from
+a fixed git tag selected by `--version`:
 
 ```text
-https://github.com/taffish/taffish/releases/download/v<version>/install-taffish.sh
-https://github.com/taffish/taffish/releases/download/v<version>/taf-<os>-<arch>-<version>
-https://github.com/taffish/taffish/releases/download/v<version>/taffish-<os>-<arch>-<version>
-https://github.com/taffish/taffish/archive/refs/tags/v<version>.tar.gz
+https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh
+https://raw.githubusercontent.com/taffish/taffish/v<version>/target/taf-<os>-<arch>-<version>
+https://raw.githubusercontent.com/taffish/taffish/v<version>/target/taffish-<os>-<arch>-<version>
+https://raw.githubusercontent.com/taffish/taffish/v<version>/completion/...
+https://raw.githubusercontent.com/taffish/taffish/v<version>/vim-highlight/...
 ```
 
-The tag archive supplies `completion/` and `vim-highlight/` files. The binary
-assets supply `taf` and `taffish`.
+The Gitee installer uses the same versioned layout under:
+
+```text
+https://gitee.com/taffish-org/taffish/raw/main/install/install-taffish.gitee.sh
+https://gitee.com/taffish-org/taffish/raw/v<version>/target/...
+```
 
 ## Project Status
 
