@@ -109,6 +109,14 @@ GitHub raw URLs may be slow or blocked in China. The Gitee installer downloads
 files from the Gitee mirror and initializes the China mirror config when no
 config exists.
 
+Note for macOS users: Gitee may require login for anonymous `raw` downloads of
+large binary files. If the Gitee installer fails with
+`large file require login for access`, this is a Gitee raw-file restriction, not
+a TAFFISH installer error. In that case, use the GitHub installer with a working
+network/proxy, or log in to Gitee and download the macOS binary manually. The
+Gitee installer is mainly useful for Linux amd64 servers, whose binaries are
+much smaller and are usually unaffected.
+
 User install:
 
 ```sh

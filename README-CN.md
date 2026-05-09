@@ -100,6 +100,11 @@ curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/instal
 
 中国大陆访问 GitHub raw 可能较慢或被阻断。Gitee 安装器会从 Gitee 镜像下载文件，并在没有配置文件时自动初始化中国镜像配置。
 
+macOS 用户注意：Gitee 可能会要求登录后才能匿名下载较大的 `raw` 二进制文件。如果 Gitee 安装器报错
+`large file require login for access`，这是 Gitee raw 文件访问限制，不是 TAFFISH
+安装器错误。这种情况下请使用 GitHub 安装方式并配置可用网络/代理，或者登录 Gitee 后手动下载对应的
+macOS 二进制文件。Gitee 安装器目前更适合 Linux amd64 服务器；Linux 二进制文件较小，通常不受这个限制影响。
+
 用户级安装：
 
 ```sh
