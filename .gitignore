@@ -8,6 +8,10 @@
 !README-CN.md
 !LICENSE
 
+# Local/internal developer documentation is intentionally kept out of the
+# binary distribution repository.
+docs/
+
 # Installer (single-file entry)
 !install/
 install/*
