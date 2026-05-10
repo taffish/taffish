@@ -290,8 +290,8 @@ curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/instal
 
 ## Runtime Config and Mirrors
 
-TAFFISH `0.3.0` adds a small runtime config file for stable mirror/custom
-source support. The default config paths are:
+Current TAFFISH is `0.3.0`. Runtime config support was introduced in `0.2.0`
+to provide stable mirror/custom source settings. The default config paths are:
 
 ```text
 user   = ~/.local/share/taffish/config.toml
