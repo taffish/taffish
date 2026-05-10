@@ -14,12 +14,13 @@ TAFFISH_INSTALL_CONFIG_PROFILE=${TAFFISH_INSTALL_CONFIG_PROFILE:-china}
 TAFFISH_INSTALL_CONFIG_FORCE=${TAFFISH_INSTALL_CONFIG_FORCE:-0}
 
 REPO=taffish-org/taffish
-VERSION=0.3.0
+VERSION=0.4.0
 ARCHIVE=
 URL=
 SHARE_URL=
 TAF_URL=
 TAFFISH_URL=
+TAFFISH_MCP_URL=
 TARGET_OS_OVERRIDE=
 TARGET_ARCH_OVERRIDE=
 
@@ -67,6 +68,13 @@ taffish_version_plain() {
     case "$VERSION" in
         v*) printf '%s\n' "${VERSION#v}" ;;
         *)  printf '%s\n' "$VERSION" ;;
+    esac
+}
+
+taffish_should_install_mcp() {
+    case "$(taffish_version_plain)" in
+        0.1|0.1.*|0.2|0.2.*|0.3|0.3.*) return 1 ;;
+        *) return 0 ;;
     esac
 }
 
@@ -378,6 +386,19 @@ taffish_stage_has_target_layout() {
     [ -d "$_taf_root/target" ] || return 1
     taffish_select_target_binary "$_taf_root/target" taf >/dev/null 2>&1 || return 1
     taffish_select_target_binary "$_taf_root/target" taffish >/dev/null 2>&1 || return 1
+    if taffish_should_install_mcp; then
+        taffish_select_target_binary "$_taf_root/target" taffish-mcp >/dev/null 2>&1 || return 1
+    fi
+    return 0
+}
+
+taffish_stage_has_bin_layout() {
+    _taf_root=$1
+    [ -f "$_taf_root/bin/taf" ] || return 1
+    [ -f "$_taf_root/bin/taffish" ] || return 1
+    if taffish_should_install_mcp; then
+        [ -f "$_taf_root/bin/taffish-mcp" ] || return 1
+    fi
     return 0
 }
 
@@ -385,7 +406,7 @@ taffish_stage_root() {
     _taf_stage=$1
     [ -d "$_taf_stage" ] || taffish_die "stage directory does not exist: $_taf_stage"
 
-    if [ -f "$_taf_stage/bin/taf" ] && [ -f "$_taf_stage/bin/taffish" ]; then
+    if taffish_stage_has_bin_layout "$_taf_stage"; then
         printf '%s\n' "$_taf_stage"
         return 0
     fi
@@ -398,7 +419,7 @@ taffish_stage_root() {
     _taf_count=0
     for _taf_candidate in "$_taf_stage"/*; do
         [ -d "$_taf_candidate" ] || continue
-        if [ -f "$_taf_candidate/bin/taf" ] && [ -f "$_taf_candidate/bin/taffish" ]; then
+        if taffish_stage_has_bin_layout "$_taf_candidate"; then
             _taf_found=$_taf_candidate
             _taf_count=$(( _taf_count + 1 ))
             continue
@@ -419,12 +440,16 @@ taffish_stage_root() {
 
 taffish_validate_stage() {
     _taf_root=$1
-    if [ -f "$_taf_root/bin/taf" ] && [ -f "$_taf_root/bin/taffish" ]; then
+    if taffish_stage_has_bin_layout "$_taf_root"; then
         :
     elif taffish_stage_has_target_layout "$_taf_root"; then
         :
     else
-        taffish_die "stage is missing binaries. Expected either bin/{taf,taffish} or target/taf-<os>-<arch>-<version>."
+        if taffish_should_install_mcp; then
+            taffish_die "stage is missing binaries. Expected either bin/{taf,taffish,taffish-mcp} or target/<name>-<os>-<arch>-<version>."
+        else
+            taffish_die "stage is missing binaries. Expected either bin/{taf,taffish} or target/<name>-<os>-<arch>-<version>."
+        fi
     fi
 
     [ -d "$_taf_root/completion" ] || taffish_warn "stage has no completion/ directory"
@@ -482,6 +507,9 @@ taffish_print_post_install_notes() {
     taffish_info "installed binaries:"
     printf '  %s\n' "$TAFFISH_INSTALL_BIN_DIR/taf"
     printf '  %s\n' "$TAFFISH_INSTALL_BIN_DIR/taffish"
+    if taffish_should_install_mcp; then
+        printf '  %s\n' "$TAFFISH_INSTALL_BIN_DIR/taffish-mcp"
+    fi
     taffish_info "TAFFISH home:"
     printf '  %s\n' "$TAFFISH_INSTALL_HOME"
 
@@ -512,18 +540,28 @@ taffish_install_from_stage() {
 
     taffish_make_required_dirs
 
-    if [ -f "$_taf_root/bin/taf" ] && [ -f "$_taf_root/bin/taffish" ]; then
+    if taffish_stage_has_bin_layout "$_taf_root"; then
         _taf_install_src_taf=$_taf_root/bin/taf
         _taf_install_src_taffish=$_taf_root/bin/taffish
+        if taffish_should_install_mcp; then
+            _taf_install_src_taffish_mcp=$_taf_root/bin/taffish-mcp
+        fi
     else
         _taf_install_src_taf=$(taffish_select_target_binary "$_taf_root/target" taf) || \
             taffish_die "can't select host taf binary from $_taf_root/target"
         _taf_install_src_taffish=$(taffish_select_target_binary "$_taf_root/target" taffish) || \
             taffish_die "can't select host taffish binary from $_taf_root/target"
+        if taffish_should_install_mcp; then
+            _taf_install_src_taffish_mcp=$(taffish_select_target_binary "$_taf_root/target" taffish-mcp) || \
+                taffish_die "can't select host taffish-mcp binary from $_taf_root/target"
+        fi
     fi
 
     taffish_install_file "$_taf_install_src_taf" "$TAFFISH_INSTALL_BIN_DIR/taf" 0755
     taffish_install_file "$_taf_install_src_taffish" "$TAFFISH_INSTALL_BIN_DIR/taffish" 0755
+    if taffish_should_install_mcp; then
+        taffish_install_file "$_taf_install_src_taffish_mcp" "$TAFFISH_INSTALL_BIN_DIR/taffish-mcp" 0755
+    fi
 
     taffish_copy_tree_files "$_taf_root/completion/bash" "$TAFFISH_INSTALL_HOME/share/completions/bash"
     taffish_copy_tree_files "$_taf_root/completion/zsh" "$TAFFISH_INSTALL_HOME/share/completions/zsh"
@@ -671,6 +709,7 @@ taffish_install_from_remote_raw() {
 
     _taf_taf_tmp="$_taf_bin_dir/taf"
     _taf_taffish_tmp="$_taf_bin_dir/taffish"
+    _taf_taffish_mcp_tmp="$_taf_bin_dir/taffish-mcp"
 
     if [ -n "$TAF_URL" ]; then
         taffish_download_file "$TAF_URL" "$_taf_taf_tmp"
@@ -686,8 +725,20 @@ taffish_install_from_remote_raw() {
             taffish_die "can't find matching taffish binary under $(taffish_raw_file_url target)"
     fi
 
+    if taffish_should_install_mcp; then
+        if [ -n "$TAFFISH_MCP_URL" ]; then
+            taffish_download_file "$TAFFISH_MCP_URL" "$_taf_taffish_mcp_tmp"
+        else
+            taffish_try_download_raw_binary "taffish-mcp" "$_taf_taffish_mcp_tmp" || \
+                taffish_die "can't find matching taffish-mcp binary under $(taffish_raw_file_url target)"
+        fi
+    fi
+
     taffish_install_file "$_taf_taf_tmp" "$TAFFISH_INSTALL_BIN_DIR/taf" 0755
     taffish_install_file "$_taf_taffish_tmp" "$TAFFISH_INSTALL_BIN_DIR/taffish" 0755
+    if taffish_should_install_mcp; then
+        taffish_install_file "$_taf_taffish_mcp_tmp" "$TAFFISH_INSTALL_BIN_DIR/taffish-mcp" 0755
+    fi
 
     if [ -n "$SHARE_URL" ]; then
         _taf_share_archive="$TMPDIR_INSTALL/share.tar.gz"
@@ -724,7 +775,7 @@ Usage:
 Install TAFFISH from raw files under a fixed git tag.
 
 Default mode (no --archive/--url):
-  - download taf/taffish binaries from target/ under tag v<version>
+  - download taf/taffish/taffish-mcp binaries from target/ under tag v<version>
   - download completion/vim files from the same tag
 
 Options:
@@ -735,14 +786,15 @@ Options:
   --bin-dir DIR             Override executable install directory
   --taffish-home DIR        Override TAFFISH runtime home
   --repo OWNER/REPO         Gitee repository [taffish-org/taffish]
-  --version VERSION         Release version [0.3.0]
+  --version VERSION         Release version [0.4.0]
   --provider PROVIDER       Raw provider: github or gitee [gitee]
   --raw-base-url URL        Override raw base URL. It should point at a tag,
-                            for example .../raw/v0.3.0
+                            for example .../raw/v0.4.0
   --os OS                   Override target OS (darwin|macos|linux)
   --arch ARCH               Override target arch (amd64|x86_64|arm64|aarch64)
   --taf-url URL             Override taf binary URL
   --taffish-url URL         Override taffish binary URL
+  --taffish-mcp-url URL     Override taffish-mcp binary URL
   --share-url URL           Override completion/vim source with tar.gz archive
   --url URL                 Download full bundle tarball from explicit URL
   --archive FILE            Install from local tar.gz archive
@@ -756,16 +808,19 @@ Options:
 Release tarball layout:
   target/taf-<os>-<arch>-<version> (or bin/taf for legacy)
   target/taffish-<os>-<arch>-<version> (or bin/taffish for legacy)
+  target/taffish-mcp-<os>-<arch>-<version> (or bin/taffish-mcp for legacy)
   completion/
   vim-highlight/
 
 Default GitHub raw URLs:
   https://raw.githubusercontent.com/<repo>/v<version>/target/taf-<os>-<arch>-<version>
   https://raw.githubusercontent.com/<repo>/v<version>/target/taffish-<os>-<arch>-<version>
+  https://raw.githubusercontent.com/<repo>/v<version>/target/taffish-mcp-<os>-<arch>-<version>
 
 Default Gitee raw URLs:
   https://gitee.com/<repo>/raw/v<version>/target/taf-<os>-<arch>-<version>
   https://gitee.com/<repo>/raw/v<version>/target/taffish-<os>-<arch>-<version>
+  https://gitee.com/<repo>/raw/v<version>/target/taffish-mcp-<os>-<arch>-<version>
 
 Bundle mode (--archive or --url):
   Stage must include target/ with binaries and optional completion/vim files.
@@ -835,6 +890,11 @@ while [ "$#" -gt 0 ]; do
         --taffish-url)
             [ "$#" -ge 2 ] || taffish_die "--taffish-url requires a value"
             TAFFISH_URL=$2
+            shift 2
+            ;;
+        --taffish-mcp-url)
+            [ "$#" -ge 2 ] || taffish_die "--taffish-mcp-url requires a value"
+            TAFFISH_MCP_URL=$2
             shift 2
             ;;
         --share-url)

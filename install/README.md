@@ -13,6 +13,7 @@ Bundle mode layout (`--archive` / `--url`):
 target/
   taf-<os>-<arch>-<version>       (or legacy target/taf)
   taffish-<os>-<arch>-<version>   (or legacy target/taffish)
+  taffish-mcp-<os>-<arch>-<version>
 completion/
   bash/
   zsh/
@@ -25,7 +26,8 @@ README.md
 ```
 
 The installer auto-selects the host-matching binaries from `target/` and
-installs them as `$BIN_DIR/taf` and `$BIN_DIR/taffish`.
+installs them as `$BIN_DIR/taf`, `$BIN_DIR/taffish`, and
+`$BIN_DIR/taffish-mcp`.
 
 ## Default paths
 
@@ -68,13 +70,13 @@ curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffis
 Pinned version:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sh -s -- --version 0.3.0 --user
+curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sh -s -- --version 0.4.0 --user
 ```
 
 Install from a local tarball:
 
 ```sh
-sh install/install-taffish.sh --user --archive ./taffish-0.3.0-target.tar.gz
+sh install/install-taffish.sh --user --archive ./taffish-0.4.0-target.tar.gz
 ```
 
 Install from an explicit URL:
@@ -85,12 +87,12 @@ sh install/install-taffish.sh --user --url https://example.org/taffish.tar.gz
 
 Default mode (without `--archive`/`--url`) downloads:
 
-- `taf-<os>-<arch>-<version>` and `taffish-<os>-<arch>-<version>` from `target/` under `v<version>`
+- `taf-<os>-<arch>-<version>`, `taffish-<os>-<arch>-<version>`, and `taffish-mcp-<os>-<arch>-<version>` from `target/` under `v<version>`
 - completion and vim files from the same tag
 
 Use `--provider github|gitee` or `--raw-base-url` to select another raw source.
 Use `--share-url` to override the completion/vim source with a tar.gz archive.
-Use `--taf-url` / `--taffish-url` to override binary asset URLs.
+Use `--taf-url` / `--taffish-url` / `--taffish-mcp-url` to override binary asset URLs.
 Use `--os` / `--arch` to override platform detection.
 
 ## Useful Options
