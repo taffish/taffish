@@ -29,6 +29,10 @@ The installer auto-selects the host-matching binaries from `target/` and
 installs them as `$BIN_DIR/taf`, `$BIN_DIR/taffish`, and
 `$BIN_DIR/taffish-mcp`.
 
+`taffish-mcp` is included in the binary set so MCP-compatible AI clients can
+inspect TAF source, installed taf-apps, and current TAFFISH projects through
+structured tools/resources without running workflows.
+
 ## Default paths
 
 User install:
@@ -70,13 +74,13 @@ curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffis
 Pinned version:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sh -s -- --version 0.5.0 --user
+curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sh -s -- --version 0.6.0 --user
 ```
 
 Install from a local tarball:
 
 ```sh
-sh install/install-taffish.sh --user --archive ./taffish-0.5.0-target.tar.gz
+sh install/install-taffish.sh --user --archive ./taffish-0.6.0-target.tar.gz
 ```
 
 Install from an explicit URL:
