@@ -102,7 +102,7 @@ Pinned version install. The installer may come from `main`, but downloaded
 files are pinned to the selected git tag:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sh -s -- --version 0.6.0 --user
+curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sh -s -- --version 0.7.0 --user
 ```
 
 ### For Users in China
@@ -135,7 +135,7 @@ curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffis
 Pinned version install:
 
 ```sh
-curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffish.gitee.sh | sh -s -- --version 0.6.0 --user
+curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffish.gitee.sh | sh -s -- --version 0.7.0 --user
 ```
 
 To force the installer to replace an existing config with the Gitee/China
@@ -293,7 +293,7 @@ curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/instal
 
 ## Runtime Config and Mirrors
 
-Current TAFFISH is `0.6.0`. Runtime config support was introduced in `0.2.0`
+Current TAFFISH is `0.7.0`. Runtime config support was introduced in `0.2.0`
 to provide stable mirror/custom source settings. The default config paths are:
 
 ```text
@@ -361,7 +361,7 @@ and the same TAFFISH index schema.
 --bin-dir DIR             Override executable install directory
 --taffish-home DIR        Override TAFFISH runtime home
 --repo OWNER/REPO         GitHub repository [taffish/taffish]
---version VERSION         Release version [0.6.0]
+--version VERSION         Release version [0.7.0]
 --provider PROVIDER       Raw provider: github or gitee [github]
 --raw-base-url URL        Override raw base URL pointing at a fixed tag
 --os OS                   Override target OS (darwin|macos|linux)
@@ -391,7 +391,7 @@ curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/instal
 From a downloaded release bundle:
 
 ```sh
-sh install/install-taffish.sh --archive ./taffish-0.6.0-target.tar.gz --user
+sh install/install-taffish.sh --archive ./taffish-0.7.0-target.tar.gz --user
 ```
 
 From an explicit bundle URL:
@@ -445,6 +445,19 @@ apptainer -> podman -> docker
 You only need to install the backend you plan to use. For local development,
 `taf run --backend docker` / `taf run --backend podman` can force a backend
 without editing the `.taf` script.
+
+For installed `taf-*` commands or direct `taffish` compilation, set
+`TAFFISH_CONTAINER_BACKEND=apptainer|podman|docker` to force generic
+`<container:...>` tags at runtime:
+
+```sh
+TAFFISH_CONTAINER_BACKEND=podman taf-my-tool-v0.1.0-r1 [ARGS...]
+TAFFISH_CONTAINER_BACKEND=podman taf-my-tool-v0.1.0-r1 --compile -- [ARGS...]
+```
+
+This does not override explicit `<docker:...>`, `<podman:...>`, or
+`<apptainer:...>` tags. `taf run --backend ...` has priority over the
+environment variable.
 
 ### Docker
 
@@ -560,6 +573,7 @@ taf publish
 taf new --docker   (creates GitHub Actions workflow files)
 taf update         (downloads index unless you use a local URL)
 taf install        (clones app repositories referenced by the local index)
+taf install --from (copies and installs a private/local TAFFISH project)
 ```
 
 Recommended developer setup:
@@ -659,6 +673,21 @@ Install an app or command:
 taf install taf-my-tool
 ```
 
+Install a private/local app project without publishing it to the public Hub:
+
+```sh
+taf install --from /path/to/my-private-tool
+taf list
+taf which taf-my-private-tool
+```
+
+`taf install --from` reads the local project's `taffish.toml`, checks the
+project, copies the working tree into the selected TAFFISH home, builds the
+versioned command wrapper, and records the install origin as
+`[local-project] <PROJECT-ROOT>`. `PROJECT-DIR` may be the project root or any
+child directory; TAFFISH searches upward for `taffish.toml`. It does not require
+`taf update` and does not auto-install dependencies.
+
 Run a versioned command:
 
 ```sh
@@ -697,8 +726,9 @@ publishing.
 
 TAFFISH `0.4.0` introduced `taffish-mcp`, a conservative MCP stdio server for
 AI clients. TAFFISH `0.5.0` added read-only TAF source/file compiler tools, and
-TAFFISH `0.6.0` adds AI-readable taf-app inspection, current project
-inspection, and safe app invocation compile:
+TAFFISH `0.6.0` added AI-readable taf-app inspection, current project
+inspection, and safe app invocation compile. TAFFISH `0.7.0` aligns MCP
+compile tools with the runtime container backend override:
 
 - `taffish_get_version` / `taffish_get_help`
 - `taffish_validate_source` / `taffish_validate_file`
@@ -718,6 +748,10 @@ and prompt operations. It does not expose `taf run`, `taf publish`, or
 image-building actions. Source, project, and app invocation compile tools
 validate arguments and return generated shell code, but never run the app or
 the project.
+
+For MCP compile tools, pass `containerBackend` when backend choice matters. If
+that argument is omitted, `TAFFISH_CONTAINER_BACKEND=apptainer|podman|docker`
+is used when set; explicit `containerBackend` always has priority.
 
 Example MCP client configuration:
 

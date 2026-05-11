@@ -95,7 +95,7 @@ curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/instal
 固定版本安装。安装器本身可以来自 `main`，实际下载内容会固定到指定 git tag：
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sh -s -- --version 0.6.0 --user
+curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sh -s -- --version 0.7.0 --user
 ```
 
 ### 中国地区用户
@@ -122,7 +122,7 @@ curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffis
 固定版本安装：
 
 ```sh
-curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffish.gitee.sh | sh -s -- --version 0.6.0 --user
+curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffish.gitee.sh | sh -s -- --version 0.7.0 --user
 ```
 
 如果需要强制把已有配置覆盖为 Gitee/中国镜像配置，添加 `--force-config`：
@@ -271,7 +271,7 @@ curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffis
 
 ## 运行时配置和镜像源
 
-当前 TAFFISH 是 `0.6.0`。运行时配置文件从 `0.2.0` 开始引入，用来稳定支持镜像源和自定义源。默认配置路径是：
+当前 TAFFISH 是 `0.7.0`。运行时配置文件从 `0.2.0` 开始引入，用来稳定支持镜像源和自定义源。默认配置路径是：
 
 ```text
 用户级 = ~/.local/share/taffish/config.toml
@@ -333,7 +333,7 @@ enabled = true
 --bin-dir DIR             覆盖可执行文件安装目录
 --taffish-home DIR        覆盖 TAFFISH 运行时 home
 --repo OWNER/REPO         GitHub 仓库 [taffish/taffish]
---version VERSION         Release 版本 [0.6.0]
+--version VERSION         Release 版本 [0.7.0]
 --provider PROVIDER       Raw 提供方：github 或 gitee [github]
 --raw-base-url URL        覆盖 raw base URL，应指向固定 tag
 --os OS                   覆盖目标 OS (darwin|macos|linux)
@@ -363,7 +363,7 @@ curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffis
 从已下载的 release bundle 安装：
 
 ```sh
-sh install/install-taffish.sh --archive ./taffish-0.6.0-target.tar.gz --user
+sh install/install-taffish.sh --archive ./taffish-0.7.0-target.tar.gz --user
 ```
 
 从显式 bundle URL 安装：
@@ -414,6 +414,18 @@ apptainer -> podman -> docker
 ```
 
 你只需要安装实际打算使用的后端。本地开发时，`taf run --backend docker` / `taf run --backend podman` 可以强制后端，而不需要修改 `.taf` 脚本。
+
+对于已经安装好的 `taf-*` 命令，或者直接使用 `taffish` 编译时，可以设置
+`TAFFISH_CONTAINER_BACKEND=apptainer|podman|docker`，在运行时强制通用
+`<container:...>` tag 使用指定后端：
+
+```sh
+TAFFISH_CONTAINER_BACKEND=podman taf-my-tool-v0.1.0-r1 [ARGS...]
+TAFFISH_CONTAINER_BACKEND=podman taf-my-tool-v0.1.0-r1 --compile -- [ARGS...]
+```
+
+这个环境变量不会覆盖显式的 `<docker:...>`、`<podman:...>` 或
+`<apptainer:...>` tag。`taf run --backend ...` 的优先级高于这个环境变量。
 
 ### Docker
 
@@ -526,6 +538,7 @@ taf publish
 taf new --docker   (创建 GitHub Actions workflow 文件)
 taf update         (下载 index，除非使用本地 URL)
 taf install        (克隆本地 index 引用的 app 仓库)
+taf install --from (复制并安装私有/本地 TAFFISH 项目)
 ```
 
 推荐开发者设置：
@@ -624,6 +637,19 @@ taf info taf-my-tool
 taf install taf-my-tool
 ```
 
+安装没有发布到公开 Hub 的私有/本地 app 项目：
+
+```sh
+taf install --from /path/to/my-private-tool
+taf list
+taf which taf-my-private-tool
+```
+
+`taf install --from` 会读取本地项目的 `taffish.toml`、检查项目、把当前工作树复制到选定的
+TAFFISH home、构建带版本的 command wrapper，并把安装来源记录为
+`[local-project] <PROJECT-ROOT>`。`PROJECT-DIR` 可以是项目根目录，也可以是项目内任意子目录；
+TAFFISH 会向上搜索 `taffish.toml`。它不需要先运行 `taf update`，也不会自动安装依赖。
+
 运行带版本的 command：
 
 ```sh
@@ -662,7 +688,8 @@ taf publish --release --yes
 TAFFISH `0.4.0` 引入了 `taffish-mcp`，这是一个保守的 stdio MCP server，
 面向 AI 客户端暴露 TAFFISH 能力。TAFFISH `0.5.0` 增加了只读的 TAF
 源码/文件编译器工具，TAFFISH `0.6.0` 继续增加了面向 AI 的 taf-app inspection、
-当前项目 inspection 和安全的 app invocation compile：
+当前项目 inspection 和安全的 app invocation compile。TAFFISH `0.7.0` 让 MCP
+compile 工具与运行时容器 backend override 保持一致：
 
 - `taffish_get_version` / `taffish_get_help`
 - `taffish_validate_source` / `taffish_validate_file`
@@ -680,6 +707,11 @@ TAFFISH `0.4.0` 引入了 `taffish-mcp`，这是一个保守的 stdio MCP server
 MCP 接口还提供相对安全的 project、Hub、config、history、resource 和 prompt
 操作，不暴露 `taf run`、`taf publish` 或镜像构建动作。app invocation compile
 以及 source/project compile 只校验参数并返回生成的 shell code，不会运行 app 或项目。
+
+对于 MCP compile 工具，如果 backend 选择很重要，优先显式传入 `containerBackend`。
+如果没有传入这个参数，则会在设置时使用
+`TAFFISH_CONTAINER_BACKEND=apptainer|podman|docker`；显式 `containerBackend`
+始终具有更高优先级。
 
 MCP 客户端配置示例：
 

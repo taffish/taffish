@@ -14,7 +14,7 @@ TAFFISH_INSTALL_CONFIG_PROFILE=${TAFFISH_INSTALL_CONFIG_PROFILE:-china}
 TAFFISH_INSTALL_CONFIG_FORCE=${TAFFISH_INSTALL_CONFIG_FORCE:-0}
 
 REPO=taffish-org/taffish
-VERSION=0.6.0
+VERSION=0.7.0
 ARCHIVE=
 URL=
 SHARE_URL=
@@ -786,10 +786,10 @@ Options:
   --bin-dir DIR             Override executable install directory
   --taffish-home DIR        Override TAFFISH runtime home
   --repo OWNER/REPO         Gitee repository [taffish-org/taffish]
-  --version VERSION         Release version [0.6.0]
+  --version VERSION         Release version [0.7.0]
   --provider PROVIDER       Raw provider: github or gitee [gitee]
   --raw-base-url URL        Override raw base URL. It should point at a tag,
-                            for example .../raw/v0.6.0
+                            for example .../raw/v0.7.0
   --os OS                   Override target OS (darwin|macos|linux)
   --arch ARCH               Override target arch (amd64|x86_64|arm64|aarch64)
   --taf-url URL             Override taf binary URL
