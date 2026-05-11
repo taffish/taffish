@@ -102,7 +102,7 @@ Pinned version install. The installer may come from `main`, but downloaded
 files are pinned to the selected git tag:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sh -s -- --version 0.4.0 --user
+curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sh -s -- --version 0.5.0 --user
 ```
 
 ### For Users in China
@@ -135,7 +135,7 @@ curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffis
 Pinned version install:
 
 ```sh
-curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffish.gitee.sh | sh -s -- --version 0.4.0 --user
+curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffish.gitee.sh | sh -s -- --version 0.5.0 --user
 ```
 
 To force the installer to replace an existing config with the Gitee/China
@@ -293,7 +293,7 @@ curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/instal
 
 ## Runtime Config and Mirrors
 
-Current TAFFISH is `0.4.0`. Runtime config support was introduced in `0.2.0`
+Current TAFFISH is `0.5.0`. Runtime config support was introduced in `0.2.0`
 to provide stable mirror/custom source settings. The default config paths are:
 
 ```text
@@ -361,7 +361,7 @@ and the same TAFFISH index schema.
 --bin-dir DIR             Override executable install directory
 --taffish-home DIR        Override TAFFISH runtime home
 --repo OWNER/REPO         GitHub repository [taffish/taffish]
---version VERSION         Release version [0.4.0]
+--version VERSION         Release version [0.5.0]
 --provider PROVIDER       Raw provider: github or gitee [github]
 --raw-base-url URL        Override raw base URL pointing at a fixed tag
 --os OS                   Override target OS (darwin|macos|linux)
@@ -391,7 +391,7 @@ curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/instal
 From a downloaded release bundle:
 
 ```sh
-sh install/install-taffish.sh --archive ./taffish-0.4.0-target.tar.gz --user
+sh install/install-taffish.sh --archive ./taffish-0.5.0-target.tar.gz --user
 ```
 
 From an explicit bundle URL:
@@ -695,9 +695,17 @@ publishing.
 
 ## MCP / AI Integration
 
-TAFFISH `0.4.0` adds `taffish-mcp`, a conservative MCP stdio server for AI
-clients. The first MCP interface exposes safe project, Hub, config, history,
-resource, and prompt operations. It does not expose `taf run`, `taf publish`, or
+TAFFISH `0.4.0` introduced `taffish-mcp`, a conservative MCP stdio server for
+AI clients. TAFFISH `0.5.0` extends it with read-only TAF source/file compiler
+tools:
+
+- `taffish_get_version` / `taffish_get_help`
+- `taffish_validate_source` / `taffish_validate_file`
+- `taffish_compile_source` / `taffish_compile_file`
+- `taffish_summarize_source` / `taffish_summarize_file`
+
+The MCP interface also exposes safe project, Hub, config, history, resource,
+and prompt operations. It does not expose `taf run`, `taf publish`, or
 image-building actions.
 
 Example MCP client configuration:
@@ -713,9 +721,10 @@ Example MCP client configuration:
 }
 ```
 
-This lets an AI client inspect TAFFISH projects, search the local index, read
-project resources, and prepare safe project actions without shelling out through
-unstructured terminal text first.
+This lets an AI client inspect TAFFISH projects, validate or compile `.taf`
+source without executing it, search the local index, read project resources, and
+prepare safe project actions without shelling out through unstructured terminal
+text first.
 
 ## Troubleshooting
 
