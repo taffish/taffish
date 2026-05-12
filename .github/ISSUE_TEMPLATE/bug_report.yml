@@ -1,0 +1,80 @@
+name: Bug Report
+description: Report a reproducible TAFFISH problem.
+title: "[Bug]: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a problem. Please include enough detail for maintainers to reproduce it without guessing your environment.
+  - type: input
+    id: version
+    attributes:
+      label: TAFFISH version
+      description: Output of `taf --version`, `taffish --version`, or `taffish-mcp --version`.
+      placeholder: "taf 0.8.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: entrypoint
+    attributes:
+      label: Entrypoint
+      options:
+        - taffish
+        - taf
+        - taffish-mcp
+        - taf-app wrapper
+        - installer
+        - documentation
+        - other
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system and architecture
+      placeholder: "macOS arm64, Debian 12 amd64, Ubuntu 24.04 amd64"
+    validations:
+      required: true
+  - type: dropdown
+    id: backend
+    attributes:
+      label: Container backend, if relevant
+      options:
+        - not relevant
+        - apptainer
+        - podman
+        - docker
+        - unknown
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command or MCP request
+      description: Paste the exact command, `.taf` snippet, or MCP request that triggers the problem.
+      render: sh
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior and logs
+      description: Include full error output when possible. Remove secrets and private paths first.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: reproducer
+    attributes:
+      label: Minimal reproducer
+      description: If possible, provide a small project or `.taf` input that reproduces the issue.
+      render: text
+    validations:
+      required: false

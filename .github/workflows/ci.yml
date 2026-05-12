@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sbcl-tests:
+    name: SBCL tests and script syntax
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install runtime tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y sbcl zsh fish
+
+      - name: Run Common Lisp tests
+        env:
+          XDG_CACHE_HOME: ${{ github.workspace }}/.cache
+        run: |
+          sbcl --load load-taffish.dev.lisp \
+            --eval '(multiple-value-bind (passed failed) (han.test:run-all-tests) (declare (ignore passed)) (when (> failed 0) (sb-ext:exit :code 1)))' \
+            --quit
+
+      - name: Check installer scripts
+        run: |
+          bash -n install/install-taffish.sh
+          bash -n install/install-taffish.gitee.sh
+
+      - name: Check shell completions
+        run: |
+          bash -n completion/bash/taf
+          bash -n completion/bash/taffish
+          zsh -n completion/zsh/_taf
+          zsh -n completion/zsh/_taffish
+          fish -n completion/fish/taf.fish
+          fish -n completion/fish/taffish.fish
+
+      - name: Check release checksums
+        run: |
+          cd target
+          shasum -a 256 -c SHA256SUMS

@@ -29,6 +29,12 @@ The installer auto-selects the host-matching binaries from `target/` and
 installs them as `$BIN_DIR/taf`, `$BIN_DIR/taffish`, and
 `$BIN_DIR/taffish-mcp`.
 
+The raw installer does not currently verify `SHA256SUMS` or GPG signatures
+automatically. For high-security installation, download the tag contents or
+release bundle first, verify `target/SHA256SUMS` and
+`target/SHA256SUMS.asc`, then install from the verified local files with
+`--archive` or explicit local paths.
+
 `taffish-mcp` is included in the binary set so MCP-compatible AI clients can
 inspect TAF source, installed taf-apps, and current TAFFISH projects through
 structured tools/resources without running workflows.
@@ -74,13 +80,13 @@ curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffis
 Pinned version:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sh -s -- --version 0.7.0 --user
+curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sh -s -- --version 0.8.0 --user
 ```
 
 Install from a local tarball:
 
 ```sh
-sh install/install-taffish.sh --user --archive ./taffish-0.7.0-target.tar.gz
+sh install/install-taffish.sh --user --archive ./taffish-0.8.0-target.tar.gz
 ```
 
 Install from an explicit URL:

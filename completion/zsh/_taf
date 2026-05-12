@@ -55,98 +55,102 @@ _taf() {
     build)
       _arguments \
         '(-h --help)'{-h,--help}'[show help]' \
-        '(- --image --docker --all)'{--image,--docker}'[build container image only]' \
-        '(- --image --docker --all)--all[build command and image]' \
-        '--backend[select image backend]:backend:(docker podman)'
+        '(-i --image -d --docker -a --all)'{-i,--image}'[build container image only]' \
+        '(-i --image -d --docker -a --all)'{-d,--docker}'[build container image only]' \
+        '(-i --image -d --docker -a --all)'{-a,--all}'[build command and image]' \
+        '(-b --backend)'{-b,--backend}'[select image backend]:backend:(docker podman)'
       ;;
     run)
       _arguments \
         '(-h --help)'{-h,--help}'[show help]' \
-        '--backend[force container backend]:backend:(docker podman apptainer)' \
+        '(-b --backend)'{-b,--backend}'[force container backend]:backend:(docker podman apptainer)' \
         '--[pass following args to app]' \
         '*:argument:'
       ;;
     publish)
       _arguments \
         '(-h --help)'{-h,--help}'[show help]' \
-        '(- --dry-run --yes)--dry-run[print publish plan only]' \
-        '(- --dry-run --yes)--yes[commit, tag and push]' \
-        '--build[build command wrapper before publishing]' \
+        '(-n --dry-run -y --yes)'{-n,--dry-run}'[print publish plan only]' \
+        '(-n --dry-run -y --yes)'{-y,--yes}'[commit, tag, push and release]' \
+        '(-b --build)'{-b,--build}'[build command wrapper before publishing]' \
+        '(-r --release)'{-r,--release}'[read release.md and create GitHub release]' \
         '(- --latest --pre)--latest[require newer than remote latest]' \
         '(- --latest --pre)--pre[allow non-latest prerelease]' \
         '--create-repo[create repository if missing]' \
         '(- --public --private)--public[create repository as public]' \
         '(- --public --private)--private[create repository as private]' \
+        '--no-lock-repo[do not lock a newly created repository]' \
         '--prompt[allow git credential prompts]'
       ;;
     update)
       _arguments \
         '(-h --help)'{-h,--help}'[show help]' \
-        '(- --user --system)--user[update user index]' \
-        '(- --user --system)--system[update system index]' \
+        '(-u --user -s --system)'{-u,--user}'[update user index]' \
+        '(-u --user -s --system)'{-s,--system}'[update system index]' \
         '--url[index URL or local index file]:index:_files' \
         '(-y --yes)'{-y,--yes}'[non-interactive compatibility]'
       ;;
     search)
       _arguments \
         '(-h --help)'{-h,--help}'[show help]' \
-        '(- --user --system)--user[read user index]' \
-        '(- --user --system)--system[read system index]' \
-        '--json[print JSON]' \
-        '--limit[result limit]:limit:' \
+        '(-u --user -s --system)'{-u,--user}'[read user index]' \
+        '(-u --user -s --system)'{-s,--system}'[read system index]' \
+        '(-j --json)'{-j,--json}'[print JSON]' \
+        '(-l --limit)'{-l,--limit}'[result limit]:limit:' \
         '*:keyword:'
       ;;
     info)
       _arguments \
         '(-h --help)'{-h,--help}'[show help]' \
-        '(- --user --system)--user[read user index]' \
-        '(- --user --system)--system[read system index]' \
-        '--json[print JSON]' \
+        '(-u --user -s --system)'{-u,--user}'[read user index]' \
+        '(-u --user -s --system)'{-s,--system}'[read system index]' \
+        '(-j --json)'{-j,--json}'[print JSON]' \
         '*:app or command:'
       ;;
     install)
       _arguments \
         '(-h --help)'{-h,--help}'[show help]' \
-        '(- --user --system)--user[install into user home]' \
-        '(- --user --system)--system[install into system home]' \
-        '--dry-run[print plan only]' \
-        '--force[replace existing version]' \
+        '(-u --user -s --system)'{-u,--user}'[install into user home]' \
+        '(-u --user -s --system)'{-s,--system}'[install into system home]' \
+        '(-n --dry-run)'{-n,--dry-run}'[print plan only]' \
+        '(-f --force)'{-f,--force}'[replace existing version]' \
+        '--from[install from local TAFFISH project directory]:project directory:_files -/' \
         '--prompt[allow git credential prompts]' \
         '*:app or command:'
       ;;
     uninstall)
       _arguments \
         '(-h --help)'{-h,--help}'[show help]' \
-        '(- --user --system)--user[uninstall from user home]' \
-        '(- --user --system)--system[uninstall from system home]' \
-        '--dry-run[print plan only]' \
-        '--force[do not fail when missing]' \
+        '(-u --user -s --system)'{-u,--user}'[uninstall from user home]' \
+        '(-u --user -s --system)'{-s,--system}'[uninstall from system home]' \
+        '(-n --dry-run)'{-n,--dry-run}'[print plan only]' \
+        '(-f --force)'{-f,--force}'[do not fail when missing]' \
         '*:app or command:'
       ;;
     list)
       _arguments \
         '(-h --help)'{-h,--help}'[show help]' \
-        '(- --local --installed --online --index)'{--local,--installed}'[list locally installed apps]' \
-        '(- --local --installed --online --index)'{--online,--index}'[list indexed apps]' \
-        '(- --user --system)--user[read user home]' \
-        '(- --user --system)--system[read system home]' \
-        '--json[print JSON]' \
-        '--limit[result limit]:limit:'
+        '(-l --local --installed -o --online --index)'{-l,--local,--installed}'[list locally installed apps]' \
+        '(-l --local --installed -o --online --index)'{-o,--online,--index}'[list indexed apps]' \
+        '(-u --user -s --system)'{-u,--user}'[read user home]' \
+        '(-u --user -s --system)'{-s,--system}'[read system home]' \
+        '(-j --json)'{-j,--json}'[print JSON]' \
+        '(-n --limit)'{-n,--limit}'[result limit]:limit:'
       ;;
     which)
       _arguments \
         '(-h --help)'{-h,--help}'[show help]' \
-        '(- --user --system)--user[search user home]' \
-        '(- --user --system)--system[search system home]' \
-        '--json[print JSON]' \
+        '(-u --user -s --system)'{-u,--user}'[search user home]' \
+        '(-u --user -s --system)'{-s,--system}'[search system home]' \
+        '(-j --json)'{-j,--json}'[print JSON]' \
         '*:app or command:'
       ;;
     doctor)
       _arguments \
         '(-h --help)'{-h,--help}'[show help]' \
-        '--init[create missing TAFFISH home directories]' \
-        '(- --user --system)--user[check or initialize user home]' \
-        '(- --user --system)--system[check or initialize system home]'
+        '(-i --init)'{-i,--init}'[create missing TAFFISH home directories]' \
+        '(-u --user -s --system)'{-u,--user}'[check or initialize user home]' \
+        '(-u --user -s --system)'{-s,--system}'[check or initialize system home]'
       ;;
     config)
       _arguments \
@@ -161,11 +165,11 @@ _taf() {
     history)
       _arguments \
         '(-h --help)'{-h,--help}'[show help]' \
-        '--last[show last N events]:count:' \
-        '--id[show one event by id]:run id:' \
-        '--json[print raw JSONL]' \
-        '--path[print history path]' \
-        '--clear[clear history file]'
+        '(-l --last)'{-l,--last}'[show last N events]:count:' \
+        '(-i --id)'{-i,--id}'[show one event by id]:run id:' \
+        '(-j --json)'{-j,--json}'[print raw JSONL]' \
+        '(-p --path)'{-p,--path}'[print history path]' \
+        '(-c --clear)'{-c,--clear}'[clear history file]'
       ;;
     *)
       _message 'taf command'

@@ -1,41 +1,60 @@
-# Binary distribution repository for TAFFISH.
-# Ignore everything by default, then whitelist distribution artifacts.
-*
+# TAFFISH source repository ignore rules.
+# Source, docs, installers, completions, vim files, and ASDF/load files are
+# tracked by default. Generated local build/cache artifacts are ignored.
 
-# Root metadata
-!.gitignore
-!README.md
-!README-CN.md
-!LICENSE
+# OS/editor noise
+.DS_Store
+Thumbs.db
+*~
+*.bak
+*.orig
+*.tmp
+*.swp
+*.swo
+#*#
 
-# Local/internal developer documentation is intentionally kept out of the
-# binary distribution repository.
-docs/
+# Logs and local scratch files
+*.log
+*.out
+*.err
+.cache/
+tmp/
+temp/
+.local/
 
-# Installer (single-file entry)
-!install/
-install/*
-!install/install-taffish.sh
-!install/install-taffish.gitee.sh
-!install/README.md
+# Common Lisp / ASDF build outputs
+*.fasl
+*.ufasl
+*.dfsl
+*.lx32fsl
+*.lx64fsl
+*.wx32fsl
+*.wx64fsl
+*.abcl
+*.fas
+*.lib
+*.x86f
+*.sparcf
+*.axpf
+*.dxf
+*.ppcf
+*.sse2f
 
-# Release payload
-!target/
+# Build/package scratch directories. The release payload under target/ is kept
+# intentionally because the raw installers download versioned binaries from git
+# tags for GitHub/Gitee compatibility.
+build/
+dist/
+release/
+
+# Keep only public release payload files in target/.
 target/*
 !target/taf-*
 !target/taffish-*
+!target/SHA256SUMS
+!target/SHA256SUMS.asc
+!target/TAFFISH-RELEASE-KEY.asc
 
-# Optional checksum manifests
-!checksums/
-!checksums/*
-
-# Shell completion and vim syntax files
-!completion/
-!completion/**/*
-!vim-highlight/
-!vim-highlight/**/*
-
-# Optional GitHub workflow files
-!.github/
-!.github/workflows/
-!.github/workflows/*
+# taf-app publish drafts should not be committed when this repository is used as
+# a working TAFFISH project.
+release.md

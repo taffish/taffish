@@ -1,4 +1,4 @@
-# TAFFISH Binary Distribution
+# TAFFISH
 
 [English](README.md) | [中文](README-CN.md)
 
@@ -8,9 +8,14 @@ TAFFISH is the local command-line part of the TAFFISH ecosystem:
 - `taf`: manage TAFFISH app projects and local TAFFISH Hub packages.
 - `taffish-mcp`: expose safe TAFFISH tools/resources/prompts to AI clients through MCP over stdio.
 
-This repository currently distributes prebuilt binaries only. It contains the
-installers, shell completion files, Vim syntax files, and binary assets for
-supported platforms.
+This repository contains the TAFFISH source code, installers, shell completion
+files, Vim syntax files, documentation, and manually built binary release
+payloads for supported platforms.
+
+The 0.8.0 release payload includes a SHA256 checksum manifest, a GPG-signed
+checksum manifest, and the public release key. For taf-apps, the Hub trust
+model is based on source commits, container digests/platform metadata, and
+smoke metadata recorded in the index.
 
 ## Table of Contents
 
@@ -27,10 +32,12 @@ supported platforms.
 - [Runtime Config and Mirrors](#runtime-config-and-mirrors)
 - [Installer Options](#installer-options)
 - [Local or Offline Install](#local-or-offline-install)
+- [Build From Source](#build-from-source)
 - [Container Backends](#container-backends)
   - [Docker](#docker)
   - [Podman](#podman)
   - [Apptainer](#apptainer)
+- [TAF App Smoke Metadata](#taf-app-smoke-metadata)
 - [GitHub and Publishing Dependencies](#github-and-publishing-dependencies)
 - [Shell Completion](#shell-completion)
 - [Vim Syntax Highlighting](#vim-syntax-highlighting)
@@ -38,7 +45,9 @@ supported platforms.
 - [MCP / AI Integration](#mcp--ai-integration)
 - [Troubleshooting](#troubleshooting)
 - [Release Interface](#release-interface)
+- [Release Verification](#release-verification)
 - [Project Status](#project-status)
+- [License](#license)
 
 ## TAFFISH Ecosystem
 
@@ -46,17 +55,24 @@ TAFFISH is organized as several GitHub repositories and one static web Hub:
 
 | Resource | Purpose |
 | --- | --- |
-| [taffish/taffish](https://github.com/taffish/taffish) | This repository. Binary distribution for `taf`, `taffish`, and `taffish-mcp`. |
+| [taffish/taffish](https://github.com/taffish/taffish) | This repository. Source code, installers, source-tree documentation under `docs/`, completion files, Vim files, and binary release payloads for `taf`, `taffish`, and `taffish-mcp`. |
 | [TAFFISH Hub](https://taffish.github.io) | Web registry for browsing available TAFFISH apps, tools, flows, versions, dependencies, and install commands. |
-| [taffish/taffish-docs](https://github.com/taffish/taffish-docs) | Developer documentation for the TAFFISH language, app projects, Hub architecture, containers, dependencies, `taffish.toml`, and index schema. |
+| [taffish/taffish-docs](https://github.com/taffish/taffish-docs) | Public documentation repository for user guides, app-author guides, tutorials, and curated ecosystem documentation. |
 | [taffish/taffish-index](https://github.com/taffish/taffish-index) | Static package index consumed by `taf update`, `taf search`, `taf info`, and `taf install`. |
 | [taffish/taffish.github.io](https://github.com/taffish/taffish.github.io) | Source repository for the web Hub. |
 | [taffish/.github](https://github.com/taffish/.github) | Organization profile and high-level project overview. |
+| [taffish-org on Gitee](https://gitee.com/taffish-org) | China mirror organization for installation and index access when GitHub raw URLs are unstable. |
 
 The current Hub design is intentionally GitHub-based: each TAFFISH app lives in
 its own repository, release tags identify immutable app versions, app
 repositories build their own container images, and `taffish-index` publishes the
 static JSON index used by local `taf` commands.
+
+Documentation is split intentionally. The `docs/` directory in this repository
+stays close to the source code and records implementation notes, specifications,
+architecture decisions, and release engineering details. The separate
+`taffish/taffish-docs` repository is intended for broader public documentation:
+quick starts, tutorials, app-author guides, and user-facing ecosystem material.
 
 ## Supported Platforms
 
@@ -102,7 +118,7 @@ Pinned version install. The installer may come from `main`, but downloaded
 files are pinned to the selected git tag:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sh -s -- --version 0.7.0 --user
+curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sh -s -- --version 0.8.0 --user
 ```
 
 ### For Users in China
@@ -135,7 +151,7 @@ curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffis
 Pinned version install:
 
 ```sh
-curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffish.gitee.sh | sh -s -- --version 0.7.0 --user
+curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffish.gitee.sh | sh -s -- --version 0.8.0 --user
 ```
 
 To force the installer to replace an existing config with the Gitee/China
@@ -293,7 +309,7 @@ curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/instal
 
 ## Runtime Config and Mirrors
 
-Current TAFFISH is `0.7.0`. Runtime config support was introduced in `0.2.0`
+Current TAFFISH is `0.8.0`. Runtime config support was introduced in `0.2.0`
 to provide stable mirror/custom source settings. The default config paths are:
 
 ```text
@@ -361,7 +377,7 @@ and the same TAFFISH index schema.
 --bin-dir DIR             Override executable install directory
 --taffish-home DIR        Override TAFFISH runtime home
 --repo OWNER/REPO         GitHub repository [taffish/taffish]
---version VERSION         Release version [0.7.0]
+--version VERSION         Release version [0.8.0]
 --provider PROVIDER       Raw provider: github or gitee [github]
 --raw-base-url URL        Override raw base URL pointing at a fixed tag
 --os OS                   Override target OS (darwin|macos|linux)
@@ -391,7 +407,7 @@ curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/instal
 From a downloaded release bundle:
 
 ```sh
-sh install/install-taffish.sh --archive ./taffish-0.7.0-target.tar.gz --user
+sh install/install-taffish.sh --archive ./taffish-0.8.0-target.tar.gz --user
 ```
 
 From an explicit bundle URL:
@@ -415,6 +431,32 @@ vim-highlight/
   syntax/
   ftdetect/
 ```
+
+## Build From Source
+
+Most users should install the prebuilt binaries above. Maintainers and
+contributors can build from source when they need to test the implementation,
+modify TAFFISH, or produce local binaries.
+
+See the dedicated source build guide:
+
+- [Build From Source](docs/dev/en/build-from-source.md)
+
+The current official binary payloads are built manually by the maintainer:
+macOS Apple Silicon binaries are built with SBCL, and Linux x86_64 binaries are
+built with LispWorks. `SHA256SUMS`, `SHA256SUMS.asc`, and the public release key
+are kept under `target/` for manual verification.
+
+Source builds produce unsuffixed local binaries:
+
+```text
+target/taf
+target/taffish
+target/taffish-mcp
+```
+
+The versioned `target/*-<os>-<arch>-<version>` files are maintainer release
+payloads used by the raw installers.
 
 ## Container Backends
 
@@ -462,6 +504,8 @@ environment variable.
 ### Docker
 
 Docker is a good default on developer laptops and many workstations.
+Official installation docs: [Install Docker](https://docs.docker.com/en/latest/installation/)
+and [Install Docker Desktop on Mac](https://docs.docker.com/desktop/setup/install/mac-install/).
 
 macOS:
 
@@ -488,6 +532,7 @@ docker run --rm hello-world
 ### Podman
 
 Podman is useful when you prefer daemonless containers.
+Official installation docs: [Podman Installation](https://podman.io/docs/installation).
 
 macOS:
 
@@ -514,6 +559,7 @@ podman run --rm hello-world
 
 Apptainer is the preferred backend for many HPC and shared Linux servers.
 It avoids requiring Docker daemon access for normal users.
+Official installation docs: [Installing Apptainer](https://apptainer.org/docs/admin/main/installation.html).
 
 Debian/Ubuntu packages vary by distribution version. If available:
 
@@ -562,6 +608,39 @@ sudo apt-get install -y squashfuse
 
 TAFFISH generated scripts use `apptainer --quiet` by default in `v0.1.2` and later builds to keep normal app output clean. Runtime errors are still reported.
 
+## TAF App Smoke Metadata
+
+TAFFISH `0.8.0` adds declarative smoke metadata for containerized taf-apps.
+This is the first local piece of the TAFFISH Hub supply-chain/trust model:
+projects can state the minimal commands that an index automation should verify
+before accepting a container image into the public index.
+
+`taf new --tool --docker` now creates a `[smoke]` section in `taffish.toml`:
+
+```toml
+[smoke]
+backend = "docker"
+timeout = 60
+exist = ["TODO"]
+test = ["TODO --help"]
+```
+
+Meaning:
+
+- `backend`: preferred smoke backend, one of `docker`, `podman`, or `apptainer`.
+- `timeout`: per smoke command timeout in seconds.
+- `exist`: executable names that should be discoverable in the container `PATH`.
+- `test`: shell commands that should exit with status `0`.
+
+`taf check` validates the structure and requires `[smoke]` for projects that
+declare `[container].image` or `[container].dockerfile`. It also rejects the
+default `TODO` placeholders, so replace them with real app-specific checks
+before `taf check`, `taf publish`, or indexing. `taf check` does not run smoke
+tests locally. Real smoke execution belongs to TAFFISH Hub/index automation,
+where the final pushed image and its digest/platform metadata can be checked
+consistently. Local/private installs preserve the smoke metadata so enterprise
+or offline indexes can apply the same policy later.
+
 ## GitHub and Publishing Dependencies
 
 Normal installation and normal app execution do not require GitHub login.
@@ -585,6 +664,11 @@ gh auth login
 
 TAFFISH does not prompt for GitHub credentials internally. Configure SSH keys,
 Git credential helpers, or GitHub CLI authentication outside TAFFISH.
+
+When the local index provides `source.commit`, `taf install` verifies that the
+installed source resolves to that exact Git commit and that the checked source
+worktree is clean before building the command wrapper. This keeps source
+rewrite/mirror installs auditable without rewriting app source files.
 
 ## Shell Completion
 
@@ -728,7 +812,9 @@ TAFFISH `0.4.0` introduced `taffish-mcp`, a conservative MCP stdio server for
 AI clients. TAFFISH `0.5.0` added read-only TAF source/file compiler tools, and
 TAFFISH `0.6.0` added AI-readable taf-app inspection, current project
 inspection, and safe app invocation compile. TAFFISH `0.7.0` aligns MCP
-compile tools with the runtime container backend override:
+compile tools with the runtime container backend override. TAFFISH `0.8.0`
+surfaces smoke/trust metadata for containerized taf-app inspection without
+running smoke tests or containers:
 
 - `taffish_get_version` / `taffish_get_help`
 - `taffish_validate_source` / `taffish_validate_file`
@@ -853,7 +939,72 @@ https://gitee.com/taffish-org/taffish/raw/main/install/install-taffish.gitee.sh
 https://gitee.com/taffish-org/taffish/raw/v<version>/target/...
 ```
 
+## Release Verification
+
+The current binary release payload is kept under `target/` so GitHub and Gitee
+raw installers can use the same tag-fixed file layout. The 0.8.0 release
+includes these verification files:
+
+```text
+target/SHA256SUMS
+target/SHA256SUMS.asc
+target/TAFFISH-RELEASE-KEY.asc
+```
+
+The copyable GitHub release note draft is kept at
+[docs/releases/v0.8.0.md](docs/releases/v0.8.0.md).
+
+The raw installers primarily download and install versioned files; they do not
+currently verify `SHA256SUMS` or the GPG signature automatically. For
+high-security installation, download the tag contents or release bundle first,
+verify the checksum manifest and signature manually, then install from the
+verified local files.
+
+Verify checksums:
+
+```sh
+cd target
+shasum -a 256 -c SHA256SUMS
+```
+
+Verify the checksum signature:
+
+```sh
+gpg --import TAFFISH-RELEASE-KEY.asc
+gpg --verify SHA256SUMS.asc SHA256SUMS
+```
+
+Before trusting `TAFFISH-RELEASE-KEY.asc`, compare the imported release key
+fingerprint with this public fingerprint:
+
+```text
+F863 33E6 0BD6 74F1 59A5  651A B919 3F30 C424 7BB2
+```
+
+Current `0.8.0` checksum manifest:
+
+```text
+63223e302422d4c4571e3c0875e1abe4a6834ee828d0d5f1529c700559b427e9  taf-darwin-arm64-0.8.0
+ab9378b1dc745ce6b81cf3de103cd054ff97fc430c93d03c11883caca6bf2a8a  taf-linux-amd64-0.8.0
+fb26e1b790f8aeef94573227fba02552c4c1cd56aefcc4b188ba8a35bbd00093  taffish-darwin-arm64-0.8.0
+aa24c0ab51d37c49e8af63ab452b495c1bc836e2c1e7aa3af1606d806ac4686d  taffish-linux-amd64-0.8.0
+c3300fec80a7e01b6abb4ff29adc023586b3a6f7c44b96b58c0bee5a1c09ffa8  taffish-mcp-darwin-arm64-0.8.0
+9b915fc5dc1175eb7e5ff350f15187d40d620b1a05e6c87d10d1b35d0f8330dc  taffish-mcp-linux-amd64-0.8.0
+```
+
+This confirms that the checksum manifest was signed by the TAFFISH release key.
+It does not yet claim GitHub Actions provenance, artifact attestation, or
+reproducible builds. Those are planned supply-chain improvements for later
+release infrastructure.
+
 ## Project Status
 
-This repository is a binary distribution channel for the first public TAFFISH
-local CLI release series. Source code is not published here yet.
+This repository is the open-source source repository for the TAFFISH local CLI
+release series. It currently keeps manually built binary payloads in `target/`
+to support tag-fixed GitHub/Gitee raw installation.
+
+## License
+
+TAFFISH is licensed under the [Apache License 2.0](LICENSE). Security reports
+and contribution guidance are documented in [SECURITY.md](SECURITY.md) and
+[CONTRIBUTING.md](CONTRIBUTING.md).

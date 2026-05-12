@@ -1,0 +1,51 @@
+name: Feature Request
+description: Suggest a focused TAFFISH improvement.
+title: "[Feature]: "
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please describe the workflow problem first. TAFFISH features should preserve static checkability, shell transparency, and reproducibility.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - TAF language/compiler
+        - taf project command
+        - taf hub/install command
+        - taf system/config/history command
+        - taffish-mcp
+        - installer/completion/editor support
+        - documentation
+        - other
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What is hard, repetitive, unsafe, or impossible today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: What should TAFFISH do instead?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+    validations:
+      required: false
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility and reproducibility impact
+      description: Note whether this affects existing `.taf` files, generated shell, taf-app metadata, or hub index behavior.
+    validations:
+      required: false

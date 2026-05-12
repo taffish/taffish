@@ -17,24 +17,71 @@ _taf_complete()
     cmd="${COMP_WORDS[1]}"
 
     case "$prev" in
-        --backend)
+        --backend|-b)
             case "$cmd" in
                 build) COMPREPLY=( $(compgen -W "docker podman" -- "$cur") ) ;;
                 run)   COMPREPLY=( $(compgen -W "docker podman apptainer" -- "$cur") ) ;;
             esac
             return 0
             ;;
-        --license|-l)
-            COMPREPLY=( $(compgen -W "Apache-2.0 MIT BSD-2-Clause BSD-3-Clause GPL-3.0 LGPL-3.0 AGPL-3.0 Unlicense" -- "$cur") )
+        --license)
+            [[ "$cmd" == "new" ]] && COMPREPLY=( $(compgen -W "Apache-2.0 MIT BSD-2-Clause BSD-3-Clause GPL-3.0 LGPL-3.0 AGPL-3.0 Unlicense" -- "$cur") )
+            return 0
+            ;;
+        --limit)
+            case "$cmd" in
+                search|list) COMPREPLY=( $(compgen -W "10 20 50 100" -- "$cur") ) ;;
+            esac
+            return 0
+            ;;
+        -l)
+            case "$cmd" in
+                new)     COMPREPLY=( $(compgen -W "Apache-2.0 MIT BSD-2-Clause BSD-3-Clause GPL-3.0 LGPL-3.0 AGPL-3.0 Unlicense" -- "$cur") ) ;;
+                search)  COMPREPLY=( $(compgen -W "10 20 50 100" -- "$cur") ) ;;
+                history) COMPREPLY=( $(compgen -W "10 20 50 100" -- "$cur") ) ;;
+            esac
+            return 0
+            ;;
+        --last)
+            [[ "$cmd" == "history" ]] && COMPREPLY=( $(compgen -W "10 20 50 100" -- "$cur") )
+            return 0
+            ;;
+        -n)
+            [[ "$cmd" == "list" ]] && COMPREPLY=( $(compgen -W "10 20 50 100" -- "$cur") )
             return 0
             ;;
         --release|-r)
-            COMPREPLY=( $(compgen -W "1 2 3" -- "$cur") )
+            [[ "$cmd" == "new" ]] && COMPREPLY=( $(compgen -W "1 2 3" -- "$cur") )
             return 0
             ;;
         --version|-v)
             [[ "$cmd" == "new" ]] && COMPREPLY=( $(compgen -W "0.1.0 1.0.0" -- "$cur") )
             return 0
+            ;;
+        --repo|-g)
+            return 0
+            ;;
+        --image)
+            case "$cmd" in
+                new)   return 0 ;;
+            esac
+            ;;
+        -i)
+            case "$cmd" in
+                new)     return 0 ;;
+                history) return 0 ;;
+            esac
+            ;;
+        --url)
+            COMPREPLY=( $(compgen -f -- "$cur") )
+            return 0
+            ;;
+        --from)
+            COMPREPLY=( $(compgen -d -- "$cur") )
+            return 0
+            ;;
+        --id)
+            [[ "$cmd" == "history" ]] && return 0
             ;;
     esac
 
@@ -49,43 +96,43 @@ _taf_complete()
             opts="-h --help --"
             ;;
         build)
-            opts="--image --docker --all --backend -h --help"
+            opts="-i --image -d --docker -a --all -b --backend -h --help"
             ;;
         run)
-            opts="--backend -h --help --"
+            opts="-b --backend -h --help --"
             ;;
         publish)
-            opts="--dry-run --yes --build --latest --pre --create-repo --public --private --prompt -h --help"
+            opts="-n --dry-run -y --yes -b --build -r --release --latest --pre --create-repo --public --private --no-lock-repo --prompt -h --help"
             ;;
         update)
-            opts="--user --system --url -y --yes -h --help"
+            opts="-u --user -s --system --url -y --yes -h --help"
             ;;
         search)
-            opts="--user --system --json --limit -h --help"
+            opts="-u --user -s --system -j --json -l --limit -h --help"
             ;;
         info)
-            opts="--user --system --json -h --help"
+            opts="-u --user -s --system -j --json -h --help"
             ;;
         install)
-            opts="--user --system --dry-run --force --prompt -h --help"
+            opts="-u --user -s --system -n --dry-run -f --force --from --prompt -h --help"
             ;;
         uninstall)
-            opts="--user --system --dry-run --force -h --help"
+            opts="-u --user -s --system -n --dry-run -f --force -h --help"
             ;;
         list)
-            opts="--local --installed --online --index --user --system --json --limit -h --help"
+            opts="-l --local --installed -o --online --index -u --user -s --system -j --json -n --limit -h --help"
             ;;
         which)
-            opts="--user --system --json -h --help"
+            opts="-u --user -s --system -j --json -h --help"
             ;;
         doctor)
-            opts="--init --user --system -h --help"
+            opts="-i --init -u --user -s --system -h --help"
             ;;
         config)
             opts="show path init -u --user -s --system --github --china -f --force -h --help"
             ;;
         history)
-            opts="--last --id --json --path --clear -h --help"
+            opts="-l --last -i --id -j --json -p --path -c --clear -h --help"
             ;;
         help|version|-h|--help|-v|--version)
             opts=""

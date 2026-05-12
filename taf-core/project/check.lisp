@@ -1,0 +1,851 @@
+(in-package :taf.core)
+
+;;;; ============================================================
+;;;; project / check.lisp
+;;;; ============================================================
+
+(defun %string-prefix-p (prefix string &key (test #'char=))
+  (and (stringp prefix)
+       (stringp string)
+       (<= (length prefix) (length string))
+       (loop for i from 0 below (length prefix)
+             always (funcall test (char prefix i) (char string i)))))
+
+(defun %blank-string-p (string)
+  (or (null string)
+      (and (stringp string)
+           (string= "" (string-trim '(#\Space #\Tab #\Newline #\Return)
+                                    string)))))
+
+(defun %trim-string (string)
+  (string-trim '(#\Space #\Tab #\Newline #\Return) string))
+
+(defun %toml-section-line-p (line)
+  (let ((clean (%trim-string line)))
+    (and (>= (length clean) 3)
+         (char= #\[ (char clean 0))
+         (char= #\] (char clean (1- (length clean)))))))
+
+(defun %toml-section-name (line)
+  (let ((clean (%trim-string line)))
+    (string-downcase (subseq clean 1 (1- (length clean))))))
+
+(defun %split-once (string split-char)
+  (let ((len (length string)))
+    (labels ((scan (index)
+               (cond
+                 ((>= index len)
+                  (values string nil))
+                 ((char= split-char (char string index))
+                  (values (subseq string 0 index)
+                          (subseq string (1+ index))))
+                 (t
+                  (scan (1+ index))))))
+      (scan 0))))
+
+(defun %parse-toml-quoted-string-at (string pos)
+  (unless (and (< pos (length string))
+               (char= #\" (char string pos)))
+    (error "[check] expected TOML string at position ~A in: ~S"
+           pos string))
+  (incf pos)
+  (let ((out (make-string-output-stream)))
+    (loop
+      (when (>= pos (length string))
+        (error "[check] unterminated TOML string: ~S" string))
+      (let ((char (char string pos)))
+        (incf pos)
+        (cond
+          ((char= char #\")
+           (return (values (get-output-stream-string out) pos)))
+          ((char= char #\\)
+           (when (>= pos (length string))
+             (error "[check] unterminated TOML escape: ~S" string))
+           (let ((escape (char string pos)))
+             (incf pos)
+             (case escape
+               (#\" (write-char #\" out))
+               (#\\ (write-char #\\ out))
+               (#\n (write-char #\Newline out))
+               (#\r (write-char #\Return out))
+               (#\t (write-char #\Tab out))
+               (otherwise
+                (error "[check] unsupported TOML escape \\~A in: ~S"
+                       escape string)))))
+          (t
+           (write-char char out)))))))
+
+(defun %toml-array-skip-ws (string pos)
+  (loop while (and (< pos (length string))
+                   (member (char string pos)
+                           '(#\Space #\Tab #\Newline #\Return)
+                           :test #'char=))
+        do (incf pos)
+        finally (return pos)))
+
+(defun %parse-toml-string-array (value)
+  (let ((pos 1)
+        (items nil)
+        (len (length value)))
+    (setf pos (%toml-array-skip-ws value pos))
+    (when (and (< pos len) (char= #\] (char value pos)))
+      (return-from %parse-toml-string-array nil))
+    (loop
+      (multiple-value-bind (item next-pos)
+          (%parse-toml-quoted-string-at value pos)
+        (push item items)
+        (setf pos (%toml-array-skip-ws value next-pos)))
+      (cond
+        ((>= pos len)
+         (error "[check] unterminated TOML array: ~S" value))
+        ((char= #\, (char value pos))
+         (setf pos (%toml-array-skip-ws value (1+ pos))))
+        ((char= #\] (char value pos))
+         (setf pos (%toml-array-skip-ws value (1+ pos)))
+         (unless (= pos len)
+           (error "[check] trailing characters after TOML array: ~S" value))
+         (return (nreverse items)))
+        (t
+         (error "[check] expected comma or ] in TOML array: ~S" value))))))
+
+(defun %parse-toml-value (raw-value)
+  (let* ((value (%trim-string raw-value))
+         (len (length value)))
+    (cond
+      ((and (>= len 2)
+            (char= #\[ (char value 0))
+            (char= #\] (char value (1- len))))
+       (%parse-toml-string-array value))
+      ((and (>= len 2)
+            (char= #\" (char value 0))
+            (char= #\" (char value (1- len))))
+       (multiple-value-bind (string pos)
+           (%parse-toml-quoted-string-at value 0)
+         (unless (= pos len)
+           (error "[check] trailing characters after TOML string: ~S" value))
+         string))
+      ((string-equal value "true")
+       t)
+      ((string-equal value "false")
+       nil)
+      ((and (> len 0)
+            (every #'digit-char-p value))
+       (parse-integer value))
+      (t
+       (error "[check] unsupported TOML value: ~S" raw-value)))))
+
+(defun %parse-taffish-toml (toml-path)
+  "Parse the small taffish.toml subset generated by `taf new`."
+  (let ((table (make-hash-table :test #'equal))
+        (section nil))
+    (dolist (line (han.os:load-lines toml-path))
+      (let ((clean (%trim-string line)))
+        (cond
+          ((or (%blank-string-p clean)
+               (char= #\# (char clean 0)))
+           nil)
+          ((%toml-section-line-p clean)
+           (setf section (%toml-section-name clean))
+           (when (gethash section table)
+             (error "[check] duplicate TOML section: [~A]" section))
+           (setf (gethash section table)
+                 (make-hash-table :test #'equal)))
+          (section
+           (multiple-value-bind (raw-key raw-value)
+               (%split-once clean #\=)
+             (unless raw-value
+               (error "[check] invalid TOML line: ~A" line))
+             (let* ((key (%trim-string raw-key))
+                    (section-table (gethash section table)))
+               (when (%blank-string-p key)
+                 (error "[check] empty TOML key in section [~A]." section))
+               (when (gethash key section-table)
+                 (error "[check] duplicate TOML key: [~A].~A" section key))
+               (setf (gethash key section-table)
+                     (%parse-toml-value raw-value)))))
+          (t
+           (error "[check] TOML key appears before section: ~A" line)))))
+    table))
+
+(defun %toml-section (toml section-name)
+  (or (gethash section-name toml)
+      (error "[check] missing TOML section: [~A]" section-name)))
+
+(defun %toml-ref (toml section-name key &key required)
+  (let ((section (%toml-section toml section-name)))
+    (multiple-value-bind (value found-p)
+        (gethash key section)
+      (cond
+        (found-p value)
+        (required
+         (error "[check] missing TOML field: [~A].~A" section-name key))
+        (t nil)))))
+
+(defun %toml-optional-ref (toml section-name key)
+  (let ((section (gethash section-name toml)))
+    (when section
+      (gethash key section))))
+
+(defun %toml-optional-section-alist (toml section-name)
+  (let ((section (gethash section-name toml))
+        (items nil))
+    (when section
+      (maphash
+       (lambda (key value)
+         (push (cons key value) items))
+       section)
+      (sort items #'string< :key #'car))))
+
+(defun %toml-optional-section (toml section-name)
+  (gethash section-name toml))
+
+(defun %ensure-string-field (value field-name)
+  (when (%blank-string-p value)
+    (error "[check] ~A must be a non-empty string." field-name))
+  (unless (stringp value)
+    (error "[check] ~A must be a string, but got: ~S" field-name value))
+  value)
+
+(defun %ensure-boolean-field (value field-name)
+  (unless (or (eql value t) (eql value nil))
+    (error "[check] ~A must be true or false, but got: ~S" field-name value))
+  value)
+
+(defun %ensure-project-relative-path (path field-name)
+  (%ensure-string-field path field-name)
+  (let ((p (han.path:->pathname path)))
+    (when (han.path:absolute-pathname-p p)
+      (error "[check] ~A must be relative to project root, but got: ~S"
+             field-name path))
+    (when (member :up (pathname-directory p) :test #'eql)
+      (error "[check] ~A must not escape project root, but got: ~S"
+             field-name path)))
+  path)
+
+(defun %ensure-kind (kind)
+  (cond
+    ((string= kind "tool") :tool)
+    ((string= kind "flow") :flow)
+    (t
+     (error "[check] [package].kind must be \"tool\" or \"flow\", but got: ~S"
+            kind))))
+
+(defun %ensure-release (release)
+  (unless (and (integerp release)
+               (> release 0))
+    (error "[check] [package].release must be a positive integer, but got: ~S"
+           release))
+  release)
+
+(defun %ensure-main-path (main)
+  (%ensure-project-relative-path main "[package].main")
+  (unless (string-equal (pathname-type (pathname main)) "taf")
+    (error "[check] [package].main should point to a .taf file, but got: ~S"
+           main))
+  main)
+
+(defun %split-string-on-char (string split-char)
+  (let ((start 0)
+        (parts nil)
+        (len (length string)))
+    (loop for index from 0 below len
+          do (when (char= split-char (char string index))
+               (push (subseq string start index) parts)
+               (setf start (1+ index))))
+    (push (subseq string start) parts)
+    (nreverse parts)))
+
+(defun %ensure-container-build-platforms (build-platforms)
+  (%ensure-string-field build-platforms "[container].build_platforms")
+  (let ((items (%split-string-on-char build-platforms #\,)))
+    (dolist (raw-item items)
+      (let* ((item (%trim-string raw-item))
+             (slash (position #\/ item)))
+        (when (%blank-string-p item)
+          (error "[check] [container].build_platforms contains an empty platform: ~S"
+                 build-platforms))
+        (when (or (find #\Space item)
+                  (find #\Tab item)
+                  (null slash)
+                  (= slash 0)
+                  (= slash (1- (length item))))
+          (error "[check] invalid container platform ~S in [container].build_platforms."
+                 item)))))
+  build-platforms)
+
+(defparameter *default-smoke-backend*
+  "docker")
+
+(defparameter *default-smoke-timeout*
+  60)
+
+(defun %ensure-smoke-backend (value)
+  (let ((backend (or value *default-smoke-backend*)))
+    (%ensure-string-field backend "[smoke].backend")
+    (unless (member backend '("docker" "podman" "apptainer")
+                    :test #'string-equal)
+      (error "[check] [smoke].backend must be docker, podman or apptainer, but got: ~S"
+             backend))
+    (string-downcase backend)))
+
+(defun %ensure-smoke-timeout (value)
+  (let ((timeout (or value *default-smoke-timeout*)))
+    (unless (and (integerp timeout)
+                 (> timeout 0))
+      (error "[check] [smoke].timeout must be a positive integer, but got: ~S"
+             timeout))
+    timeout))
+
+(defun %ensure-smoke-string-list (value field-name)
+  (cond
+    ((null value)
+     nil)
+    ((listp value)
+     (dolist (item value)
+       (%ensure-string-field item field-name))
+     value)
+    (t
+     (error "[check] ~A must be an array of non-empty strings, but got: ~S"
+            field-name value))))
+
+(defun %smoke-placeholder-string-p (value)
+  (and (stringp value)
+       (not (null (search "TODO" (string-upcase value) :test #'char=)))))
+
+(defun %ensure-smoke-no-placeholders (items field-name)
+  (dolist (item items)
+    (when (%smoke-placeholder-string-p item)
+      (error "[check] ~A contains TODO placeholder: ~S.~%  Replace default smoke checks with real app-specific checks before check/index."
+             field-name item))))
+
+(defun %ensure-smoke (smoke-section containerized-p)
+  (cond
+    ((null smoke-section)
+     (when containerized-p
+       (error "[check] containerized projects must define [smoke] with non-empty exist or test checks."))
+     nil)
+    (t
+     (let* ((backend (%ensure-smoke-backend
+                      (gethash "backend" smoke-section)))
+            (timeout (%ensure-smoke-timeout
+                      (gethash "timeout" smoke-section)))
+            (exist (%ensure-smoke-string-list
+                    (gethash "exist" smoke-section)
+                    "[smoke].exist"))
+            (test (%ensure-smoke-string-list
+                   (gethash "test" smoke-section)
+                   "[smoke].test")))
+       (when (and (null exist)
+                  (null test))
+         (error "[check] [smoke] must define at least one non-empty exist or test entry."))
+       (%ensure-smoke-no-placeholders exist "[smoke].exist")
+       (%ensure-smoke-no-placeholders test "[smoke].test")
+       (list :backend backend
+             :timeout timeout
+             :exist exist
+             :test test)))))
+
+(defun %ensure-dependencies (dependencies)
+  (let ((results nil))
+    (dolist (dependency dependencies (nreverse results))
+      (let ((command (car dependency))
+            (versions (cdr dependency)))
+        (%ensure-string-field command "[dependencies] key")
+        (unless (%string-prefix-p "taf-" command)
+          (error "[check] dependency command must start with \"taf-\", but got: ~S"
+                 command))
+        (unless (listp versions)
+          (setf versions (list versions)))
+        (when (null versions)
+          (error "[check] [dependencies].~A must not be an empty array."
+                 command))
+        (dolist (version versions)
+          (%ensure-string-field version
+                                (format nil "[dependencies].~A" command))
+          (pushnew (list :command command :version version)
+                   results
+                   :test (lambda (left right)
+                           (and (string= (getf left :command)
+                                         (getf right :command))
+                                (string= (getf left :version)
+                                         (getf right :version))))))))))
+
+(defun %check-taf-main-file (main-file)
+  (unless (%project-file-exists-p main-file)
+    (error "[check] main TAF file does not exist: ~A"
+           (han.path:->namestring main-file)))
+  (taffish.core:parse-taf (han.os:load-string main-file)))
+
+(defun %static-subtag-head-string (line)
+  (when (and (taffish.core:taf-line-p line)
+             (eql (taffish.core:taf-line-kind line) :tag)
+             (eql (taffish.core:taf-line-subkind line) :subtag))
+    (let ((parts nil))
+      (dolist (token (taffish.core:taf-line-tokens line)
+               (format nil "~{~A~}" (nreverse parts)))
+        (unless (eql (taffish.core:taf-token-kind token) :text)
+          (return-from %static-subtag-head-string nil))
+        (push (taffish.core:taf-token-value token) parts)))))
+
+(defun %dependency-ws-char-p (char)
+  (member char '(#\Space #\Tab #\Newline #\Return) :test #'char=))
+
+(defun %dependency-subseq-prefix-p (string index prefix)
+  (and (<= (+ index (length prefix)) (length string))
+       (loop for i from 0 below (length prefix)
+             always (char= (char prefix i)
+                           (char string (+ index i))))))
+
+(defun %dependency-find-taf-ref-close (string start)
+  (let ((len (length string)))
+    (labels ((scan (index)
+               (cond
+                 ((>= index len) nil)
+                 ((%dependency-subseq-prefix-p string index "]]") index)
+                 (t (scan (1+ index))))))
+      (scan start))))
+
+(defun %dependency-first-word (string)
+  (let* ((clean (%trim-string string))
+         (len (length clean)))
+    (when (> len 0)
+      (let ((end (or (position-if #'%dependency-ws-char-p clean)
+                     len)))
+        (subseq clean 0 end)))))
+
+(defun %scan-taf-dependency-queries-in-line (line &key (error-prefix "[check]"))
+  (let ((deps nil)
+        (len (length line)))
+    (labels ((scan (index)
+               (when (< index len)
+                 (cond
+                   ((and (char= (char line index) #\\)
+                         (< (1+ index) len)
+                         (member (char line (1+ index)) '(#\[ #\])
+                                 :test #'char=))
+                    (scan (+ index 2)))
+                   ((%dependency-subseq-prefix-p line index "[[taf:")
+                    (let* ((content-start (+ index (length "[[taf:")))
+                           (close (%dependency-find-taf-ref-close
+                                   line content-start)))
+                      (unless close
+                        (error "~A unclosed [[taf: ...]] dependency reference: ~A"
+                               error-prefix line))
+                      (let ((command (%dependency-first-word
+                                      (subseq line content-start close))))
+                        (when (%blank-string-p command)
+                          (error "~A empty [[taf: ...]] dependency reference: ~A"
+                                 error-prefix line))
+                        (unless (%string-prefix-p "taf-" command)
+                          (error "~A flow dependency command must start with taf-, but got: ~S"
+                                 error-prefix command))
+                        (push command deps))
+                      (scan (+ close 2))))
+                   (t
+                    (scan (1+ index)))))))
+      (scan 0))
+    (nreverse deps)))
+
+(defun %taffish-block-p (block)
+  (let ((head (car block)))
+    (and head
+         (let ((tag (%static-subtag-head-string head)))
+           (and tag (string-equal (%trim-string tag) "taffish"))))))
+
+(defun %flow-dependency-queries-from-program (taf-program &key (error-prefix "[check]"))
+  (let ((deps nil))
+    (dolist (block (taffish.core:taf-program-body taf-program))
+      (when (%taffish-block-p block)
+        (dolist (line (cdr block))
+          (when (eql (taffish.core:taf-line-kind line) :code)
+            (dolist (dep (%scan-taf-dependency-queries-in-line
+                          (taffish.core:taf-line-raw-string line)
+                          :error-prefix error-prefix))
+              (pushnew dep deps :test #'string=))))))
+    (nreverse deps)))
+
+(defun %flow-dependency-queries (project &key taf-program (error-prefix "[check]"))
+  (let ((deps nil))
+    (when (eql (getf project :kind) :flow)
+      (let ((program (or taf-program
+                         (taffish.core:parse-taf
+                          (han.os:load-string (getf project :main-file))))))
+        (setf deps
+              (%flow-dependency-queries-from-program
+               program
+               :error-prefix error-prefix))))
+    deps))
+
+(defun %dependency-last-search (needle haystack)
+  (let ((needle-len (length needle))
+        (haystack-len (length haystack))
+        (found nil))
+    (when (<= needle-len haystack-len)
+      (loop for index from 0 to (- haystack-len needle-len)
+            do (when (string= needle haystack
+                              :start2 index
+                              :end2 (+ index needle-len))
+                 (setf found index))))
+    found))
+
+(defun %parse-dependency-version-tag (tag)
+  (let ((split (%dependency-last-search "-r" tag)))
+    (when (and split
+               (> split 1)
+               (char= #\v (char tag 0)))
+      (let* ((version (subseq tag 1 split))
+             (release-string (subseq tag (+ split 2)))
+             (release (ignore-errors
+                        (parse-integer release-string :junk-allowed nil))))
+        (when (and release (> release 0))
+          (list :version version :release release))))))
+
+(defun %parse-artifact-dependency-query (query)
+  (let ((split (%dependency-last-search "-v" query)))
+    (when split
+      (let* ((command (subseq query 0 split))
+             (version-tag (subseq query (1+ split)))
+             (info (%parse-dependency-version-tag version-tag)))
+        (when (and (%string-prefix-p "taf-" command)
+                   info)
+          (values command
+                  (format nil "~A-r~A"
+                          (getf info :version)
+                          (getf info :release))
+                  t))))))
+
+(defun %normalize-dependency-query (query existing)
+  (multiple-value-bind (command version exact-p)
+      (%parse-artifact-dependency-query query)
+    (unless exact-p
+      (setf command query
+            version (cdr (assoc query existing :test #'string=))))
+    (list :command command
+          :version (or version "latest")
+          :query query
+          :exact-p exact-p)))
+
+(defun %add-normalized-dependency (dependency dependencies
+                                   &key (error-prefix "[check]"))
+  (declare (ignore error-prefix))
+  (let* ((command (getf dependency :command))
+         (version (getf dependency :version))
+         (old (find-if (lambda (dep)
+                         (and (string= command (getf dep :command))
+                              (string= version (getf dep :version))))
+                       dependencies)))
+    (cond
+      ((null old)
+       (cons dependency dependencies))
+      (t
+       (when (and (getf dependency :exact-p)
+                  (not (getf old :exact-p)))
+         (setf (getf old :exact-p) t
+               (getf old :query) (getf dependency :query)))
+       dependencies))))
+
+(defun %normalized-flow-dependencies (queries existing
+                                      &key (error-prefix "[check]"))
+  (let ((dependencies nil))
+    (dolist (query queries)
+      (setf dependencies
+            (%add-normalized-dependency
+             (%normalize-dependency-query query existing)
+             dependencies
+             :error-prefix error-prefix)))
+    (nreverse dependencies)))
+
+(defun %dependency-alist-from-plists (dependencies)
+  (mapcar (lambda (dependency)
+            (cons (getf dependency :command)
+                  (getf dependency :version)))
+          dependencies))
+
+(defun %dependency-alist-from-toml-file (toml-path &key (error-prefix "[check]"))
+  (let* ((toml (%parse-taffish-toml toml-path))
+         (section (gethash "dependencies" toml))
+         (deps nil))
+    (when section
+      (maphash
+       (lambda (command version)
+         (unless (%string-prefix-p "taf-" command)
+           (error "~A dependency command must start with taf-, but got: ~S"
+                  error-prefix command))
+         (let ((versions version))
+           (unless (listp versions)
+             (setf versions (list versions)))
+           (when (null versions)
+             (error "~A [dependencies].~A must not be an empty array."
+                    error-prefix command))
+           (dolist (item versions)
+             (unless (stringp item)
+               (error "~A [dependencies].~A must be a string or string array, but got: ~S"
+                      error-prefix command version))
+             (pushnew (cons command item)
+                      deps
+                      :test (lambda (left right)
+                              (and (string= (car left) (car right))
+                                   (string= (cdr left) (cdr right))))))))
+       section))
+    deps))
+
+(defun %dependency-versions-by-command (command dependencies)
+  (let ((versions nil))
+    (dolist (dependency dependencies (nreverse versions))
+      (when (string= command (getf dependency :command))
+        (pushnew (getf dependency :version)
+                 versions
+                 :test #'string=)))))
+
+(defun %dependency-version-declared-p (command version dependencies)
+  (member version
+          (%dependency-versions-by-command command dependencies)
+          :test #'string=))
+
+(defun %ensure-main-flow-dependencies-declared (taf-program dependencies main-file)
+  (let* ((declared (%dependency-alist-from-plists dependencies))
+         (queries (%flow-dependency-queries-from-program
+                   taf-program
+                   :error-prefix "[check]"))
+         (required (%normalized-flow-dependencies
+                    queries
+                    declared
+                    :error-prefix "[check]"))
+         (missing nil))
+    (dolist (dependency required)
+      (let* ((command (getf dependency :command))
+             (declared-versions (%dependency-versions-by-command
+                                 command dependencies)))
+        (cond
+          ((null declared-versions)
+           (push command missing))
+          ((and (getf dependency :exact-p)
+                (not (%dependency-version-declared-p
+                      command
+                      (getf dependency :version)
+                      dependencies)))
+           (error "[check] [dependencies].~A must include exact main dependency version ~A, but got ~{~A~^, ~}.~%  main: ~A~%  hint: run `taf build` to sync taffish.toml."
+                  command
+                  (getf dependency :version)
+                  declared-versions
+                  (han.path:->namestring main-file))))))
+    (when missing
+      (error "[check] [dependencies] is missing flow dependencies from main TAF file: ~{~A~^, ~}.~%  main: ~A~%  hint: run `taf build` to sync taffish.toml."
+             (nreverse missing)
+             (han.path:->namestring main-file)))))
+
+(defun %main-container-image-refs (taf-program)
+  (let ((refs nil))
+    (dolist (block (taffish.core:taf-program-body taf-program))
+      (let* ((head (car block))
+             (line-number (and head
+                               (taffish.core:taf-line-line-number head)))
+             (raw-tag (and head (%static-subtag-head-string head))))
+        (when raw-tag
+          (let* ((taf-app (taffish.emitter.builtins.taf-app:match-taf-app-tag
+                           raw-tag line-number))
+                 (container-tag (if taf-app
+                                    (getf taf-app :next-tag)
+                                    raw-tag))
+                 (container (taffish.emitter.builtins.container:match-container-tag
+                             container-tag line-number)))
+            (when container
+              (push (list :line line-number
+                          :tag raw-tag
+                          :image (getf container :image))
+                    refs))))))
+    (nreverse refs)))
+
+(defun %container-image-tag (image)
+  (let* ((digest-start (position #\@ image))
+         (image-without-digest (if digest-start
+                                   (subseq image 0 digest-start)
+                                   image))
+         (tag-colon (position #\: image-without-digest :from-end t))
+         (last-slash (position #\/ image-without-digest :from-end t)))
+    (when (and tag-colon
+               (or (null last-slash)
+                   (> tag-colon last-slash))
+               (< tag-colon (1- (length image-without-digest))))
+      (subseq image-without-digest (1+ tag-colon)))))
+
+(defun %expected-container-image-tag (version release)
+  (format nil "~A-r~A" version release))
+
+(defun %ensure-container-image-tag-current (image version release)
+  (let ((actual-tag (%container-image-tag image))
+        (expected-tag (%expected-container-image-tag version release)))
+    (unless (and actual-tag
+                 (string= actual-tag expected-tag))
+      (error "[check] [container].image tag must match [package].version/release.~%  image   : ~A~%  tag     : ~A~%  expected: ~A"
+             image
+             (or actual-tag "<missing>")
+             expected-tag))))
+
+(defun %ensure-main-container-images-match (image refs main-file)
+  (unless refs
+    (error "[check] [container].image is set, but main TAF file has no static container tag using it.~%  image: ~A~%  main : ~A"
+           image
+           (han.path:->namestring main-file)))
+  (dolist (ref refs)
+    (unless (string= (getf ref :image) image)
+      (error "[check] main TAF container image disagrees with [container].image.~%  main line: ~A~%  toml     : ~A~%  main     : ~A"
+             (getf ref :line)
+             image
+             (getf ref :image)))))
+
+(defun %print-project-check-summary (project)
+  (format t "[TAF] project ok: ~A~%" (getf project :name))
+  (format t "  root    : ~A~%" (getf project :root-dir))
+  (format t "  kind    : ~A~%" (string-downcase (string (getf project :kind))))
+  (format t "  version : ~A-r~A~%" (getf project :version) (getf project :release))
+  (when (getf project :license)
+    (format t "  license : ~A~%" (getf project :license)))
+  (format t "  repo    : ~A~%" (getf project :repository-url))
+  (format t "  command : ~A~%" (getf project :command-name))
+  (format t "  main    : ~A~%" (getf project :main-path))
+  (when (getf project :dependencies)
+    (format t "  deps    : ~{~A~^, ~}~%"
+            (mapcar (lambda (dep)
+                      (format nil "~A=~A"
+                              (getf dep :command)
+                              (getf dep :version)))
+                    (getf project :dependencies))))
+  (format t "  target  : ~A~%"
+          (if (getf project :target-exists-p) "exists" "missing"))
+  (when (or (getf project :container-image)
+            (getf project :dockerfile))
+    (format t "  image   : ~A~%" (or (getf project :container-image) ""))
+    (when (getf project :dockerfile)
+      (format t "  docker  : ~A~%" (getf project :dockerfile)))
+    (when (getf project :container-build-platforms)
+      (format t "  build   : ~A~%" (getf project :container-build-platforms))))
+  (when (getf project :smoke)
+    (let ((smoke (getf project :smoke)))
+      (format t "  smoke   : ~A, timeout=~A, exist=~A, test=~A~%"
+              (getf smoke :backend)
+              (getf smoke :timeout)
+              (length (getf smoke :exist))
+              (length (getf smoke :test))))))
+
+(defun project-check (&optional (start-dir (han.os:current-directory))
+                        (verbose t)
+                        (dependency-check-p t))
+  (let* ((root (%find-project-root start-dir))
+         (root-string (han.path:->namestring root))
+         (toml-path (han.path:join-path root "taffish.toml"))
+         (toml (%parse-taffish-toml toml-path))
+         (name (%ensure-string-field
+                (%toml-ref toml "package" "name" :required t)
+                "[package].name"))
+         (kind (%ensure-kind
+                (%ensure-string-field
+                 (%toml-ref toml "package" "kind" :required t)
+                 "[package].kind")))
+         (version (%ensure-string-field
+                   (%toml-ref toml "package" "version" :required t)
+                   "[package].version"))
+         (release (%ensure-release
+                   (%toml-ref toml "package" "release" :required t)))
+         (license (%toml-optional-ref toml "package" "license"))
+         (main-path (%ensure-main-path
+                     (%toml-ref toml "package" "main" :required t)))
+         (repository-url (%ensure-string-field
+                          (%toml-ref toml "repository" "url" :required t)
+                          "[repository].url"))
+         (command-name (%ensure-string-field
+                        (%toml-ref toml "command" "name" :required t)
+                        "[command].name"))
+         (runtime-pipe (%ensure-boolean-field
+                        (%toml-ref toml "runtime" "pipe" :required t)
+                        "[runtime].pipe"))
+         (runtime-command-mode (%ensure-boolean-field
+                                (%toml-ref toml "runtime" "command_mode" :required t)
+                                "[runtime].command_mode"))
+         (image (%toml-optional-ref toml "container" "image"))
+        (dockerfile (%toml-optional-ref toml "container" "dockerfile"))
+        (raw-build-platforms (%toml-optional-ref toml "container" "build_platforms"))
+        (legacy-platforms (%toml-optional-ref toml "container" "platforms"))
+         (build-platforms (or raw-build-platforms legacy-platforms))
+         (dependencies
+          (%ensure-dependencies
+           (%toml-optional-section-alist toml "dependencies")))
+         (smoke-section (%toml-optional-section toml "smoke"))
+         (main-file (%project-file-path root main-path))
+         (help-file (%project-file-path root "docs/help.md"))
+         (target-dir (%project-file-path root "target"))
+         (main-container-image-refs nil)
+         (smoke nil)
+         (project nil))
+    (unless (%valid-project-name-p name)
+      (error "[check] [package].name is not a valid TAFFISH project name: ~S"
+             name))
+    (unless (%valid-version-string-p version)
+      (error "[check] [package].version must be a non-empty string without spaces, but got: ~S"
+             version))
+    (when license
+      (%ensure-string-field license "[package].license"))
+    (%ensure-repository-url repository-url "[check] [repository].url")
+    (unless (%string-prefix-p "taf-" command-name)
+      (error "[check] [command].name must start with \"taf-\", but got: ~S"
+             command-name))
+    (when image
+      (%ensure-string-field image "[container].image"))
+    (when dockerfile
+      (setf dockerfile
+            (%ensure-project-relative-path dockerfile "[container].dockerfile"))
+      (unless (%project-file-exists-p (%project-file-path root dockerfile))
+        (error "[check] dockerfile does not exist: ~A" dockerfile)))
+    (when (and raw-build-platforms
+               legacy-platforms
+               (not (equal raw-build-platforms legacy-platforms)))
+      (error "[check] [container].build_platforms and legacy [container].platforms disagree."))
+    (when build-platforms
+      (setf build-platforms
+            (%ensure-container-build-platforms build-platforms)))
+    (setf smoke
+          (%ensure-smoke smoke-section (or image dockerfile)))
+    (let ((main-program (%check-taf-main-file main-file)))
+      (setf main-container-image-refs
+            (%main-container-image-refs main-program))
+      (when (and dependency-check-p
+                 (eql kind :flow))
+        (%ensure-main-flow-dependencies-declared main-program
+                                                 dependencies
+                                                 main-file))
+      (when image
+        (%ensure-container-image-tag-current image version release)
+        (%ensure-main-container-images-match image
+                                             main-container-image-refs
+                                             main-file)))
+    (unless (%project-file-exists-p help-file)
+      (error "[check] docs/help.md does not exist. It is required by built command --help."))
+    (setf project
+          (list :root-dir root-string
+                :toml-file (han.path:->namestring toml-path)
+                :name name
+                :kind kind
+                :version version
+                :release release
+                :license license
+                :repository-url repository-url
+                :command-name command-name
+                :main-path main-path
+                :main-file (han.path:->namestring main-file)
+                :help-file (han.path:->namestring help-file)
+                :target-dir (han.path:->namestring target-dir)
+                :target-exists-p (%project-dir-exists-p target-dir)
+                :runtime-pipe runtime-pipe
+                :runtime-command-mode runtime-command-mode
+                :container-image image
+                :smoke smoke
+                :dependencies dependencies
+                :main-container-images (mapcar #'(lambda (ref)
+                                                   (getf ref :image))
+                                               main-container-image-refs)
+                :dockerfile dockerfile
+                :container-build-platforms build-platforms
+                :container-platforms build-platforms))
+    (when verbose
+      (%print-project-check-summary project))
+    project))
