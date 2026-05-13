@@ -19,9 +19,9 @@
 (deftest test-taf-cli-version-string-basic ()
   (check-equal (stringp taf.cli:*taf-version*) t)
   (check-equal (%taf-cli-string-contains-p taf.cli:*taf-version* "taf") t)
-  (check-equal (%taf-cli-string-contains-p taf.cli:*taf-version* "0.8.0") t)
+  (check-equal (%taf-cli-string-contains-p taf.cli:*taf-version* "0.8.1") t)
   (check-equal taf.cli:*taf-version*
-               "taf 0.8.0 (2026-05, Kaiyuan Han)"))
+               "taf 0.8.1 (2026-05, Kaiyuan Han)"))
 
 (deftest test-taf-cli-new-help-string-basic ()
   (let ((help-string (taf.cli::%get-taf-new-help-string)))

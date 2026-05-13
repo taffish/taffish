@@ -49,6 +49,11 @@ If neither tool nor flow is specified, flow is created by default.
 5. Optional `[container]`
 6. Optional `[smoke]` for containerized projects
 
+It intentionally does not generate optional ecosystem metadata sections such as
+`[meta]` and `[upstream]`. The default skeleton should stay small and locally
+usable. Hub maintainers can add those sections manually when preparing an app
+for public discovery, categorization, and upstream provenance tracking.
+
 Tool default:
 
 ```toml

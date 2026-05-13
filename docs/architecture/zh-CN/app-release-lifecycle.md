@@ -97,8 +97,9 @@ my-tool/
 1. `[package].name` 是最终 package 名，不要后续频繁改名。
 2. `[repository].url` 指向 GitHub canonical 仓库，不写 Gitee 或内网镜像。
 3. `[command].name` 以 `taf-` 开头。
-4. tool app 尽量补 `[upstream]`，记录被包装软件来源、版本、许可证和引用信息。
-5. flow app 明确依赖哪些 taf app，不把外部科学依赖藏在文档里。
+4. 公开 Hub app 应补 `[meta]`，用于发现和分类。
+5. tool app 尽量补 `[upstream]`，记录被包装软件来源、版本、许可证和引用信息。
+6. flow app 明确依赖哪些 taf app，不把外部科学依赖藏在文档里。
 
 ## 阶段二：补齐元数据和科学上下文
 
@@ -110,13 +111,16 @@ my-tool/
 | canonical 仓库 | `[repository].url` | index 记录的 source identity。 |
 | 命令入口 | `[command]` / `src/main.taf` | 决定用户安装后的 command name。 |
 | 运行语义 | `[runtime]` | 决定 pipe、command mode 等行为。 |
+| 发现元数据 | `[meta]` | 记录 domain、category、summary 和搜索关键词。 |
 | 容器声明 | `[container]` | 决定 image、Dockerfile 和构建平台。 |
 | 平台约束 | `[platform]` | 记录 OS、arch、container requirement、资源需求。 |
 | 上游来源 | `[upstream]` | 记录原始生信工具、版本、主页、论文、许可证。 |
 | 帮助文档 | `docs/help.md` | 供 `taf check`、Hub 和用户理解 app。 |
 | 发布说明 | `release.md` | 供 publish message 和 GitHub Release notes 使用。 |
 
-`[upstream]` 尤其重要。它不只是展示字段，也支撑 `hubctl` 后续做 upstream 版本检测。缺少 upstream 元数据的 app 仍然可以发布，但生态维护成本会更高。
+`[meta]` 是发现元数据，帮助 Hub/index 搜索和展示，但本地命令不应该强制要求。
+
+`[upstream]` 对 tool wrapper 尤其重要。它不只是展示字段，也支撑 `hubctl` 后续做 upstream 版本检测。缺少 upstream 元数据的 app 仍然可以发布，但生态维护成本会更高。
 
 ## 阶段三：本地校验
 
@@ -180,7 +184,7 @@ taf build --all --backend docker
 
 ## 阶段五：发布前 dry-run
 
-发布前编辑 `release.md`。第一行必须是可用的发布摘要，不能保留默认 `TODO`。整个文件会成为 GitHub Release notes。
+发布前编辑 `release.md`。第一行必须是可用的发布摘要，不能保留默认的 `# TODO: release summary` 占位符。整个文件会成为 GitHub Release notes。
 
 先运行：
 
@@ -441,6 +445,7 @@ hubctl/target/hubctl check --finish
 - [ ] `src/main.taf` 可以被 `taf check` 解析。
 - [ ] `docs/help.md` 已更新。
 - [ ] `LICENSE` 不是空文件或模板占位文件。
+- [ ] 如果准备进入官方 index，已补 `[meta]` 供公开 Hub 发现和分类。
 - [ ] 如果包装第三方生信软件，已补 `[upstream]`。
 - [ ] 如果是容器化 app，`[container].image` tag 等于 `<version>-r<release>`。
 - [ ] 如果是容器化 app，`[smoke]` 声明了最小 executable 和/或 command 检查。

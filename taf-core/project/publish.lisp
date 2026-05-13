@@ -407,6 +407,11 @@
         (%publish-trim-output (subseq trimmed 2))
         trimmed)))
 
+(defun %publish-default-release-summary-p (message)
+  (let ((trimmed (%publish-trim-output message)))
+    (or (string-equal trimmed "TODO")
+        (string-equal trimmed "TODO: release summary"))))
+
 (defun %publish-read-release-file (project tag)
   (let ((path (%publish-release-file project)))
     (unless (%project-file-exists-p path)
@@ -419,8 +424,8 @@
         (error "[publish] release.md is empty."))
       (when (%blank-string-p message)
         (error "[publish] first line of release.md is empty."))
-      (when (search "TODO" message :test #'char-equal)
-        (error "[publish] first line of release.md still contains TODO. Replace the release summary before publishing."))
+      (when (%publish-default-release-summary-p message)
+        (error "[publish] first line of release.md is still the default TODO release summary. Replace it before publishing."))
       (list :file path
             :file-display "release.md"
             :message message

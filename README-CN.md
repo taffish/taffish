@@ -10,7 +10,7 @@ TAFFISH 是 TAFFISH 生态系统的本地命令行部分：
 
 当前仓库包含 TAFFISH 源码、安装脚本、shell 自动补全文件、Vim 语法高亮文件、文档，以及面向支持平台的手动构建二进制 release 载荷。
 
-0.8.0 release 载荷包含 SHA256 checksum manifest、GPG 签名的 checksum
+0.8.1 release 载荷包含 SHA256 checksum manifest、GPG 签名的 checksum
 manifest 和公开 release key。对于 taf-app，Hub 可信模型基于 index 中记录的
 源码 commit、容器 digest / platform 元数据和 smoke metadata。
 
@@ -108,7 +108,7 @@ curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/instal
 固定版本安装。安装器本身可以来自 `main`，实际下载内容会固定到指定 git tag：
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sh -s -- --version 0.8.0 --user
+curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sh -s -- --version 0.8.1 --user
 ```
 
 ### 中国地区用户
@@ -135,7 +135,7 @@ curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffis
 固定版本安装：
 
 ```sh
-curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffish.gitee.sh | sh -s -- --version 0.8.0 --user
+curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffish.gitee.sh | sh -s -- --version 0.8.1 --user
 ```
 
 如果需要强制把已有配置覆盖为 Gitee/中国镜像配置，添加 `--force-config`：
@@ -284,7 +284,7 @@ curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffis
 
 ## 运行时配置和镜像源
 
-当前 TAFFISH 是 `0.8.0`。运行时配置文件从 `0.2.0` 开始引入，用来稳定支持镜像源和自定义源。默认配置路径是：
+当前 TAFFISH 是 `0.8.1`。运行时配置文件从 `0.2.0` 开始引入，用来稳定支持镜像源和自定义源。默认配置路径是：
 
 ```text
 用户级 = ~/.local/share/taffish/config.toml
@@ -346,7 +346,7 @@ enabled = true
 --bin-dir DIR             覆盖可执行文件安装目录
 --taffish-home DIR        覆盖 TAFFISH 运行时 home
 --repo OWNER/REPO         GitHub 仓库 [taffish/taffish]
---version VERSION         Release 版本 [0.8.0]
+--version VERSION         Release 版本 [0.8.1]
 --provider PROVIDER       Raw 提供方：github 或 gitee [github]
 --raw-base-url URL        覆盖 raw base URL，应指向固定 tag
 --os OS                   覆盖目标 OS (darwin|macos|linux)
@@ -376,7 +376,7 @@ curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffis
 从已下载的 release bundle 安装：
 
 ```sh
-sh install/install-taffish.sh --archive ./taffish-0.8.0-target.tar.gz --user
+sh install/install-taffish.sh --archive ./taffish-0.8.1-target.tar.gz --user
 ```
 
 从显式 bundle URL 安装：
@@ -756,7 +756,7 @@ taf publish --release --yes
 
 `taf new` 会创建一个被 ignore 的 `release.md` 草稿。使用 `taf publish --release`
 时，`release.md` 第一行会成为 publish message，整个文件会成为 GitHub Release notes。
-发布前需要替换默认的 `TODO` 摘要。
+发布前需要替换默认的 `# TODO: release summary` 第一行。
 
 ## MCP / AI 集成
 
@@ -888,7 +888,7 @@ https://gitee.com/taffish-org/taffish/raw/v<version>/target/...
 
 ## Release 校验
 
-当前二进制 release 载荷保留在 `target/` 下，这样 GitHub 和 Gitee raw 安装器可以使用同一套固定 tag 的文件布局。0.8.0 release 包含这些校验文件：
+当前二进制 release 载荷保留在 `target/` 下，这样 GitHub 和 Gitee raw 安装器可以使用同一套固定 tag 的文件布局。0.8.1 release 包含这些校验文件：
 
 ```text
 target/SHA256SUMS
@@ -897,8 +897,8 @@ target/TAFFISH-RELEASE-KEY.asc
 ```
 
 可直接复制到 GitHub release 页面的 release note 草稿保存在
-[docs/releases/v0.8.0.zh-CN.md](docs/releases/v0.8.0.zh-CN.md)，英文版见
-[docs/releases/v0.8.0.md](docs/releases/v0.8.0.md)。
+[docs/releases/v0.8.1.zh-CN.md](docs/releases/v0.8.1.zh-CN.md)，英文版见
+[docs/releases/v0.8.1.md](docs/releases/v0.8.1.md)。
 
 Raw 安装器主要负责下载并安装固定版本文件；它当前不会自动校验 `SHA256SUMS`
 或 GPG 签名。如果需要高安全安装，应先下载对应 tag 内容或 release bundle，
@@ -924,15 +924,15 @@ gpg --verify SHA256SUMS.asc SHA256SUMS
 F863 33E6 0BD6 74F1 59A5  651A B919 3F30 C424 7BB2
 ```
 
-当前 `0.8.0` checksum manifest：
+当前 `0.8.1` checksum manifest：
 
 ```text
-63223e302422d4c4571e3c0875e1abe4a6834ee828d0d5f1529c700559b427e9  taf-darwin-arm64-0.8.0
-ab9378b1dc745ce6b81cf3de103cd054ff97fc430c93d03c11883caca6bf2a8a  taf-linux-amd64-0.8.0
-fb26e1b790f8aeef94573227fba02552c4c1cd56aefcc4b188ba8a35bbd00093  taffish-darwin-arm64-0.8.0
-aa24c0ab51d37c49e8af63ab452b495c1bc836e2c1e7aa3af1606d806ac4686d  taffish-linux-amd64-0.8.0
-c3300fec80a7e01b6abb4ff29adc023586b3a6f7c44b96b58c0bee5a1c09ffa8  taffish-mcp-darwin-arm64-0.8.0
-9b915fc5dc1175eb7e5ff350f15187d40d620b1a05e6c87d10d1b35d0f8330dc  taffish-mcp-linux-amd64-0.8.0
+244c64e5924abb427fb47f28046352cbd658aa6c12a89c3825103189516ed2eb  taf-darwin-arm64-0.8.1
+fb8a81c6a9bac723d52ad57329c543f3261b188eed7c9e2001a1e64f12421f18  taf-linux-amd64-0.8.1
+0b1d8161c05e2381d320be412ad110f13bf843e729ec0a30456bb8ae9219af28  taffish-darwin-arm64-0.8.1
+bf1c050522290a53698d90336d540fe022770777f64d27848a1ae4314e0bbf58  taffish-linux-amd64-0.8.1
+3d6ff46e54d7085b4afbc00c1bea9421e9c0e66735ffa12a6bd91d1b9f144402  taffish-mcp-darwin-arm64-0.8.1
+cbe347960c34cedc0cfda1441b404d540d09dd29e8cd44e5cdd2f9481ee2c8c3  taffish-mcp-linux-amd64-0.8.1
 ```
 
 这可以确认 checksum manifest 由 TAFFISH release key 签名。它目前还不表示已经具备 GitHub Actions provenance、artifact attestation 或可复现构建。这些属于后续 release infrastructure 的供应链安全改进。

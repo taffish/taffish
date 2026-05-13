@@ -24,7 +24,7 @@ POSIX shell 工具
 Git
 ```
 
-0.8.0 的维护者构建路径：
+0.8.1 的维护者构建路径：
 
 | 平台 | 官方二进制构建路径 | 说明 |
 | --- | --- | --- |
@@ -80,7 +80,7 @@ target/taffish-mcp
 ```
 
 这些不带后缀的文件是本地构建输出。维护者发布 release tag 前，会把它们重命名/复制为
-`taf-darwin-arm64-0.8.0` 这类版本化文件名。
+`taf-darwin-arm64-0.8.1` 这类版本化文件名。
 
 ## 用 LispWorks 构建二进制
 
@@ -102,9 +102,9 @@ target/taffish-mcp
 
 ## 手动 release 载荷
 
-0.8.0 release 会把手动构建的二进制载荷保留在 `target/` 下，这样 GitHub 和 Gitee raw 安装器可以从不可变 git tag 下载文件。
+0.8.1 release 会把手动构建的二进制载荷保留在 `target/` 下，这样 GitHub 和 Gitee raw 安装器可以从不可变 git tag 下载文件。
 
-0.8.0 维护者 release 载荷包含：
+0.8.1 维护者 release 载荷包含：
 
 ```text
 target/SHA256SUMS
@@ -130,4 +130,4 @@ gpg --verify SHA256SUMS.asc SHA256SUMS
 
 ## 当前公开 API 边界
 
-`compile-taf-program` 在 0.8.0 中不是完成态公开 API。稳定的用户侧编译路径是 `taffish` 命令，以及 `taffish-mcp` 暴露的 source/file compile tools。除非模块文档明确标为稳定，否则更底层的实验性入口应视为实现细节。
+`compile-taf-program` 在 0.8.1 中不是完成态公开 API。稳定的用户侧编译路径是 `taffish` 命令，以及 `taffish-mcp` 暴露的 source/file compile tools。除非模块文档明确标为稳定，否则更底层的实验性入口应视为实现细节。

@@ -69,7 +69,7 @@ Main APIs:
 | `normalize-input-context` | Normalize runtime context. |
 | `bind-taf` | Bind arguments and context. |
 | `compile-taf-result` | Generate shell from a bound result. |
-| `compile-taf-program` | Internal reserved function; not exported in 0.8.0 and not implemented yet. Future work must define a default binding strategy before exposing it. |
+| `compile-taf-program` | Internal reserved function; not exported in 0.8.1 and not implemented yet. Future work must define a default binding strategy before exposing it. |
 | `compile-taf` | Compile by dispatching from input type. |
 | `taffish-to-shell` | Conversion entry for external callers. |
 

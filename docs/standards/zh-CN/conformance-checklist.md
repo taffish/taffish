@@ -84,13 +84,16 @@ notes:
 - flow 项目通常应设置 `pipe = false` 和 `command_mode = false`。
 - 容器化工具应同时给出 Dockerfile 和明确 image。
 - `[dependencies]` 中应尽量使用精确 version id，而不是长期依赖 `latest`。
+- 准备公开 Hub 收录的 app 应添加 `[meta]`，包含 domain、category、summary 和 keywords。
+- 包装第三方软件的 tool app 应尽量添加 `[upstream]`，包含上游 name、version、URL、license 和 citation。
 
 ### 警告项
 
 - 使用 legacy `[container].platforms`。
 - `[dependencies]` 使用 `latest` 或 `*`。
 - repository URL 与实际镜像来源混用。
-- `release.md` 或 README 中仍包含 TODO 类占位内容。
+- 公开 Hub 候选 app 缺少 `[meta]`，或第三方 tool wrapper 缺少 `[upstream]`。
+- `release.md` 仍保留默认发布占位符，或 README 中仍包含未完成的 TODO 类占位内容。
 
 ## hub index 检查
 

@@ -162,7 +162,7 @@ github.com/taffish/bio/tools/<app>
 维护者在这里完成：
 
 1. `taf new` 或迁移旧 app。
-2. 编辑 `taffish.toml`、`.taf`、Dockerfile、帮助文档和 upstream 元数据。
+2. 编辑 `taffish.toml`、`.taf`、Dockerfile、帮助文档和 meta/upstream 元数据。
 3. `taf check`、`taf run`、`taf build`、必要的科学 smoke test。
 4. `taf publish --release --dry-run`。
 5. `taf publish --release --yes --build`。
@@ -289,7 +289,7 @@ https://raw.githubusercontent.com/taffish/taffish-index/main/index/index.json
 2. tool / flow 分类。
 3. package 详情。
 4. version 列表。
-5. dependencies、platform、container、upstream 展示。
+5. dependencies、platform、container、meta、upstream 展示。
 6. install 命令复制。
 7. index warnings 展示。
 

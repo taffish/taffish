@@ -106,6 +106,8 @@ Core fields:
 | `license` | string | recommended | License id. |
 | `repository_url` | string | recommended | Canonical repository URL. |
 | `repository_slug` | string | optional | For example `taffish/demo`. |
+| `meta` | object | optional | Discovery metadata copied from `[meta]` in `taffish.toml`. |
+| `upstream` | object | optional | Upstream provenance metadata copied from `[upstream]` in `taffish.toml`. |
 | `command` | object | required for install | Command information. |
 | `runtime` | object | recommended | Runtime information. |
 | `paths` | object | recommended | Project-internal path information. |
@@ -113,6 +115,35 @@ Core fields:
 | `smoke` | object | optional | Declared smoke checks and index-side smoke result. |
 | `source` | object | recommended for install | Source clone/copy information. |
 | `dependencies` | object | optional | Dependent apps. |
+
+## `meta`
+
+`meta` records discovery metadata from `[meta]` in `taffish.toml`. It is meant
+for search, categorization, and display. Consumers should treat it as optional.
+
+Recommended fields:
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `domain` | string | Broad domain, such as `bioinformatics`. |
+| `category` | string | More specific area, such as `molecular-docking`. |
+| `summary` | string | One-sentence description. |
+| `keywords` | array | Search keywords and aliases. |
+
+## `upstream`
+
+`upstream` records the original software, method, database, or workflow wrapped
+by the taf-app. It is distinct from the TAFFISH app repository.
+
+Recommended fields:
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `name` | string | Upstream software/method/resource name. |
+| `version` | string | Upstream version wrapped by this taf-app release. |
+| `url` | string | Upstream homepage, repository, or documentation URL. |
+| `license` | string | Upstream license when known. |
+| `citation` | string | Citation text, DOI, PMID, or paper URL when available. |
 
 ## `command`
 

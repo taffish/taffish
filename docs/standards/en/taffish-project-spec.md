@@ -10,6 +10,7 @@ This page defines taf-app project layout, `taffish.toml`, build artifacts, and r
 | `[package]`, `[repository]`, `[command]`, `[runtime]` | Draft v0.1 stable | Shared foundation for `project-check`, `build`, `publish`, and `install`. |
 | `[container]` | Draft v0.1 stable | Image/tag consistency is already protected by checks. |
 | `[dependencies]` | Draft v0.1 semi-stable | Flow dependency synchronization exists; complex dependency resolution still needs Hub migration validation. |
+| `[meta]`, `[upstream]` | Draft v0.1 optional | Ecosystem discovery and upstream provenance metadata. Local project commands do not require them. |
 | GitHub release flow | Current implementation | `taf publish` currently targets GitHub; Gitee is a mirror distribution layer. |
 
 ## Project Root
@@ -138,6 +139,67 @@ pipe = false
 command_mode = false
 ```
 
+## `[meta]`
+
+`[meta]` is optional ecosystem metadata for discovery, search, documentation,
+and Hub display. Local project commands do not require it, and missing `[meta]`
+must not make an otherwise valid local project invalid.
+
+Recommended fields:
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `domain` | string | Broad domain, for example `bioinformatics`. |
+| `category` | string | More specific area, for example `molecular-docking`. |
+| `summary` | string | One-sentence description for humans and index search. |
+| `keywords` | string array | Search keywords and aliases. |
+
+Example:
+
+```toml
+[meta]
+domain = "bioinformatics"
+category = "molecular-docking"
+summary = "AutoDock Vina wrapper for molecular docking."
+keywords = ["docking", "virtual-screening", "vina"]
+```
+
+The default `taf new` skeleton intentionally does not generate `[meta]`.
+Maintainers may add it manually when preparing apps for public Hub/index
+discovery.
+
+## `[upstream]`
+
+`[upstream]` is optional provenance metadata for the original software, method,
+database, or workflow being wrapped. It is distinct from `[repository]`:
+`[repository]` points to the TAFFISH app packaging repository, while
+`[upstream]` points to the upstream project or scientific source.
+
+Recommended fields:
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `name` | string | Upstream software/method/resource name. |
+| `version` | string | Upstream version wrapped by this taf-app release. |
+| `url` | string | Upstream homepage, repository, or documentation URL. |
+| `license` | string | Upstream license id or short license text when known. |
+| `citation` | string | Citation text, DOI, PMID, or paper URL when available. |
+
+Example:
+
+```toml
+[upstream]
+name = "AutoDock Vina"
+version = "1.2.7"
+url = "https://github.com/ccsb-scripps/AutoDock-Vina"
+license = "Apache-2.0"
+citation = "https://doi.org/10.1002/jcc.21334"
+```
+
+Tool apps that package third-party bioinformatics software should usually add
+`[upstream]`. Flow apps may omit it or use it only when there is a clear primary
+upstream method or reference.
+
 ## `[container]`
 
 Optional fields:
@@ -259,7 +321,7 @@ Before release:
 1. `project-check` passes.
 2. `LICENSE` exists, is non-empty, and is not a placeholder.
 3. If release is enabled, `release.md` exists in the project root.
-4. The first line of `release.md` is non-empty and does not contain `TODO`.
+4. The first line of `release.md` is non-empty and is not the default scaffold placeholder (`# TODO: release summary`).
 5. A normal `latest` release must be greater than the latest remote tag; pre-releases may relax this rule.
 
 TAFFISH does not handle GitHub login. Users configure SSH keys, credential helpers, or `gh auth login` themselves.

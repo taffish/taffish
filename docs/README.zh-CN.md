@@ -20,14 +20,14 @@
 - [开发者手册](dev/README.zh-CN.md)
 - [TAFFISH 规范草案](standards/README.zh-CN.md)
 - [TAFFISH 系统架构](architecture/README.zh-CN.md)
-- [Release Notes](releases/v0.8.0.zh-CN.md)
+- [Release Notes](releases/v0.8.1.zh-CN.md)
 
 英文入口：
 
 - [Developer Manual](dev/README.en.md)
 - [TAFFISH Specification Draft](standards/README.en.md)
 - [TAFFISH System Architecture](architecture/README.en.md)
-- [English Release Notes](releases/v0.8.0.md)
+- [English Release Notes](releases/v0.8.1.md)
 
 ## 写作原则
 

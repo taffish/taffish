@@ -96,4 +96,4 @@ TAFFISH 的核心价值来自三件事的组合：
 
 维护代码时要保护这三个性质。任何改动如果让 `.taf` 变得难以静态检查、让输出 shell 变得不透明，或者让 hub 中的 app 难以长期维护，都应该谨慎评估。
 
-当前稳定编译主路径是 `parse-taf -> bind-taf -> compile-taf-result`。`compile-taf-program` 在 0.8.0 中是内部保留函数，不导出、未实现，调用方不应把它当成公开入口。
+当前稳定编译主路径是 `parse-taf -> bind-taf -> compile-taf-result`。`compile-taf-program` 在 0.8.1 中是内部保留函数，不导出、未实现，调用方不应把它当成公开入口。

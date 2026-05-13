@@ -10,6 +10,7 @@
 | `[package]`、`[repository]`、`[command]`、`[runtime]` | Draft v0.1 稳定 | 是 `project-check/build/publish/install` 的共同基础。 |
 | `[container]` | Draft v0.1 稳定 | image/tag 一致性已经由检查器保护。 |
 | `[dependencies]` | Draft v0.1 半稳定 | flow 依赖同步已实现，复杂依赖解析仍需 hub 迁移验证。 |
+| `[meta]`、`[upstream]` | Draft v0.1 可选 | 生态发现和上游溯源元数据。本地项目命令不强制要求。 |
 | GitHub 发布流程 | 当前实现 | 当前 `taf publish` 面向 GitHub；Gitee 是镜像分发层。 |
 
 ## 项目根目录
@@ -138,6 +139,63 @@ pipe = false
 command_mode = false
 ```
 
+## `[meta]`
+
+`[meta]` 是可选的生态元数据，用于发现、搜索、文档和 Hub 展示。本地项目命令不要求
+它存在；缺少 `[meta]` 不应让一个本来合法的本地项目变成非法。
+
+推荐字段：
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `domain` | string | 大领域，例如 `bioinformatics`。 |
+| `category` | string | 更细分领域，例如 `molecular-docking`。 |
+| `summary` | string | 面向人类和 index search 的一句话描述。 |
+| `keywords` | string array | 搜索关键词和别名。 |
+
+示例：
+
+```toml
+[meta]
+domain = "bioinformatics"
+category = "molecular-docking"
+summary = "AutoDock Vina wrapper for molecular docking."
+keywords = ["docking", "virtual-screening", "vina"]
+```
+
+默认 `taf new` 骨架刻意不生成 `[meta]`。维护者在准备公开 Hub/index 收录时可以
+手动添加。
+
+## `[upstream]`
+
+`[upstream]` 是可选的上游溯源元数据，用于记录被包装的原始软件、方法、数据库或
+workflow。它和 `[repository]` 不同：`[repository]` 指向 TAFFISH app 的包装仓库，
+`[upstream]` 指向上游项目或科学来源。
+
+推荐字段：
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `name` | string | 上游软件、方法或资源名称。 |
+| `version` | string | 当前 taf-app release 包装的上游版本。 |
+| `url` | string | 上游主页、仓库或文档 URL。 |
+| `license` | string | 已知的上游 license id 或简短 license 文本。 |
+| `citation` | string | citation 文本、DOI、PMID 或论文 URL。 |
+
+示例：
+
+```toml
+[upstream]
+name = "AutoDock Vina"
+version = "1.2.7"
+url = "https://github.com/ccsb-scripps/AutoDock-Vina"
+license = "Apache-2.0"
+citation = "https://doi.org/10.1002/jcc.21334"
+```
+
+包装第三方生信软件的 tool app 通常应该添加 `[upstream]`。flow app 可以省略，
+也可以在存在清晰主要上游方法或参考文献时使用它。
+
 ## `[container]`
 
 可选字段：
@@ -257,7 +315,7 @@ v<version>-r<release>
 1. `project-check` 通过。
 2. `LICENSE` 存在、非空且不是 placeholder。
 3. 如果启用 release，项目根目录必须有 `release.md`。
-4. `release.md` 第一行不能为空，不能含 `TODO`。
+4. `release.md` 第一行不能为空，且不能是默认脚手架占位符（`# TODO: release summary`）。
 5. 当前 `latest` 发布必须高于远端最新 tag；pre 发布可以放宽该限制。
 
 TAFFISH 不负责 GitHub 登录。用户应自行配置 SSH key、credential helper 或 `gh auth login`。

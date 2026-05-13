@@ -48,6 +48,6 @@ Out of scope unless they expose a TAFFISH-specific bug:
 
 ## Current Release Integrity Model
 
-TAFFISH 0.8.0 publishes manually built binary payloads under `target/` with `SHA256SUMS`, `SHA256SUMS.asc`, and `TAFFISH-RELEASE-KEY.asc` files. This provides signed checksum verification, but it is not yet a reproducible-build or GitHub Actions provenance guarantee.
+TAFFISH 0.8.1 publishes manually built binary payloads under `target/` with `SHA256SUMS`, `SHA256SUMS.asc`, and `TAFFISH-RELEASE-KEY.asc` files. This provides signed checksum verification, but it is not yet a reproducible-build or GitHub Actions provenance guarantee.
 
 TAFFISH Hub package trust is expected to rely on index metadata such as source commit, container digest/platforms, and smoke-test results.

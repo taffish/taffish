@@ -217,7 +217,7 @@ Initial MCP project test release.
        (han.path:delete-directory-tree ,root :if-does-not-exist :ignore))))
 
 (han.test:deftest test-taffish-mcp-version-string-basic ()
-  (han.test:check-true (search "taffish-mcp 0.8.0" *taffish-mcp-version*)))
+  (han.test:check-true (search "taffish-mcp 0.8.1" *taffish-mcp-version*)))
 
 (han.test:deftest test-taffish-mcp-initialize-response ()
   (let* ((raw "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-06-18\"}}")
@@ -263,7 +263,7 @@ Initial MCP project test release.
          (structured (%mcp-test-structured result)))
     (han.test:check-equal nil (han.json:get-json result "isError"))
     (han.test:check-true
-     (search "taffish-mcp 0.8.0"
+     (search "taffish-mcp 0.8.1"
              (han.json:get-json structured "taffish_mcp")))
     (han.test:check-true
      (> (length (han.json:get-json structured "features")) 0))

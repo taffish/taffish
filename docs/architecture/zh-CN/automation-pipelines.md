@@ -142,8 +142,8 @@ GITHUB_TOKEN      -> 没有 bot token 时回退
 ```
 
 index builder 的责任是发现、校验和记录 app 元数据。它不构建镜像，也不替 app 发布 release。
-它可以把 `[container].image`、镜像 digest/platform 元数据和 `[smoke]` 结果写入 index，
-但镜像本身必须由 app 仓库 workflow 负责发布。
+它可以把 `[meta]`、`[upstream]`、`[container].image`、镜像 digest/platform 元数据和
+`[smoke]` 结果写入 index，但镜像本身必须由 app 仓库 workflow 负责发布。
 
 对于 release tag 记录，index builder 还应把解析出的源码 commit 记录为
 `source.commit`。`taf install` 会使用该字段在构建安装 command 前校验 resolved

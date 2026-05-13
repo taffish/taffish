@@ -143,9 +143,10 @@ GITHUB_TOKEN      -> fallback
 ```
 
 The index builder discovers, validates, and records app metadata. It does not
-build images and does not publish app releases. It can write `[container].image`,
-image digest/platform metadata, and `[smoke]` results into the index, but the
-image itself must be published by the app repository workflow.
+build images and does not publish app releases. It can write `[meta]`,
+`[upstream]`, `[container].image`, image digest/platform metadata, and `[smoke]`
+results into the index, but the image itself must be published by the app
+repository workflow.
 
 For release-tag records, the index builder should also record the resolved
 source commit as `source.commit`. `taf install` uses that field to verify the

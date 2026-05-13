@@ -96,4 +96,4 @@ TAFFISH's core value comes from the combination of three things:
 
 Maintenance work should protect these three properties. Any change that makes `.taf` hard to check statically, makes output shell opaque, or makes Hub apps hard to maintain long-term needs careful evaluation.
 
-The current stable compilation path is `parse-taf -> bind-taf -> compile-taf-result`. `compile-taf-program` is an internal reserved function in 0.8.0. It is not exported, not implemented, and should not be treated as a public entry point.
+The current stable compilation path is `parse-taf -> bind-taf -> compile-taf-result`. `compile-taf-program` is an internal reserved function in 0.8.1. It is not exported, not implemented, and should not be treated as a public entry point.

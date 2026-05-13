@@ -1304,6 +1304,30 @@ This release fixes the container image tag.")
                       "rm")
                      t)))))
 
+(deftest test-taf-project-publish-release-file-allows-todo-word ()
+  (with-taf-project-temp-dir (dir)
+    (taf.core:project-new
+     "demo-publish-release-todo-word"
+     '("--version" "1.2.3" "--release" "2"))
+    (%taf-project-write-string
+     (%taf-project-path "demo-publish-release-todo-word" "release.md")
+     "# autodock-vina todo wording
+
+This release mentions a todo-like upstream word, but it is not the default template.")
+    (uiop:with-current-directory ((%taf-project-dir "demo-publish-release-todo-word"))
+      (let* ((result (taf.core:project-publish
+                      :start-dir (han.os:current-directory)
+                      :dry-run t
+                      :release-p t
+                      :remote-tags '("refs/tags/v1.2.3-r1")
+                      :verbose nil))
+             (release (getf result :release)))
+        (check-equal (getf release :message) "autodock-vina todo wording")
+        (check-equal (%taf-project-string-contains-p
+                      (getf release :notes)
+                      "todo-like upstream word")
+                     t)))))
+
 (deftest test-taf-project-publish-release-file-missing-error ()
   (with-taf-project-temp-dir (dir)
     (taf.core:project-new "demo-publish-release-missing" nil)

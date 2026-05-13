@@ -106,6 +106,8 @@ version record 是具体发布版本。
 | `license` | string | 建议 | license id。 |
 | `repository_url` | string | 建议 | canonical repository URL。 |
 | `repository_slug` | string | 可选 | 例如 `taffish/demo`。 |
+| `meta` | object | 可选 | 从 `taffish.toml` 的 `[meta]` 复制的发现元数据。 |
+| `upstream` | object | 可选 | 从 `taffish.toml` 的 `[upstream]` 复制的上游溯源元数据。 |
 | `command` | object | 安装必需 | command 信息。 |
 | `runtime` | object | 建议 | 运行时信息。 |
 | `paths` | object | 建议 | 项目内路径信息。 |
@@ -113,6 +115,35 @@ version record 是具体发布版本。
 | `smoke` | object | 可选 | 声明式 smoke 检查和 index 侧 smoke 结果。 |
 | `source` | object | 安装建议 | source clone/copy 信息。 |
 | `dependencies` | object | 可选 | 依赖 app 信息。 |
+
+## `meta`
+
+`meta` 记录 `taffish.toml` 中 `[meta]` 的发现元数据，用于搜索、分类和展示。
+消费端应把它视为可选字段。
+
+推荐字段：
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `domain` | string | 大领域，例如 `bioinformatics`。 |
+| `category` | string | 更细分领域，例如 `molecular-docking`。 |
+| `summary` | string | 一句话描述。 |
+| `keywords` | array | 搜索关键词和别名。 |
+
+## `upstream`
+
+`upstream` 记录 taf-app 包装的原始软件、方法、数据库或 workflow。它不同于
+TAFFISH app 自己的包装仓库。
+
+推荐字段：
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `name` | string | 上游软件、方法或资源名称。 |
+| `version` | string | 当前 taf-app release 包装的上游版本。 |
+| `url` | string | 上游主页、仓库或文档 URL。 |
+| `license` | string | 已知的上游 license。 |
+| `citation` | string | citation 文本、DOI、PMID 或论文 URL。 |
 
 ## `command`
 

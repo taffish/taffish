@@ -24,7 +24,7 @@ POSIX shell tools
 Git
 ```
 
-Supported maintainer build paths at 0.8.0:
+Supported maintainer build paths at 0.8.1:
 
 | Platform | Official binary build path | Notes |
 | --- | --- | --- |
@@ -81,7 +81,7 @@ Check the generated commands:
 
 These unsuffixed files are local build outputs. Maintainer release payloads are
 renamed/copied to versioned file names such as
-`taf-darwin-arm64-0.8.0` before publishing a release tag.
+`taf-darwin-arm64-0.8.1` before publishing a release tag.
 
 ## Build Binaries With LispWorks
 
@@ -103,9 +103,9 @@ If your LispWorks executable has a different command name or path, invoke that e
 
 ## Manual Release Payload
 
-The 0.8.0 release keeps manually built binary payloads in `target/` so the GitHub and Gitee raw installers can download files from immutable git tags.
+The 0.8.1 release keeps manually built binary payloads in `target/` so the GitHub and Gitee raw installers can download files from immutable git tags.
 
-The 0.8.0 maintainer release payload includes:
+The 0.8.1 maintainer release payload includes:
 
 ```text
 target/SHA256SUMS
@@ -131,4 +131,4 @@ This verifies the signed checksum manifest. It is not a reproducible-build claim
 
 ## Current Public API Boundary
 
-`compile-taf-program` is not a finished public API in 0.8.0. The stable user-facing compiler path is the `taffish` command and the source/file compile tools exposed by `taffish-mcp`. Treat lower-level experimental entrypoints as implementation details unless their module docs explicitly mark them stable.
+`compile-taf-program` is not a finished public API in 0.8.1. The stable user-facing compiler path is the `taffish` command and the source/file compile tools exposed by `taffish-mcp`. Treat lower-level experimental entrypoints as implementation details unless their module docs explicitly mark them stable.

@@ -61,7 +61,7 @@ If release is enabled:
 
 1. The project root must contain `release.md`.
 2. The file must not be empty.
-3. The first line must not still contain TODO.
+3. The first line must not still be the default `# TODO: release summary` placeholder.
 4. The first line enters the commit message.
 5. Full content becomes GitHub release notes.
 
@@ -95,4 +95,3 @@ Be especially careful when changing publish:
 3. Dry-run output should remain trustworthy.
 4. Tag comparison should stay consistent with Hub version ordering.
 5. If GitHub-specific logic later needs Gitee publishing support, abstract it into a higher-level release backend instead of simply adding it to the current function.
-

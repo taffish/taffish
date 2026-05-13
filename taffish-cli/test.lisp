@@ -62,9 +62,9 @@
 (deftest test-taffish-cli-version-string-basic ()
   (check-equal (stringp taffish.cli:*taffish-version*) t)
   (check-equal (%taffish-cli-string-contains-p taffish.cli:*taffish-version* "taffish") t)
-  (check-equal (%taffish-cli-string-contains-p taffish.cli:*taffish-version* "0.8.0") t)
+  (check-equal (%taffish-cli-string-contains-p taffish.cli:*taffish-version* "0.8.1") t)
   (check-equal taffish.cli:*taffish-version*
-               "taffish 0.8.0 (2026-05, Kaiyuan Han)"))
+               "taffish 0.8.1 (2026-05, Kaiyuan Han)"))
 
 (deftest test-taffish-cli-help-string-basic ()
   (let ((help-string (taffish.cli::%get-taffish-help-string)))

@@ -162,7 +162,7 @@ Each app worktree should keep normal TAFFISH app structure:
 Maintainers do the following here:
 
 1. Run `taf new` or migrate an old app.
-2. Edit `taffish.toml`, `.taf`, Dockerfile, help docs, and upstream metadata.
+2. Edit `taffish.toml`, `.taf`, Dockerfile, help docs, and meta/upstream metadata.
 3. Run `taf check`, `taf run`, `taf build`, and required scientific smoke tests.
 4. Run `taf publish --release --dry-run`.
 5. Run `taf publish --release --yes --build`.
@@ -289,7 +289,7 @@ It provides:
 2. tool / flow classification.
 3. package detail view.
 4. version list.
-5. dependencies, platform, container, and upstream display.
+5. dependencies, platform, container, meta, and upstream display.
 6. install command copy.
 7. index warnings display.
 

@@ -49,6 +49,10 @@
 5. `[container]` 可选
 6. 容器化项目可选生成 `[smoke]`
 
+它刻意不生成 `[meta]`、`[upstream]` 这类可选生态元数据 section。默认骨架应保持
+小而可本地使用。Hub 维护者在准备公开发现、分类和上游溯源时，可以手动补充这些
+section。
+
 tool 默认：
 
 ```toml

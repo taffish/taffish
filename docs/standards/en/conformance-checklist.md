@@ -84,13 +84,16 @@ notes:
 - Flow projects usually set `pipe = false` and `command_mode = false`.
 - Containerized tools should provide both a Dockerfile and an explicit image.
 - `[dependencies]` should prefer exact version ids instead of long-term `latest` dependencies.
+- Public Hub candidates should add `[meta]` with domain, category, summary, and keywords for discovery.
+- Tool apps wrapping third-party software should add `[upstream]` with upstream name, version, URL, license, and citation when available.
 
 ### Warnings
 
 - Uses legacy `[container].platforms`.
 - Uses `latest` or `*` in `[dependencies]`.
 - Mixes canonical repository URLs with mirror source identities.
-- `release.md` or `README.md` still contains TODO-like placeholders.
+- Public Hub candidate lacks `[meta]`, or a third-party tool wrapper lacks `[upstream]`.
+- `release.md` still keeps the default release placeholder, or `README.md` still contains unfinished TODO-like placeholders.
 
 ## Hub Index Checks
 

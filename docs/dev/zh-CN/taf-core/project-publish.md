@@ -61,7 +61,7 @@ TAFFISH 不负责 GitHub 登录。默认非交互执行时会设置：
 
 1. 项目根必须有 `release.md`。
 2. 文件不能为空。
-3. 第一行不能仍包含 TODO。
+3. 第一行不能仍是默认的 `# TODO: release summary` 占位符。
 4. 第一行会进入 commit message。
 5. 完整内容用于 GitHub release notes。
 

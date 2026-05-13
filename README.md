@@ -12,7 +12,7 @@ This repository contains the TAFFISH source code, installers, shell completion
 files, Vim syntax files, documentation, and manually built binary release
 payloads for supported platforms.
 
-The 0.8.0 release payload includes a SHA256 checksum manifest, a GPG-signed
+The 0.8.1 release payload includes a SHA256 checksum manifest, a GPG-signed
 checksum manifest, and the public release key. For taf-apps, the Hub trust
 model is based on source commits, container digests/platform metadata, and
 smoke metadata recorded in the index.
@@ -118,7 +118,7 @@ Pinned version install. The installer may come from `main`, but downloaded
 files are pinned to the selected git tag:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sh -s -- --version 0.8.0 --user
+curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sh -s -- --version 0.8.1 --user
 ```
 
 ### For Users in China
@@ -151,7 +151,7 @@ curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffis
 Pinned version install:
 
 ```sh
-curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffish.gitee.sh | sh -s -- --version 0.8.0 --user
+curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffish.gitee.sh | sh -s -- --version 0.8.1 --user
 ```
 
 To force the installer to replace an existing config with the Gitee/China
@@ -309,7 +309,7 @@ curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/instal
 
 ## Runtime Config and Mirrors
 
-Current TAFFISH is `0.8.0`. Runtime config support was introduced in `0.2.0`
+Current TAFFISH is `0.8.1`. Runtime config support was introduced in `0.2.0`
 to provide stable mirror/custom source settings. The default config paths are:
 
 ```text
@@ -377,7 +377,7 @@ and the same TAFFISH index schema.
 --bin-dir DIR             Override executable install directory
 --taffish-home DIR        Override TAFFISH runtime home
 --repo OWNER/REPO         GitHub repository [taffish/taffish]
---version VERSION         Release version [0.8.0]
+--version VERSION         Release version [0.8.1]
 --provider PROVIDER       Raw provider: github or gitee [github]
 --raw-base-url URL        Override raw base URL pointing at a fixed tag
 --os OS                   Override target OS (darwin|macos|linux)
@@ -407,7 +407,7 @@ curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/instal
 From a downloaded release bundle:
 
 ```sh
-sh install/install-taffish.sh --archive ./taffish-0.8.0-target.tar.gz --user
+sh install/install-taffish.sh --archive ./taffish-0.8.1-target.tar.gz --user
 ```
 
 From an explicit bundle URL:
@@ -803,8 +803,8 @@ taf publish --release --yes
 
 `taf new` creates an ignored `release.md` draft. With `taf publish --release`,
 the first line of `release.md` becomes the publish message, and the whole file
-becomes the GitHub Release notes. Replace the default `TODO` summary before
-publishing.
+becomes the GitHub Release notes. Replace the default
+`# TODO: release summary` first line before publishing.
 
 ## MCP / AI Integration
 
@@ -942,7 +942,7 @@ https://gitee.com/taffish-org/taffish/raw/v<version>/target/...
 ## Release Verification
 
 The current binary release payload is kept under `target/` so GitHub and Gitee
-raw installers can use the same tag-fixed file layout. The 0.8.0 release
+raw installers can use the same tag-fixed file layout. The 0.8.1 release
 includes these verification files:
 
 ```text
@@ -952,7 +952,7 @@ target/TAFFISH-RELEASE-KEY.asc
 ```
 
 The copyable GitHub release note draft is kept at
-[docs/releases/v0.8.0.md](docs/releases/v0.8.0.md).
+[docs/releases/v0.8.1.md](docs/releases/v0.8.1.md).
 
 The raw installers primarily download and install versioned files; they do not
 currently verify `SHA256SUMS` or the GPG signature automatically. For
@@ -981,15 +981,15 @@ fingerprint with this public fingerprint:
 F863 33E6 0BD6 74F1 59A5  651A B919 3F30 C424 7BB2
 ```
 
-Current `0.8.0` checksum manifest:
+Current `0.8.1` checksum manifest:
 
 ```text
-63223e302422d4c4571e3c0875e1abe4a6834ee828d0d5f1529c700559b427e9  taf-darwin-arm64-0.8.0
-ab9378b1dc745ce6b81cf3de103cd054ff97fc430c93d03c11883caca6bf2a8a  taf-linux-amd64-0.8.0
-fb26e1b790f8aeef94573227fba02552c4c1cd56aefcc4b188ba8a35bbd00093  taffish-darwin-arm64-0.8.0
-aa24c0ab51d37c49e8af63ab452b495c1bc836e2c1e7aa3af1606d806ac4686d  taffish-linux-amd64-0.8.0
-c3300fec80a7e01b6abb4ff29adc023586b3a6f7c44b96b58c0bee5a1c09ffa8  taffish-mcp-darwin-arm64-0.8.0
-9b915fc5dc1175eb7e5ff350f15187d40d620b1a05e6c87d10d1b35d0f8330dc  taffish-mcp-linux-amd64-0.8.0
+244c64e5924abb427fb47f28046352cbd658aa6c12a89c3825103189516ed2eb  taf-darwin-arm64-0.8.1
+fb8a81c6a9bac723d52ad57329c543f3261b188eed7c9e2001a1e64f12421f18  taf-linux-amd64-0.8.1
+0b1d8161c05e2381d320be412ad110f13bf843e729ec0a30456bb8ae9219af28  taffish-darwin-arm64-0.8.1
+bf1c050522290a53698d90336d540fe022770777f64d27848a1ae4314e0bbf58  taffish-linux-amd64-0.8.1
+3d6ff46e54d7085b4afbc00c1bea9421e9c0e66735ffa12a6bd91d1b9f144402  taffish-mcp-darwin-arm64-0.8.1
+cbe347960c34cedc0cfda1441b404d540d09dd29e8cd44e5cdd2f9481ee2c8c3  taffish-mcp-linux-amd64-0.8.1
 ```
 
 This confirms that the checksum manifest was signed by the TAFFISH release key.

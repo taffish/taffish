@@ -43,7 +43,20 @@
 | `[runtime]` | `pipe` | boolean。 |
 | `[runtime]` | `command_mode` | boolean。 |
 
-可选字段包括 license、container image、dockerfile、build platforms、smoke 元数据、dependencies。
+可选字段包括 license、container image、dockerfile、build platforms、smoke 元数据、
+dependencies，以及 `[meta]`、`[upstream]` 这类生态元数据。
+
+## 可选生态元数据
+
+`project-check` 当前保持 `[meta]` 和 `[upstream]` 可选。它不要求这些 section
+存在，也不会因为缺少它们而让本地项目报错。如果这些 section 存在，它们仍然需要
+使用受限 TOML 子集。
+
+这个边界是刻意的：
+
+1. 本地私有 app 和实验项目应该保持轻量。
+2. 公开 Hub/index producer 可以施加更严格的收录规则。
+3. 官方生态元数据要求应可以演进，但不破坏旧的本地项目。
 
 ## 主 TAF 检查
 

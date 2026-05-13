@@ -97,8 +97,9 @@ Check immediately:
 1. `[package].name` is the final package name and should not churn.
 2. `[repository].url` points to the GitHub canonical repository, not Gitee or an internal mirror.
 3. `[command].name` starts with `taf-`.
-4. Tool apps should include `[upstream]` whenever possible: original software, version, license, citations, and source.
-5. Flow apps should declare taf-app dependencies explicitly rather than hiding scientific dependencies in prose.
+4. Public Hub apps should include `[meta]` for discovery and categorization.
+5. Tool apps should include `[upstream]` whenever possible: original software, version, license, citations, and source.
+6. Flow apps should declare taf-app dependencies explicitly rather than hiding scientific dependencies in prose.
 
 ## Phase 2: Complete Metadata And Scientific Context
 
@@ -110,13 +111,16 @@ Publishing an app is not just adding a `.taf` file to a repository. Maintainers 
 | canonical repository | `[repository].url` | Source identity recorded in the index. |
 | command entry | `[command]` / `src/main.taf` | Determines installed command name. |
 | runtime semantics | `[runtime]` | Determines pipe support, command mode, and related behavior. |
+| discovery metadata | `[meta]` | Records domain, category, summary, and search keywords. |
 | container declaration | `[container]` | Determines image, Dockerfile, and build platforms. |
 | platform constraints | `[platform]` | Records OS, arch, container requirement, and resource needs. |
 | upstream source | `[upstream]` | Records original bioinformatics software, version, homepage, paper, and license. |
 | help docs | `docs/help.md` | Helps `taf check`, Hub, and users understand the app. |
 | release notes | `release.md` | Provides publish message and GitHub Release notes. |
 
-`[upstream]` is especially important. It is not only display metadata; it supports future `hubctl` upstream version checks. Apps without upstream metadata can still be published, but maintenance costs are higher.
+`[meta]` is discovery metadata. It helps Hub/index search and display, but local commands should not require it.
+
+`[upstream]` is especially important for tool wrappers. It is not only display metadata; it supports future `hubctl` upstream version checks. Apps without upstream metadata can still be published, but maintenance costs are higher.
 
 ## Phase 3: Local Validation
 
@@ -180,7 +184,7 @@ Important: `taf publish --release --yes --build` currently builds the command wr
 
 ## Phase 5: Pre-Publish Dry Run
 
-Edit `release.md` first. Its first line must be a real release summary and must not keep the default `TODO`. The whole file becomes GitHub Release notes.
+Edit `release.md` first. Its first line must be a real release summary and must not keep the default `# TODO: release summary` placeholder. The whole file becomes GitHub Release notes.
 
 Run:
 
@@ -443,6 +447,7 @@ The most important rule: public Git tags and image tags are immutable. Fixes adv
 - [ ] `src/main.taf` can be parsed by `taf check`.
 - [ ] `docs/help.md` is updated.
 - [ ] `LICENSE` is neither empty nor a placeholder template.
+- [ ] `[meta]` is present for public Hub discovery if this app is intended for the official index.
 - [ ] `[upstream]` is present if wrapping third-party bioinformatics software.
 - [ ] For containerized apps, `[container].image` tag equals `<version>-r<release>`.
 - [ ] For containerized apps, `[smoke]` declares minimal executable and/or command checks.

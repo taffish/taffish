@@ -44,7 +44,21 @@ It is not a full TOML implementation. Do not treat it as a general TOML parser d
 | `[runtime]` | `command_mode` | Boolean. |
 
 Optional fields include license, container image, dockerfile, build platforms,
-smoke metadata, and dependencies.
+smoke metadata, dependencies, and ecosystem metadata such as `[meta]` and
+`[upstream]`.
+
+## Optional Ecosystem Metadata
+
+`project-check` currently keeps `[meta]` and `[upstream]` optional. It does not
+require them, and it does not turn their absence into a local project error.
+They still need to use the restricted TOML subset when present.
+
+This boundary is intentional:
+
+1. Local private apps and experiments should stay lightweight.
+2. Public Hub/index producers may apply stricter curation rules.
+3. Official ecosystem metadata requirements should evolve without breaking old
+   local projects.
 
 ## Main TAF Check
 
