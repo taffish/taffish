@@ -52,6 +52,10 @@ dependencies，以及 `[meta]`、`[upstream]` 这类生态元数据。
 存在，也不会因为缺少它们而让本地项目报错。如果这些 section 存在，它们仍然需要
 使用受限 TOML 子集。
 
+对于 `[upstream]`，`project-check` 同时接受 `repository` 和兼容别名 `repo`。
+两者都会被规范化为返回 project plist 中的 `:upstream :repository`。如果两个字段
+同时存在，它们必须一致。
+
 这个边界是刻意的：
 
 1. 本地私有 app 和实验项目应该保持轻量。

@@ -142,8 +142,13 @@ Recommended fields:
 | `name` | string | Upstream software/method/resource name. |
 | `version` | string | Upstream version wrapped by this taf-app release. |
 | `url` | string | Upstream homepage, repository, or documentation URL. |
+| `repository` | string | Upstream source repository URL or slug when known. |
 | `license` | string | Upstream license when known. |
 | `citation` | string | Citation text, DOI, PMID, or paper URL when available. |
+
+Index generators should accept `[upstream].repo` from `taffish.toml` as a
+compatibility alias and normalize it to `upstream.repository` in generated
+index records.
 
 ## `command`
 

@@ -182,8 +182,14 @@ Recommended fields:
 | `name` | string | Upstream software/method/resource name. |
 | `version` | string | Upstream version wrapped by this taf-app release. |
 | `url` | string | Upstream homepage, repository, or documentation URL. |
+| `repository` | string | Upstream source repository URL or slug when known. |
+| `repo` | string | Compatibility alias for `repository`; consumers should normalize it to `repository`. |
 | `license` | string | Upstream license id or short license text when known. |
 | `citation` | string | Citation text, DOI, PMID, or paper URL when available. |
+
+If both `repository` and `repo` are present, they must have the same value.
+New projects should prefer `repository`; existing projects that already use
+`repo` remain valid.
 
 Example:
 
@@ -192,6 +198,7 @@ Example:
 name = "AutoDock Vina"
 version = "1.2.7"
 url = "https://github.com/ccsb-scripps/AutoDock-Vina"
+repository = "https://github.com/ccsb-scripps/AutoDock-Vina"
 license = "Apache-2.0"
 citation = "https://doi.org/10.1002/jcc.21334"
 ```

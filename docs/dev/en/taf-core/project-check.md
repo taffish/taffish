@@ -53,6 +53,10 @@ smoke metadata, dependencies, and ecosystem metadata such as `[meta]` and
 require them, and it does not turn their absence into a local project error.
 They still need to use the restricted TOML subset when present.
 
+For `[upstream]`, `project-check` accepts both `repository` and the compatibility
+alias `repo`. It normalizes either form to `:upstream :repository` in the
+returned project plist. If both fields are present, they must match.
+
 This boundary is intentional:
 
 1. Local private apps and experiments should stay lightweight.
