@@ -2,13 +2,19 @@
 
 [English](README.md) | [中文](README-CN.md)
 
-TAFFISH 是 TAFFISH 生态系统的本地命令行部分：
+TAFFISH 是一个面向生物信息学命令级可复现执行的 shell-native 可执行包框架。
+
+它将生物信息学命令行工具调用转化为可版本化、可容器解析、可安装、可组合的
+shell 命令，使这些命令既可以在普通 shell 中直接使用，也可以嵌入现有工作流系统。
+
+当前仓库提供 TAFFISH 核心工具的本地命令行实现、安装器、源码树文档、shell 自动补全文件、
+Vim 语法高亮文件，以及面向支持平台的手动构建二进制 release 载荷。
+
+本地命令行工具包括：
 
 - `taffish`：将 `.taf` 程序编译为 shell。
 - `taf`：管理 TAFFISH app 项目和本地 TAFFISH Hub 包。
 - `taffish-mcp`：通过 stdio MCP 为 AI 客户端暴露安全的 TAFFISH tools/resources/prompts。
-
-当前仓库包含 TAFFISH 源码、安装脚本、shell 自动补全文件、Vim 语法高亮文件、文档，以及面向支持平台的手动构建二进制 release 载荷。
 
 0.8.1 release 载荷包含 SHA256 checksum manifest、GPG 签名的 checksum
 manifest 和公开 release key。对于 taf-app，Hub 可信模型基于 index 中记录的

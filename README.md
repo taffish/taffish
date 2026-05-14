@@ -2,15 +2,22 @@
 
 [English](README.md) | [中文](README-CN.md)
 
-TAFFISH is the local command-line part of the TAFFISH ecosystem:
+TAFFISH is a shell-native executable package framework for command-level
+reproducible execution in bioinformatics.
+
+It turns bioinformatics command-line tool invocations into versioned,
+container-resolved, installable, and composable shell commands that can be used
+directly in ordinary shells or embedded in existing workflow systems.
+
+This repository provides the local command-line implementation, installers,
+source-tree documentation, shell completion files, Vim syntax files, and
+manually built binary release payloads for supported platforms.
+
+The local command-line tools are:
 
 - `taffish`: compile `.taf` programs to shell.
 - `taf`: manage TAFFISH app projects and local TAFFISH Hub packages.
 - `taffish-mcp`: expose safe TAFFISH tools/resources/prompts to AI clients through MCP over stdio.
-
-This repository contains the TAFFISH source code, installers, shell completion
-files, Vim syntax files, documentation, and manually built binary release
-payloads for supported platforms.
 
 The 0.8.1 release payload includes a SHA256 checksum manifest, a GPG-signed
 checksum manifest, and the public release key. For taf-apps, the Hub trust
