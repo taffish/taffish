@@ -97,6 +97,10 @@ Not currently provided:
 - Windows
 - Alpine/musl Linux binary assets
 
+This list only describes official prebuilt binary assets. TAFFISH can still be
+built locally from source on platforms with a working SBCL environment and the
+required POSIX tools; see [Build From Source](#build-from-source).
+
 You can force platform selection with `--os` and `--arch`, but the selected
 binary must exist under `target/` for the selected version.
 
