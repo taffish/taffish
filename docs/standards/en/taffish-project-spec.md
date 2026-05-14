@@ -180,12 +180,18 @@ Recommended fields:
 | Field | Type | Meaning |
 | --- | --- | --- |
 | `name` | string | Upstream software/method/resource name. |
+| `type` | string | Optional source type, such as `official`, `github`, `gitlab`, `archive`, `docker`, `apt`, `conda`, or `other`. |
 | `version` | string | Upstream version wrapped by this taf-app release. |
 | `url` | string | Upstream homepage, repository, or documentation URL. |
+| `homepage` | string | Upstream homepage when different from `url`. |
 | `repository` | string | Upstream source repository URL or slug when known. |
 | `repo` | string | Compatibility alias for `repository`; consumers should normalize it to `repository`. |
+| `release_url` | string | Upstream release page when known. |
+| `docker_image` | string | Existing upstream Docker image when known; this is not the TAFFISH-built image. |
 | `license` | string | Upstream open-source license, preferably an SPDX identifier when known. |
-| `citation` | string | Citation text, DOI, PMID, or paper URL when available. |
+| `citation` | string | Short citation text when available. |
+| `doi` | string | DOI for the upstream method/software paper when available. |
+| `pmid` | string | PubMed ID for the upstream method/software paper when available. |
 
 If both `repository` and `repo` are present, they must have the same value.
 New projects should prefer `repository`; existing projects that already use
@@ -195,16 +201,26 @@ New projects should prefer `repository`; existing projects that already use
 It is distinct from `[package].license`, which records the license of the
 TAFFISH wrapper project itself. They may be different.
 
+For scholarly bioinformatics tools, prefer verified citation metadata. Use
+`citation` for a short human-readable citation, and use dedicated `doi` and
+`pmid` fields when they are known. Do not guess citation metadata.
+
 Example:
 
 ```toml
 [upstream]
-name = "AutoDock Vina"
-version = "1.2.7"
-url = "https://github.com/ccsb-scripps/AutoDock-Vina"
-repository = "https://github.com/ccsb-scripps/AutoDock-Vina"
-license = "Apache-2.0"
-citation = "https://doi.org/10.1002/jcc.21334"
+name = "CD-HIT"
+type = "github"
+version = "4.8.1"
+url = "https://github.com/weizhongli/cdhit"
+homepage = "https://github.com/weizhongli/cdhit"
+repository = "weizhongli/cdhit"
+release_url = "https://github.com/weizhongli/cdhit/releases"
+docker_image = "quay.io/biocontainers/cd-hit:4.8.1"
+license = "GPL-2.0"
+citation = "Fu et al. 2012"
+doi = "10.1093/bioinformatics/bts565"
+pmid = "23060610"
 ```
 
 Tool apps that package third-party bioinformatics software should usually add

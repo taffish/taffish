@@ -98,7 +98,7 @@ my-tool/
 2. `[repository].url` 指向 GitHub canonical 仓库，不写 Gitee 或内网镜像。
 3. `[command].name` 以 `taf-` 开头。
 4. 公开 Hub app 应补 `[meta]`，用于发现和分类。
-5. tool app 尽量补 `[upstream]`，记录被包装软件来源、版本、上游开源协议/许可证和引用信息。
+5. tool app 尽量补 `[upstream]`，记录被包装软件来源、版本、上游开源协议/许可证、citation/DOI/PMID 和 source。
 6. flow app 明确依赖哪些 taf app，不把外部科学依赖藏在文档里。
 
 ## 阶段二：补齐元数据和科学上下文
@@ -114,17 +114,18 @@ my-tool/
 | 发现元数据 | `[meta]` | 记录 domain、category、summary 和搜索关键词。 |
 | 容器声明 | `[container]` | 决定 image、Dockerfile 和构建平台。 |
 | 平台约束 | `[platform]` | 记录 OS、arch、container requirement、资源需求。 |
-| 上游来源 | `[upstream]` | 记录原始生信工具、版本、主页、论文、上游开源协议/许可证。 |
+| 上游来源 | `[upstream]` | 记录原始生信工具、版本、主页、发布页、上游已有镜像、论文归属和上游开源协议/许可证。 |
 | 帮助文档 | `docs/help.md` | 供 `taf check`、Hub 和用户理解 app。 |
 | 发布说明 | `release.md` | 供 publish message 和 GitHub Release notes 使用。 |
 
 `[meta]` 是发现元数据，帮助 Hub/index 搜索和展示，但本地命令不应该强制要求。
 
 `[upstream]` 对 tool wrapper 尤其重要。它不只是展示字段，也支撑 `hubctl`
-后续做 upstream 版本检测，并让 index 消费端能展示上游 license。
+后续做 upstream 版本检测，并让 index 消费端能展示上游 license 和学术归属信息。
 `[upstream].license` 不同于 `[package].license`：前者属于被包装的上游项目，
-后者属于 TAFFISH wrapper 项目。缺少 upstream 元数据的 app 仍然可以发布，
-但生态维护成本会更高。
+后者属于 TAFFISH wrapper 项目。对于学术型工具，优先写入经过确认的
+`citation`、`doi` 和 `pmid` 字段，不要只把论文信息藏在 prose 中。缺少
+upstream 元数据的 app 仍然可以发布，但生态维护成本会更高。
 
 ## 阶段三：本地校验
 
@@ -450,7 +451,7 @@ hubctl/target/hubctl check --finish
 - [ ] `docs/help.md` 已更新。
 - [ ] `LICENSE` 不是空文件或模板占位文件。
 - [ ] 如果准备进入官方 index，已补 `[meta]` 供公开 Hub 发现和分类。
-- [ ] 如果包装第三方生信软件，已补 `[upstream]`。
+- [ ] 如果包装第三方生信软件，已补 `[upstream]`，包括已知的上游 license 和 citation/DOI/PMID。
 - [ ] 如果是容器化 app，`[container].image` tag 等于 `<version>-r<release>`。
 - [ ] 如果是容器化 app，`[smoke]` 声明了最小 executable 和/或 command 检查。
 - [ ] 如果是容器化 app，本地 `taf build --image --backend ...` 和 `taf run --backend ...` 使用一致后端。

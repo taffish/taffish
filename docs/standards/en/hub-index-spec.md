@@ -140,11 +140,17 @@ Recommended fields:
 | Field | Type | Meaning |
 | --- | --- | --- |
 | `name` | string | Upstream software/method/resource name. |
+| `type` | string | Optional source type, such as `official`, `github`, `gitlab`, `archive`, `docker`, `apt`, `conda`, or `other`. |
 | `version` | string | Upstream version wrapped by this taf-app release. |
 | `url` | string | Upstream homepage, repository, or documentation URL. |
+| `homepage` | string | Upstream homepage when different from `url`. |
 | `repository` | string | Upstream source repository URL or slug when known. |
+| `release_url` | string | Upstream release page when known. |
+| `docker_image` | string | Existing upstream Docker image when known; this is not the TAFFISH-built image. |
 | `license` | string | Upstream open-source license, preferably an SPDX identifier when known. |
-| `citation` | string | Citation text, DOI, PMID, or paper URL when available. |
+| `citation` | string | Short citation text when available. |
+| `doi` | string | DOI for the upstream method/software paper when available. |
+| `pmid` | string | PubMed ID for the upstream method/software paper when available. |
 
 Index generators should accept `[upstream].repo` from `taffish.toml` as a
 compatibility alias and normalize it to `upstream.repository` in generated
@@ -152,6 +158,12 @@ index records.
 
 `upstream.license` describes the upstream software/resource license. The
 top-level package `license` field describes the TAFFISH wrapper license.
+For scholarly bioinformatics tools, `citation`, `doi`, and `pmid` preserve
+verified academic attribution metadata.
+
+Index-side metadata overrides may supplement `license`, `citation`, `doi`, and
+`pmid` on records that already have upstream data. They should not create a new
+upstream object for a record that did not declare upstream metadata.
 
 ## `command`
 

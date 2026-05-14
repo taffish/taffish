@@ -53,11 +53,12 @@ smoke metadata, dependencies, and ecosystem metadata such as `[meta]` and
 require them, and it does not turn their absence into a local project error.
 They still need to use the restricted TOML subset when present.
 
-For `[upstream]`, `project-check` accepts both `repository` and the compatibility
-alias `repo`. It normalizes either form to `:upstream :repository` in the
-returned project plist. If both fields are present, they must match.
-`[upstream].license` is treated as optional ecosystem metadata for the upstream
-software/resource license; it is not the same field as `[package].license`.
+`project-check` does not currently interpret or normalize `[meta]` and
+`[upstream]` fields into the returned project plist. Hub/index producers are
+responsible for consuming ecosystem metadata such as `[upstream].repository`,
+the compatibility alias `[upstream].repo`, `[upstream].license`, and scholarly
+attribution fields like `[upstream].citation`, `[upstream].doi`, and
+`[upstream].pmid`.
 
 This boundary is intentional:
 

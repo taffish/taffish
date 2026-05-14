@@ -52,11 +52,10 @@ dependencies，以及 `[meta]`、`[upstream]` 这类生态元数据。
 存在，也不会因为缺少它们而让本地项目报错。如果这些 section 存在，它们仍然需要
 使用受限 TOML 子集。
 
-对于 `[upstream]`，`project-check` 同时接受 `repository` 和兼容别名 `repo`。
-两者都会被规范化为返回 project plist 中的 `:upstream :repository`。如果两个字段
-同时存在，它们必须一致。
-`[upstream].license` 是可选生态元数据，用于记录上游软件或资源自己的 license；
-它不是 `[package].license`。
+`project-check` 当前不会把 `[meta]` 和 `[upstream]` 字段解释或规范化到返回的
+project plist 中。Hub/index producer 负责消费这些生态元数据，例如
+`[upstream].repository`、兼容别名 `[upstream].repo`、`[upstream].license`，
+以及 `[upstream].citation`、`[upstream].doi`、`[upstream].pmid` 这类学术归属字段。
 
 这个边界是刻意的：
 

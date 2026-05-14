@@ -85,7 +85,7 @@ notes:
 - 容器化工具应同时给出 Dockerfile 和明确 image。
 - `[dependencies]` 中应尽量使用精确 version id，而不是长期依赖 `latest`。
 - 准备公开 Hub 收录的 app 应添加 `[meta]`，包含 domain、category、summary 和 keywords。
-- 包装第三方软件的 tool app 应尽量添加 `[upstream]`，包含上游 name、version、URL、开源协议/许可证和 citation。
+- 包装第三方软件的 tool app 应尽量添加 `[upstream]`，包含上游 name、version、URL、开源协议/许可证、citation、DOI 和 PMID。
 
 ### 警告项
 

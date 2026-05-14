@@ -140,17 +140,28 @@ TAFFISH app 自己的包装仓库。
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
 | `name` | string | 上游软件、方法或资源名称。 |
+| `type` | string | 可选来源类型，例如 `official`、`github`、`gitlab`、`archive`、`docker`、`apt`、`conda` 或 `other`。 |
 | `version` | string | 当前 taf-app release 包装的上游版本。 |
 | `url` | string | 上游主页、仓库或文档 URL。 |
+| `homepage` | string | 与 `url` 不同时的上游主页。 |
 | `repository` | string | 已知的上游源码仓库 URL 或 slug。 |
+| `release_url` | string | 已知的上游发布页。 |
+| `docker_image` | string | 已知的上游已有 Docker 镜像；这不是 TAFFISH 构建的镜像。 |
 | `license` | string | 上游开源协议/许可证，已知时优先使用 SPDX identifier。 |
-| `citation` | string | citation 文本、DOI、PMID 或论文 URL。 |
+| `citation` | string | 简短 citation 文本。 |
+| `doi` | string | 已知的上游方法或软件论文 DOI。 |
+| `pmid` | string | 已知的上游方法或软件论文 PubMed ID。 |
 
 Index 生成器应接受 `taffish.toml` 中的 `[upstream].repo` 作为兼容别名，并在
 生成的 index record 中规范化为 `upstream.repository`。
 
 `upstream.license` 描述上游软件或资源自己的 license；顶层 package 的
 `license` 字段描述 TAFFISH wrapper 项目本身的 license。
+对于学术型生信工具，`citation`、`doi` 和 `pmid` 用于保留经过确认的学术归属元数据。
+
+index 侧 metadata override 可以为已经存在 upstream 的记录补充 `license`、
+`citation`、`doi` 和 `pmid`，但不应该为原本没有 upstream 元数据的记录创建新的
+upstream object。
 
 ## `command`
 
