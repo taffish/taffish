@@ -143,11 +143,14 @@ TAFFISH app 自己的包装仓库。
 | `version` | string | 当前 taf-app release 包装的上游版本。 |
 | `url` | string | 上游主页、仓库或文档 URL。 |
 | `repository` | string | 已知的上游源码仓库 URL 或 slug。 |
-| `license` | string | 已知的上游 license。 |
+| `license` | string | 上游开源协议/许可证，已知时优先使用 SPDX identifier。 |
 | `citation` | string | citation 文本、DOI、PMID 或论文 URL。 |
 
 Index 生成器应接受 `taffish.toml` 中的 `[upstream].repo` 作为兼容别名，并在
 生成的 index record 中规范化为 `upstream.repository`。
+
+`upstream.license` 描述上游软件或资源自己的 license；顶层 package 的
+`license` 字段描述 TAFFISH wrapper 项目本身的 license。
 
 ## `command`
 

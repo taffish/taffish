@@ -184,12 +184,16 @@ Recommended fields:
 | `url` | string | Upstream homepage, repository, or documentation URL. |
 | `repository` | string | Upstream source repository URL or slug when known. |
 | `repo` | string | Compatibility alias for `repository`; consumers should normalize it to `repository`. |
-| `license` | string | Upstream license id or short license text when known. |
+| `license` | string | Upstream open-source license, preferably an SPDX identifier when known. |
 | `citation` | string | Citation text, DOI, PMID, or paper URL when available. |
 
 If both `repository` and `repo` are present, they must have the same value.
 New projects should prefer `repository`; existing projects that already use
 `repo` remain valid.
+
+`[upstream].license` records the license of the upstream software or resource.
+It is distinct from `[package].license`, which records the license of the
+TAFFISH wrapper project itself. They may be different.
 
 Example:
 

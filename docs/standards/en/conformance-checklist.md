@@ -85,7 +85,7 @@ notes:
 - Containerized tools should provide both a Dockerfile and an explicit image.
 - `[dependencies]` should prefer exact version ids instead of long-term `latest` dependencies.
 - Public Hub candidates should add `[meta]` with domain, category, summary, and keywords for discovery.
-- Tool apps wrapping third-party software should add `[upstream]` with upstream name, version, URL, license, and citation when available.
+- Tool apps wrapping third-party software should add `[upstream]` with upstream name, version, URL, open-source license, and citation when available.
 
 ### Warnings
 

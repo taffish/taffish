@@ -55,6 +55,8 @@ dependencies，以及 `[meta]`、`[upstream]` 这类生态元数据。
 对于 `[upstream]`，`project-check` 同时接受 `repository` 和兼容别名 `repo`。
 两者都会被规范化为返回 project plist 中的 `:upstream :repository`。如果两个字段
 同时存在，它们必须一致。
+`[upstream].license` 是可选生态元数据，用于记录上游软件或资源自己的 license；
+它不是 `[package].license`。
 
 这个边界是刻意的：
 

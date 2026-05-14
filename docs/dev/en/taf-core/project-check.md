@@ -56,6 +56,8 @@ They still need to use the restricted TOML subset when present.
 For `[upstream]`, `project-check` accepts both `repository` and the compatibility
 alias `repo`. It normalizes either form to `:upstream :repository` in the
 returned project plist. If both fields are present, they must match.
+`[upstream].license` is treated as optional ecosystem metadata for the upstream
+software/resource license; it is not the same field as `[package].license`.
 
 This boundary is intentional:
 

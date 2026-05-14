@@ -98,7 +98,7 @@ Check immediately:
 2. `[repository].url` points to the GitHub canonical repository, not Gitee or an internal mirror.
 3. `[command].name` starts with `taf-`.
 4. Public Hub apps should include `[meta]` for discovery and categorization.
-5. Tool apps should include `[upstream]` whenever possible: original software, version, license, citations, and source.
+5. Tool apps should include `[upstream]` whenever possible: original software, version, upstream open-source license, citations, and source.
 6. Flow apps should declare taf-app dependencies explicitly rather than hiding scientific dependencies in prose.
 
 ## Phase 2: Complete Metadata And Scientific Context
@@ -114,13 +114,18 @@ Publishing an app is not just adding a `.taf` file to a repository. Maintainers 
 | discovery metadata | `[meta]` | Records domain, category, summary, and search keywords. |
 | container declaration | `[container]` | Determines image, Dockerfile, and build platforms. |
 | platform constraints | `[platform]` | Records OS, arch, container requirement, and resource needs. |
-| upstream source | `[upstream]` | Records original bioinformatics software, version, homepage, paper, and license. |
+| upstream source | `[upstream]` | Records original bioinformatics software, version, homepage, paper, and upstream open-source license. |
 | help docs | `docs/help.md` | Helps `taf check`, Hub, and users understand the app. |
 | release notes | `release.md` | Provides publish message and GitHub Release notes. |
 
 `[meta]` is discovery metadata. It helps Hub/index search and display, but local commands should not require it.
 
-`[upstream]` is especially important for tool wrappers. It is not only display metadata; it supports future `hubctl` upstream version checks. Apps without upstream metadata can still be published, but maintenance costs are higher.
+`[upstream]` is especially important for tool wrappers. It is not only display
+metadata; it supports future `hubctl` upstream version checks and makes the
+upstream license visible to index consumers. `[upstream].license` is distinct
+from `[package].license`: the former belongs to the wrapped upstream project,
+while the latter belongs to the TAFFISH wrapper. Apps without upstream metadata
+can still be published, but maintenance costs are higher.
 
 ## Phase 3: Local Validation
 
