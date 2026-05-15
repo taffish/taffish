@@ -39,6 +39,15 @@
 
 强制 backend 只影响通用 `<container:...>` tag。显式 `<docker:...>`、`<podman:...>` 和 `<apptainer:...>` tag 仍保持显式含义。
 
+project compile/run 还会转发本机 backend runtime args：
+
+1. `TAFFISH_DOCKER_RUN_ARGS`
+2. `TAFFISH_PODMAN_RUN_ARGS`
+3. `TAFFISH_APPTAINER_RUN_ARGS`
+
+这些参数会在生成 shell 中追加到 `.taf` tag run-args 之后。它们用于本机策略，
+例如 GPU flag 或站点特定 runtime 选项，而不是 app 层面的科学语义。
+
 ## compile 选项
 
 当前支持：

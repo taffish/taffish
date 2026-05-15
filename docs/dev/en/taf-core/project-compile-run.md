@@ -39,6 +39,16 @@ For project compilation and run paths, the effective forced backend priority is:
 
 The forced backend only affects generic `<container:...>` tags. Explicit `<docker:...>`, `<podman:...>`, and `<apptainer:...>` tags remain explicit.
 
+Project compile/run also forwards local backend runtime args from:
+
+1. `TAFFISH_DOCKER_RUN_ARGS`
+2. `TAFFISH_PODMAN_RUN_ARGS`
+3. `TAFFISH_APPTAINER_RUN_ARGS`
+
+These are appended after `.taf` tag run-args in the generated shell. They are
+intended for local machine policy, such as GPU flags or site-specific runtime
+options, not app-level scientific semantics.
+
 ## Compile Options
 
 Currently supported:

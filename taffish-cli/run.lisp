@@ -9,7 +9,7 @@
 ;;;; ------------------------------------------------------------
 
 (defparameter *taffish-version*
-  "taffish 0.8.1 (2026-05, Kaiyuan Han)")
+  "taffish 0.9.0 (2026-05, Kaiyuan Han)")
 
 (defun run-taffish-version ()
   (format t "~A~%" *taffish-version*))
@@ -43,7 +43,9 @@ DETAILS:
     as .taf program arguments.
   - Generated shell code is printed to STDOUT.
   - TAFFISH_CONTAINER_BACKEND=apptainer|podman|docker forces generic
-    <container:...> tags without overriding explicit backend tags.")
+    <container:...> tags without overriding explicit backend tags.
+  - TAFFISH_DOCKER_RUN_ARGS, TAFFISH_PODMAN_RUN_ARGS, and
+    TAFFISH_APPTAINER_RUN_ARGS append local backend-specific runtime args.")
 
 (defun run-taffish-help ()
   (format t "~A~%" *taffish-version*)

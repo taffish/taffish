@@ -58,3 +58,10 @@ target/*
 # taf-app publish drafts should not be committed when this repository is used as
 # a working TAFFISH project.
 release.md
+
+# Local AI/agent working notes. Keep agent instructions private for now.
+AGENTS.md
+AGENTS.local.md
+docs-for-codex/
+.codex-notes/
+what-is-taffish.md

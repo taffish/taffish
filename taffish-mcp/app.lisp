@@ -397,6 +397,7 @@
            (list (cons :available-backends (%mcp-available-backends)))))
     (when backend
       (push (cons :force-backend backend) container-config))
+    (setf container-config (%add-container-env-run-args container-config))
     (list (cons :user user)
           (cons :homedir (and home (%strip-trailing-slash home)))
           (cons :workdir (%compiler-work-dir))

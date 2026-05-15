@@ -83,11 +83,27 @@
      (error "TAFFISH_CONTAINER_BACKEND must be a string or keyword, but got: ~S"
             (type-of backend)))))
 
+(defun %container-env-args (name)
+  (let ((value (han.host:getenv name)))
+    (when (and (stringp value)
+               (not (string= "" (string-trim '(#\Space #\Tab #\Newline #\Return)
+                                             value))))
+      value)))
+
 (defun %make-container-config (&optional container-backend)
   (let ((config (list (cons :available-backends (%get-available-backends))))
         (force-backend (%normalize-container-backend container-backend)))
     (when force-backend
       (push (cons :force-backend force-backend) config))
+    (let ((docker-run-args (%container-env-args "TAFFISH_DOCKER_RUN_ARGS"))
+          (podman-run-args (%container-env-args "TAFFISH_PODMAN_RUN_ARGS"))
+          (apptainer-run-args (%container-env-args "TAFFISH_APPTAINER_RUN_ARGS")))
+      (when docker-run-args
+        (push (cons :docker-env-run-args docker-run-args) config))
+      (when podman-run-args
+        (push (cons :podman-env-run-args podman-run-args) config))
+      (when apptainer-run-args
+        (push (cons :apptainer-env-exec-args apptainer-run-args) config)))
     (nreverse config)))
 
 (defun %fallback-homedir (user)

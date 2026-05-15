@@ -202,6 +202,8 @@ notes:
 
 - 默认后端顺序应优先 Apptainer，再 Podman，再 Docker。
 - 生成 shell 应保留容器调试 prelude。
+- 结构化 container `$@[backend: ARGS]` block 应只应用到匹配 backend。
+- `TAFFISH_DOCKER_RUN_ARGS`、`TAFFISH_PODMAN_RUN_ARGS`、`TAFFISH_APPTAINER_RUN_ARGS` 应在 tag 参数之后追加本机 runtime 参数。
 - 容器运行应挂载 home 和 workdir，除非配置明确关闭。
 - 不应直接拼接未转义用户输入到 shell 命令中。
 - 镜像 tag 应与 taf-app version id 对齐。

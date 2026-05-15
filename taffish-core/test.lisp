@@ -39,6 +39,13 @@
        (stringp substring)
        (not (null (search substring string :test #'char=)))))
 
+(defun %line-containing (string substring)
+  (with-input-from-string (in string)
+    (loop for line = (read-line in nil nil)
+          while line
+          when (%string-contains-p line substring)
+            return line)))
+
 (defun %default-test-context (&optional container-config argv)
   (append
    `((:cmd . "taf-app-xxx")
@@ -280,6 +287,15 @@ c"))
     (check-equal (han.args:arg-spec-default message)
                  '(:concat "hello, " (:query "name")))))
 
+(deftest test-taffish-parser-args-subtag-head-arg-token-error ()
+  (let ((code (format nil
+                      "ARGS~%<message::name::>~%  hello~%RUN~%<taffish>~%echo hello~%")))
+    (check-equal
+     (%taffish-signal-error-p
+      (lambda ()
+        (taffish.core:parse-taf code)))
+     t)))
+
 (deftest test-taffish-parser-args-after-run-error ()
   (let ((code (format nil
                       "RUN~%<taffish>~%echo hello~%ARGS~%<name>~%")))
@@ -289,9 +305,27 @@ c"))
         (taffish.core:parse-taf code)))
      t)))
 
+(deftest test-taffish-parser-duplicate-args-error ()
+  (let ((code (format nil
+                      "ARGS~%<name>~%  alice~%ARGS~%<other>~%  bob~%RUN~%<taffish>~%echo hello~%")))
+    (check-equal
+     (%taffish-signal-error-p
+      (lambda ()
+        (taffish.core:parse-taf code)))
+     t)))
+
 (deftest test-taffish-parser-duplicate-run-error ()
   (let ((code (format nil
                       "RUN~%<taffish>~%echo hello~%RUN~%<other>~%echo world~%")))
+    (check-equal
+     (%taffish-signal-error-p
+      (lambda ()
+        (taffish.core:parse-taf code)))
+     t)))
+
+(deftest test-taffish-parser-missing-run-error ()
+  (let ((code (format nil
+                      "ARGS~%<name>~%  alice~%")))
     (check-equal
      (%taffish-signal-error-p
       (lambda ()
@@ -640,6 +674,18 @@ c"))
     ;; <shell> should not wrap code into bash heredoc
     (check-equal (%string-contains-p shell "bash <<'EOF'") nil)))
 
+(deftest test-taffish-to-shell-unknown-tag-error ()
+  (let ((code (format nil
+                      "RUN~%<unknown>~%  echo hello~%")))
+    (check-equal
+     (%taffish-signal-error-p
+      (lambda ()
+        (taffish.core:taffish-to-shell
+         code
+         '("my-cmd")
+         (%default-test-context))))
+     t)))
+
 (deftest test-taffish-to-shell-podman-container-tag-single-command ()
   (let* ((code (format nil
                        "RUN~%<podman:ghcr.io/taffish/blast:2.16.0>~%  blastp -h~%"))
@@ -719,6 +765,100 @@ c"))
     (check-equal (%string-contains-p shell "# FORCE BACKEND: :DOCKER") t)
     (check-equal (%string-contains-p shell "docker run --rm -i") t)
     (check-equal (%string-contains-p shell "apptainer --quiet exec --pwd") nil)))
+
+(deftest test-taffish-to-shell-container-legacy-run-args-still-work ()
+  (let* ((code (format nil
+                       "RUN~%<container:ghcr.io/taffish/blast:2.16.0$--network host>~%  tblastn -h~%"))
+         (shell (taffish.core:taffish-to-shell
+                 code
+                 (%default-test-input-args)
+                 (%default-test-context
+                  '((:available-backends . (:docker))
+                    (:force-backend . :docker))))))
+    (check-equal (%string-contains-p shell "# CHOSEN BACKEND: DOCKER") t)
+    (check-equal (%string-contains-p shell "--network host") t)))
+
+(deftest test-taffish-to-shell-container-structured-run-args-docker ()
+  (let* ((code (format nil
+                       "RUN~%<container:ghcr.io/taffish/blast:2.16.0$@[all: --network host][docker: --gpus all][podman: --device nvidia.com/gpu=all][apptainer: --nv]>~%  tblastn -h~%"))
+         (shell (taffish.core:taffish-to-shell
+                 code
+                 (%default-test-input-args)
+                 (%default-test-context
+                  '((:available-backends . (:docker))
+                    (:force-backend . :docker))))))
+    (let ((final-run-args (%line-containing shell "# FINAL RUN ARGS:")))
+      (check-equal (%string-contains-p shell "# CHOSEN BACKEND: DOCKER") t)
+      (check-equal (%string-contains-p final-run-args "--network host --gpus all") t)
+      (check-equal (%string-contains-p final-run-args "nvidia.com/gpu") nil)
+      (check-equal (%string-contains-p final-run-args "--nv") nil))))
+
+(deftest test-taffish-to-shell-container-structured-run-args-apptainer ()
+  (let* ((code (format nil
+                       "RUN~%<container:ghcr.io/taffish/blast:2.16.0$@[all: --containall][docker: --gpus all][apptainer: --nv]>~%  tblastn -h~%"))
+         (shell (taffish.core:taffish-to-shell
+                 code
+                 (%default-test-input-args)
+                 (%default-test-context
+                  '((:available-backends . (:apptainer))
+                    (:force-backend . :apptainer))))))
+    (let ((final-run-args (%line-containing shell "# FINAL RUN ARGS:")))
+      (check-equal (%string-contains-p shell "# CHOSEN BACKEND: APPTAINER") t)
+      (check-equal (%string-contains-p final-run-args "--containall --nv") t)
+      (check-equal (%string-contains-p final-run-args "--gpus all") nil))))
+
+(deftest test-taffish-to-shell-container-structured-run-args-combo-target ()
+  (let* ((code (format nil
+                       "RUN~%<container:ghcr.io/taffish/blast:2.16.0$@[docker/podman: --network host][apptainer: --nv]>~%  tblastn -h~%"))
+         (shell (taffish.core:taffish-to-shell
+                 code
+                 (%default-test-input-args)
+                 (%default-test-context
+                  '((:available-backends . (:podman))
+                    (:force-backend . :podman))))))
+    (let ((final-run-args (%line-containing shell "# FINAL RUN ARGS:")))
+      (check-equal (%string-contains-p shell "# CHOSEN BACKEND: PODMAN") t)
+      (check-equal (%string-contains-p final-run-args "--network host") t)
+      (check-equal (%string-contains-p final-run-args "--nv") nil))))
+
+(deftest test-taffish-to-shell-container-structured-run-args-escaped-right-bracket ()
+  (let* ((code (format nil
+                       "RUN~%<container:ghcr.io/taffish/blast:2.16.0$@[docker: --label note=a\\]b]>~%  tblastn -h~%"))
+         (shell (taffish.core:taffish-to-shell
+                 code
+                 (%default-test-input-args)
+                 (%default-test-context
+                  '((:available-backends . (:docker))
+                    (:force-backend . :docker))))))
+    (let ((final-run-args (%line-containing shell "# FINAL RUN ARGS:")))
+      (check-equal (%string-contains-p shell "# CHOSEN BACKEND: DOCKER") t)
+      (check-equal (%string-contains-p final-run-args "--label note=a]b") t))))
+
+(deftest test-taffish-to-shell-container-structured-run-args-bad-target-error ()
+  (let ((code (format nil
+                      "RUN~%<container:ghcr.io/taffish/blast:2.16.0$@[singularity: --nv]>~%  tblastn -h~%")))
+    (check-equal
+     (%taffish-signal-error-p
+      (lambda ()
+        (taffish.core:taffish-to-shell
+         code
+         (%default-test-input-args)
+         (%default-test-context
+          '((:available-backends . (:apptainer)))))))
+     t)))
+
+(deftest test-taffish-to-shell-container-structured-run-args-empty-error ()
+  (let ((code (format nil
+                      "RUN~%<container:ghcr.io/taffish/blast:2.16.0$@[docker: ]>~%  tblastn -h~%")))
+    (check-equal
+     (%taffish-signal-error-p
+      (lambda ()
+        (taffish.core:taffish-to-shell
+         code
+         (%default-test-input-args)
+         (%default-test-context
+          '((:available-backends . (:docker)))))))
+     t)))
 
 (deftest test-taffish-to-shell-forced-backend-keeps-explicit-backend ()
   (let* ((code (format nil
@@ -960,6 +1100,16 @@ c"))
     (check-equal (%string-contains-p shell "echo [[taf: taf-a foo]]") t)
     (check-equal (%string-contains-p shell "taffish_step_1") nil)
     (check-equal (%string-contains-p shell "mktemp -d") nil)))
+
+(deftest test-taffish-to-shell-taffish-escaped-right-bracket ()
+  (let* ((code (format nil
+                       "RUN~%<taffish>~%  echo \\] literal~%"))
+         (shell (taffish.core:taffish-to-shell
+                 code
+                 '("my-cmd")
+                 (%default-test-context))))
+    (check-equal (%string-contains-p shell "echo ] literal") t)
+    (check-equal (%string-contains-p shell "taffish_step_1") nil)))
 
 (deftest test-taffish-to-shell-taffish-empty-taf-error ()
   (check-equal

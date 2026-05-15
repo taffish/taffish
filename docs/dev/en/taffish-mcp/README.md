@@ -34,6 +34,15 @@ For compile tools that expose `containerBackend`, the effective backend priority
 
 This only changes generated shell for generic `<container:...>` tags. MCP still does not execute the shell or start containers.
 
+MCP compile tools also inherit local runtime arg variables from the MCP server
+process:
+
+1. `TAFFISH_DOCKER_RUN_ARGS`
+2. `TAFFISH_PODMAN_RUN_ARGS`
+3. `TAFFISH_APPTAINER_RUN_ARGS`
+
+These only affect generated shell. MCP does not run the shell.
+
 ## Main Files
 
 | File | Responsibility |

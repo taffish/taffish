@@ -34,6 +34,14 @@ Smoke 和 trust 元数据只作为数据暴露给 AI 检查。MCP 不会运行 s
 
 这只会影响通用 `<container:...>` tag 的生成 shell。MCP 仍然不会执行 shell 或启动容器。
 
+MCP compile 工具也会继承 MCP server 进程中的本机 runtime arg 环境变量：
+
+1. `TAFFISH_DOCKER_RUN_ARGS`
+2. `TAFFISH_PODMAN_RUN_ARGS`
+3. `TAFFISH_APPTAINER_RUN_ARGS`
+
+这些变量只影响生成的 shell。MCP 不会执行 shell。
+
 ## 主要文件
 
 | 文件 | 职责 |

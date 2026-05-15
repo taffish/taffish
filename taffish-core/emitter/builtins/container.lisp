@@ -45,6 +45,9 @@
        (<= (length prefix) (length string))
        (string= prefix (subseq string 0 (length prefix)))))
 
+(defun %trim-run-args (string)
+  (and string (%clean-string string)))
+
 (defun %parse-container-kind (container)
   (let ((clean-container (%clean-string container)))
     (cond
@@ -58,11 +61,33 @@
        :apptainer)
       (t nil))))
 
+(defun %parse-container-arg-kind (container)
+  (let ((clean-container (%clean-string container)))
+    (cond
+      ((string-equal clean-container "all")
+       :all)
+      ((string-equal clean-container "container")
+       :all)
+      (t
+       (%parse-container-kind clean-container)))))
+
 (defun %parse-container-head (container-head)
   (let ((containers (mapcar #'%parse-container-kind
                             (%split-every container-head #\/))))
     (unless (some #'null containers)
       containers)))
+
+(defun %parse-container-arg-targets (target-string raw-tag line-number)
+  (let ((targets (mapcar #'%parse-container-arg-kind
+                         (%split-every target-string #\/))))
+    (when (or (null targets)
+              (some #'null targets))
+      (taffish.core:signal-taffish-error
+       "Invalid container run-args target in <CONTAINER:IMAGE$@[backend: ARGS]>."
+       :line line-number
+       :column nil
+       :source-string raw-tag))
+    targets))
 
 (defun %blank-string-p (string)
   (or (null string)
@@ -73,6 +98,97 @@
     (if (ignore-errors (char= #\' (char clean-tag 0)))
         (values (subseq raw-tag 1) t)
         (values raw-tag nil))))
+
+(defun %structured-run-args-p (run-args)
+  (%string-prefix-p "@[" (%clean-string run-args)))
+
+(defun %read-container-arg-block (string index raw-tag line-number)
+  (let ((len (length string))
+        (out nil)
+        (i index))
+    (unless (and (< i len)
+                 (char= #\[ (char string i)))
+      (taffish.core:signal-taffish-error
+       "Expected '[' in structured container run args."
+       :line line-number
+       :column nil
+       :source-string raw-tag))
+    (incf i)
+    (loop
+      (when (>= i len)
+        (taffish.core:signal-taffish-error
+         "Unclosed structured container run-args block."
+         :line line-number
+         :column nil
+         :source-string raw-tag))
+      (let ((char (char string i)))
+        (cond
+          ((char= char #\])
+           (return
+             (values (coerce (nreverse out) 'string)
+                     (1+ i))))
+          ((and (char= char #\\)
+                (< (1+ i) len)
+                (char= (char string (1+ i)) #\]))
+           (push #\] out)
+           (incf i 2))
+          (t
+           (push char out)
+           (incf i)))))))
+
+(defun %parse-container-arg-block (content raw-tag line-number)
+  (multiple-value-bind (target-string arg-string)
+      (%split-once content #\:)
+    (unless arg-string
+      (taffish.core:signal-taffish-error
+       "Structured container run-args block must be [backend: ARGS]."
+       :line line-number
+       :column nil
+       :source-string raw-tag))
+    (let ((targets (%parse-container-arg-targets target-string raw-tag line-number))
+          (args (%trim-run-args arg-string)))
+      (when (%blank-string-p args)
+        (taffish.core:signal-taffish-error
+         "Structured container run-args block has empty ARGS."
+         :line line-number
+         :column nil
+         :source-string raw-tag))
+      (loop for target in targets
+            collect (cons target args)))))
+
+(defun %parse-structured-run-args (run-args raw-tag line-number)
+  (let* ((clean-run-args (%clean-string run-args))
+         (len (length clean-run-args))
+         (i 1)
+         (out nil))
+    (loop
+      (loop while (and (< i len)
+                       (member (char clean-run-args i)
+                               '(#\Space #\Tab #\Newline #\Return)))
+            do (incf i))
+      (when (>= i len)
+        (return (nreverse out)))
+      (unless (char= #\[ (char clean-run-args i))
+        (taffish.core:signal-taffish-error
+         "Structured container run args must be @[...] blocks."
+         :line line-number
+         :column nil
+         :source-string raw-tag))
+      (multiple-value-bind (content next-index)
+          (%read-container-arg-block clean-run-args i raw-tag line-number)
+        (dolist (entry (%parse-container-arg-block content raw-tag line-number))
+          (push entry out))
+        (setf i next-index)))))
+
+(defun %parse-container-run-args (run-args raw-tag line-number)
+  (cond
+    ((%blank-string-p run-args)
+     (values nil nil))
+    ((%structured-run-args-p run-args)
+     (values nil
+             (%parse-structured-run-args run-args raw-tag line-number)))
+    (t
+     (values (%clean-string run-args) nil))))
 
 ;; <CONTAINERS:IMAGE$RUN-ARGS>
 (defun match-container-tag (raw-tag line-number)
@@ -90,17 +206,19 @@
              :line line-number
              :column nil
              :source-string raw-tag))
-          (let ((container-kinds (%parse-container-head container-head))
-                (clean-image (%clean-string image))
-                (clean-run-args (and run-args (%clean-string run-args))))
-            (when container-kinds
-              (list :kind :container
-                    :tag raw-tag
-                    :line-number line-number
-                    :heredoc-quoted-p force-heredoc-p
-                    :backend-kinds container-kinds
-                    :image clean-image
-                    :run-args clean-run-args))))))))
+          (multiple-value-bind (legacy-run-args backend-run-args)
+              (%parse-container-run-args run-args raw-tag line-number)
+            (let ((container-kinds (%parse-container-head container-head))
+                  (clean-image (%clean-string image)))
+              (when container-kinds
+                (list :kind :container
+                      :tag raw-tag
+                      :line-number line-number
+                      :heredoc-quoted-p force-heredoc-p
+                      :backend-kinds container-kinds
+                      :image clean-image
+                      :run-args legacy-run-args
+                      :backend-run-args backend-run-args)))))))))
 
 (defun %container-ref (container-config key)
   (let ((pair (assoc key container-config :test #'eql)))
@@ -390,17 +508,32 @@ selection against AVAILABLE-BACKENDS."
          (value (%container-config-value taf-result key)))
     (%ensure-string-list value key)))
 
-(defun %podman-or-docker-tag-run-args-list (parsed-info)
+(defun %backend-tag-run-args-list (backend parsed-info)
   (let ((run-args (getf parsed-info :run-args)))
-    (if (%blank-string-p run-args)
-        nil
-        (list run-args))))
+    (append
+     (if (%blank-string-p run-args)
+         nil
+         (list run-args))
+     (loop for (target . args) in (getf parsed-info :backend-run-args)
+           when (member target (list :all backend) :test #'eql)
+           collect args))))
+
+(defun %podman-or-docker-env-run-args-list (backend taf-result)
+  (let* ((key (case backend
+                (:docker :docker-env-run-args)
+                (:podman :podman-env-run-args)
+                (t
+                 (error "BACKEND must be :DOCKER or :PODMAN, but got: ~S"
+                        backend))))
+         (value (%container-config-value taf-result key)))
+    (%ensure-string-list value key)))
 
 (defun %podman-or-docker-run-args-string (backend parsed-info taf-result)
   (let ((all-args
           (append (%podman-or-docker-default-run-args-list backend taf-result)
                   (%podman-or-docker-config-run-args-list backend taf-result)
-                  (%podman-or-docker-tag-run-args-list parsed-info))))
+                  (%backend-tag-run-args-list backend parsed-info)
+                  (%podman-or-docker-env-run-args-list backend taf-result))))
     (if all-args
         (apply #'%join-non-empty-strings all-args)
         "")))
@@ -609,17 +742,16 @@ selection against AVAILABLE-BACKENDS."
   (let ((value (%container-config-value taf-result :apptainer-exec-args)))
     (%ensure-string-list value :apptainer-exec-args)))
 
-(defun %apptainer-tag-run-args-list (parsed-info)
-  (let ((run-args (getf parsed-info :run-args)))
-    (if (%blank-string-p run-args)
-        nil
-        (list run-args))))
+(defun %apptainer-env-exec-args-list (taf-result)
+  (let ((value (%container-config-value taf-result :apptainer-env-exec-args)))
+    (%ensure-string-list value :apptainer-env-exec-args)))
 
 (defun %apptainer-exec-args-string (parsed-info taf-result)
   (let ((all-args
           (append (%apptainer-default-exec-args-list taf-result)
                   (%apptainer-config-exec-args-list taf-result)
-                  (%apptainer-tag-run-args-list parsed-info))))
+                  (%backend-tag-run-args-list :apptainer parsed-info)
+                  (%apptainer-env-exec-args-list taf-result))))
     (if all-args
         (apply #'%join-non-empty-strings all-args)
         "")))

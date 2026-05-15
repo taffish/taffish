@@ -183,6 +183,18 @@ parser 不应直接读取真实 CLI 参数，compiler 不应重新解释 `ARGS` 
 | `<apptainer:IMAGE>` | 指定 Apptainer。 |
 | `<docker/podman:IMAGE>` | 从给定后端列表中选择可用后端。 |
 
+container tag 可以在 `$` 后传入 runtime arguments。旧的 `$ARGS` 会应用到所有选中后端。
+结构化 `$@[backend: ARGS]` block 只会应用到匹配后端：
+
+```taf
+<container:IMAGE$@[all: --network host][docker: --gpus all][apptainer: --nv]>
+```
+
+结构化 target 包括 `all`、作为 `all` 别名的 `container`、`docker`、`podman`、
+`apptainer`，以及 `docker/podman` 这样的 `/` 组合。runtime 参数会在 backend
+选择之后再筛选，所以同一个通用 `<container:...>` tag 在 context 或
+`TAFFISH_CONTAINER_BACKEND` 强制不同后端时，可能编译出不同的 final run args。
+
 未知标签由 emitter registry 决定是否报错。
 
 ## 未稳定区域

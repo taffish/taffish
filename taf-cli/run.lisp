@@ -9,7 +9,7 @@
 ;;;; ------------------------------------------------------------
 
 (defparameter *taf-version*
-  "taf 0.8.1 (2026-05, Kaiyuan Han)")
+  "taf 0.9.0 (2026-05, Kaiyuan Han)")
 
 (defun run-taf-version ()
   (format t "~A~%" *taf-version*))
@@ -310,6 +310,8 @@ Details:
   - forwards ARGS to the .taf program
   - TAFFISH_CONTAINER_BACKEND=apptainer|podman|docker is used when
     --backend is not given
+  - TAFFISH_DOCKER_RUN_ARGS, TAFFISH_PODMAN_RUN_ARGS, and
+    TAFFISH_APPTAINER_RUN_ARGS append local backend-specific runtime args
 
 Options:
   -b, --backend <docker|podman|apptainer>

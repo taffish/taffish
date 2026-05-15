@@ -82,6 +82,13 @@
    (or explicit-backend
        (han.host:getenv "TAFFISH_CONTAINER_BACKEND"))))
 
+(defun %container-env-args (name)
+  (let ((value (han.host:getenv name)))
+    (when (and (stringp value)
+               (not (string= "" (string-trim '(#\Space #\Tab #\Newline #\Return)
+                                             value))))
+      value)))
+
 (defun %parse-project-compile-options (options)
   (unless (evenp (length options))
     (error "[compile] malformed keyword options: ~S" options))
@@ -113,6 +120,15 @@
            (list (cons :available-backends (%get-available-backends)))))
     (when force-backend
       (push (cons :force-backend force-backend) container-config))
+    (let ((docker-run-args (%container-env-args "TAFFISH_DOCKER_RUN_ARGS"))
+          (podman-run-args (%container-env-args "TAFFISH_PODMAN_RUN_ARGS"))
+          (apptainer-run-args (%container-env-args "TAFFISH_APPTAINER_RUN_ARGS")))
+      (when docker-run-args
+        (push (cons :docker-env-run-args docker-run-args) container-config))
+      (when podman-run-args
+        (push (cons :podman-env-run-args podman-run-args) container-config))
+      (when apptainer-run-args
+        (push (cons :apptainer-env-exec-args apptainer-run-args) container-config)))
     (list (cons :user user)
           (cons :homedir (and home (%strip-trailing-slash home)))
           (cons :workdir (%absolute-directory-namestring workdir))

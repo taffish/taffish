@@ -217,7 +217,7 @@ Initial MCP project test release.
        (han.path:delete-directory-tree ,root :if-does-not-exist :ignore))))
 
 (han.test:deftest test-taffish-mcp-version-string-basic ()
-  (han.test:check-true (search "taffish-mcp 0.8.1" *taffish-mcp-version*)))
+  (han.test:check-true (search "taffish-mcp 0.9.0" *taffish-mcp-version*)))
 
 (han.test:deftest test-taffish-mcp-initialize-response ()
   (let* ((raw "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-06-18\"}}")
@@ -263,7 +263,7 @@ Initial MCP project test release.
          (structured (%mcp-test-structured result)))
     (han.test:check-equal nil (han.json:get-json result "isError"))
     (han.test:check-true
-     (search "taffish-mcp 0.8.1"
+     (search "taffish-mcp 0.9.0"
              (han.json:get-json structured "taffish_mcp")))
     (han.test:check-true
      (> (length (han.json:get-json structured "features")) 0))
@@ -404,6 +404,21 @@ Initial MCP project test release.
           (han.test:check-true (search "# CHOSEN BACKEND: DOCKER" shell))
           (han.test:check-true (search "# FORCE BACKEND: :DOCKER" shell)))))))
 
+(han.test:deftest test-taffish-mcp-compile-source-uses-env-run-args ()
+  (let ((source (format nil "RUN~%<container:ghcr.io/taffish/mcp-demo:0.1.0-r1$@[docker: --ipc host]>~%echo hi")))
+    (with-mcp-env ("TAFFISH_CONTAINER_BACKEND" "docker")
+      (with-mcp-env ("TAFFISH_DOCKER_RUN_ARGS" "--gpus all")
+        (with-mcp-available-backends (list :apptainer :podman :docker)
+          (let* ((result (call-tool
+                          "taffish_compile_source"
+                          (%json-object (cons "source" source))))
+                 (structured (%mcp-test-structured result))
+                 (shell (han.json:get-json structured "shell")))
+            (han.test:check-equal nil (han.json:get-json result "isError"))
+            (han.test:check-equal t (han.json:get-json structured "ok"))
+            (han.test:check-true (search "# CHOSEN BACKEND: DOCKER" shell))
+            (han.test:check-true (search "--ipc host --gpus all" shell))))))))
+
 (han.test:deftest test-taffish-mcp-invalid-env-backend-is-structured-error ()
   (let ((source (format nil "RUN~%<container:ghcr.io/taffish/mcp-demo:0.1.0-r1>~%echo hi")))
     (with-mcp-env ("TAFFISH_CONTAINER_BACKEND" "bad-backend")
@@ -531,6 +546,17 @@ Initial MCP project test release.
       (han.test:check-equal
        (cdr (assoc :force-backend container :test #'eql))
        :apptainer))))
+
+(han.test:deftest test-taffish-mcp-app-compiler-context-uses-env-run-args ()
+  (with-mcp-env ("TAFFISH_APPTAINER_RUN_ARGS" "--nv")
+    (let* ((context (%app-compiler-context (han.json:make-json-object)
+                                           "taf-demo"
+                                           '("uname" "-a")
+                                           nil))
+           (container (cdr (assoc :container context :test #'eql))))
+      (han.test:check-equal
+       (cdr (assoc :apptainer-env-exec-args container :test #'eql))
+       "--nv"))))
 
 (han.test:deftest test-taffish-mcp-compile-app-invocation-keeps-args-array ()
   (with-mcp-installed-app (root user-home system-home)

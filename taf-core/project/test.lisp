@@ -725,6 +725,28 @@ echo after")
                           "# FORCE BACKEND: :PODMAN")
                          t)))))))
 
+(deftest test-taf-project-compile-container-env-run-args ()
+  (with-taf-project-temp-dir (dir)
+    (taf.core:project-new "demo-env-run-args" nil)
+    (%taf-project-write-string
+     (%taf-project-path "demo-env-run-args" "src" "main.taf")
+     (format nil "RUN~%<container:ghcr.io/taffish/demo-env-run-args:0.1.0-r1$@[docker: --ipc host]>~%echo hi"))
+    (uiop:with-current-directory ((%taf-project-dir "demo-env-run-args"))
+      (%with-taf-project-env ("TAFFISH_CONTAINER_BACKEND" "docker")
+        (%with-taf-project-env ("TAFFISH_DOCKER_RUN_ARGS" "--gpus all")
+          (%with-taf-project-available-backends (list :apptainer :podman :docker)
+            (let ((shell (taf.core:project-compile
+                          nil
+                          (han.os:current-directory))))
+              (check-equal (%taf-project-string-contains-p
+                            shell
+                            "# CHOSEN BACKEND: DOCKER")
+                           t)
+              (check-equal (%taf-project-string-contains-p
+                            shell
+                            "--ipc host --gpus all")
+                           t))))))))
+
 (deftest test-taf-project-build-command-wrapper-and-frozen-snapshot ()
   (with-taf-project-temp-dir (dir)
     (taf.core:project-new "demo-build" nil)

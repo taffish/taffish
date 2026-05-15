@@ -37,11 +37,37 @@ echo hello
 | `IMAGE` | 容器镜像。不能为空。 |
 | `$RUN-ARGS` | 可选，追加到后端运行参数中。 |
 
-示例：
+旧的 all-backend 示例：
 
 ```taf
 <docker/podman:ubuntu:22.04$--network host>
 ```
+
+backend-specific 结构化参数写成 `$` 后面的 `@[...]` block：
+
+```taf
+<container:ubuntu:22.04$@[docker: --gpus all][podman: --device nvidia.com/gpu=all][apptainer: --nv]>
+```
+
+支持的 block target 是 `all`、`docker`、`podman`、`apptainer`。
+target 可以用 `/` 组合，例如 `[docker/podman: --network host]`。
+在结构化 run-args 中，`container` 可作为 `all` 的别名。
+
+示例：
+
+```taf
+<container:ubuntu:22.04$@[all: --network host]>
+echo shared args
+```
+
+```taf
+<container:ubuntu:22.04$@[docker/podman: --security-opt=label=disable][apptainer: --nv]>
+echo backend-specific args
+```
+
+结构化 run-args 会在 backend 选择之后再筛选。因此同一个通用
+`<container:...>` tag，在强制 `TAFFISH_CONTAINER_BACKEND=docker`、`podman`
+或 `apptainer` 时，可以从同一份源码生成不同的 final run args。
 
 如果 tag 以单引号开头，会强制 heredoc quoted。
 
@@ -71,7 +97,7 @@ Docker 和 Podman 共享大部分逻辑：
 4. 生成 `docker run` 或 `podman run`。
 5. 默认 `--rm -i`。
 6. 设置工作目录。
-7. 追加默认挂载、配置参数和 tag 参数。
+7. 追加默认挂载、配置参数、tag 参数和环境变量 runtime 参数。
 
 默认挂载包括：
 
@@ -83,6 +109,20 @@ Docker 和 Podman 共享大部分逻辑：
 
 1. `HOME`
 2. `USER`
+
+运行时环境变量可以在不修改 `.taf` 文件的情况下追加本机
+backend-specific 参数：
+
+1. `TAFFISH_DOCKER_RUN_ARGS`
+2. `TAFFISH_PODMAN_RUN_ARGS`
+3. `TAFFISH_APPTAINER_RUN_ARGS`
+
+最终顺序是默认参数、context config 参数、tag 参数、环境变量 runtime 参数。
+
+这个拆分是有意的：
+
+1. app 自身要求放在 tag args，因为它属于 taf-app 源码。
+2. 本地站点或 runtime 策略放在环境变量，因为它属于实际运行机器或集群。
 
 ## Apptainer
 

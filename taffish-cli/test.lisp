@@ -62,9 +62,9 @@
 (deftest test-taffish-cli-version-string-basic ()
   (check-equal (stringp taffish.cli:*taffish-version*) t)
   (check-equal (%taffish-cli-string-contains-p taffish.cli:*taffish-version* "taffish") t)
-  (check-equal (%taffish-cli-string-contains-p taffish.cli:*taffish-version* "0.8.1") t)
+  (check-equal (%taffish-cli-string-contains-p taffish.cli:*taffish-version* "0.9.0") t)
   (check-equal taffish.cli:*taffish-version*
-               "taffish 0.8.1 (2026-05, Kaiyuan Han)"))
+               "taffish 0.9.0 (2026-05, Kaiyuan Han)"))
 
 (deftest test-taffish-cli-help-string-basic ()
   (let ((help-string (taffish.cli::%get-taffish-help-string)))
@@ -281,6 +281,22 @@
            (container (cdr (assoc :container context :test #'eql))))
       (check-equal (cdr (assoc :force-backend container :test #'eql))
                    :podman))))
+
+(deftest test-taffish-cli-make-core-context-container-env-run-args ()
+  (%with-taffish-cli-env ("TAFFISH_DOCKER_RUN_ARGS" "--gpus all")
+    (%with-taffish-cli-env ("TAFFISH_PODMAN_RUN_ARGS" "--device nvidia.com/gpu=all")
+      (%with-taffish-cli-env ("TAFFISH_APPTAINER_RUN_ARGS" "--nv")
+        (let* ((context (taffish.cli::%make-core-context
+                         "taffish"
+                         '(:stdin)
+                         nil))
+               (container (cdr (assoc :container context :test #'eql))))
+          (check-equal (cdr (assoc :docker-env-run-args container :test #'eql))
+                       "--gpus all")
+          (check-equal (cdr (assoc :podman-env-run-args container :test #'eql))
+                       "--device nvidia.com/gpu=all")
+          (check-equal (cdr (assoc :apptainer-env-exec-args container :test #'eql))
+                       "--nv"))))))
 
 (deftest test-taffish-cli-normalize-container-backend-error ()
   (check-equal (taffish.cli::%normalize-container-backend nil) nil)

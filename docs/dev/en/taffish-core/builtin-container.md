@@ -37,11 +37,38 @@ Parts:
 | `IMAGE` | Container image. Must not be empty. |
 | `$RUN-ARGS` | Optional arguments appended to backend run arguments. |
 
-Example:
+Legacy all-backend example:
 
 ```taf
 <docker/podman:ubuntu:22.04$--network host>
 ```
+
+Backend-specific structured arguments use `@[...]` blocks after `$`:
+
+```taf
+<container:ubuntu:22.04$@[docker: --gpus all][podman: --device nvidia.com/gpu=all][apptainer: --nv]>
+```
+
+Supported block targets are `all`, `docker`, `podman`, and `apptainer`.
+Targets may be combined with `/`, for example `[docker/podman: --network host]`.
+`container` is accepted as an alias for `all` inside structured run-args.
+
+Examples:
+
+```taf
+<container:ubuntu:22.04$@[all: --network host]>
+echo shared args
+```
+
+```taf
+<container:ubuntu:22.04$@[docker/podman: --security-opt=label=disable][apptainer: --nv]>
+echo backend-specific args
+```
+
+Structured run-args are selected after the backend is chosen. For the same
+generic `<container:...>` tag, forcing `TAFFISH_CONTAINER_BACKEND=docker`,
+`podman`, or `apptainer` can therefore produce different final run args from the
+same source.
 
 If the tag starts with a single quote, it forces quoted heredoc.
 
@@ -71,7 +98,8 @@ Docker and Podman share most logic:
 4. Generate `docker run` or `podman run`.
 5. Default to `--rm -i`.
 6. Set workdir.
-7. Append default mounts, config arguments, and tag arguments.
+7. Append default mounts, config arguments, tag arguments, and environment
+   runtime arguments.
 
 Default mounts include:
 
@@ -83,6 +111,22 @@ Default environment variables include:
 
 1. `HOME`
 2. `USER`
+
+Runtime environment variables can append local backend-specific args without
+editing the `.taf` file:
+
+1. `TAFFISH_DOCKER_RUN_ARGS`
+2. `TAFFISH_PODMAN_RUN_ARGS`
+3. `TAFFISH_APPTAINER_RUN_ARGS`
+
+The effective order is default args, context config args, tag args, then
+environment runtime args.
+
+This split is intentional:
+
+1. Put app requirements in tag args, because they belong to the taf-app source.
+2. Put local site/runtime policy in environment variables, because it belongs to
+   the machine or cluster where the command runs.
 
 ## Apptainer
 
@@ -152,4 +196,3 @@ Also check:
 5. Whether China-user mirrors or network environments need additional source rewrite support.
 
 The container emitter is an important display of TAFFISH's strength, but also the riskiest emitter. Do not add logic tightly bound to a specific bioinformatics tool here.
-

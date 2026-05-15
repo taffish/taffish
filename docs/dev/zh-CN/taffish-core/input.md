@@ -66,6 +66,9 @@ han.args:parse-args-input
 | `:docker-run-args` | Docker 额外 run args。 |
 | `:podman-run-args` | Podman 额外 run args。 |
 | `:apptainer-exec-args` | Apptainer 额外 exec args。 |
+| `:docker-env-run-args` | 来自 `TAFFISH_DOCKER_RUN_ARGS` 的 Docker 参数。 |
+| `:podman-env-run-args` | 来自 `TAFFISH_PODMAN_RUN_ARGS` 的 Podman 参数。 |
+| `:apptainer-env-exec-args` | 来自 `TAFFISH_APPTAINER_RUN_ARGS` 的 Apptainer 参数。 |
 | `:apptainer-image-dir` | SIF 搜索和缓存目录。 |
 | `:apptainer-quiet-p` | 是否使用 quiet 模式。 |
 | `:apptainer-auto-pull-p` | SIF 不存在时是否自动 pull。 |

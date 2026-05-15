@@ -183,6 +183,20 @@ Subtag headers are matched by the emitter registry. Built-in tags include:
 | `<apptainer:IMAGE>` | require Apptainer. |
 | `<docker/podman:IMAGE>` | choose an available backend from the listed candidates. |
 
+Container tags may pass runtime arguments after `$`. Legacy `$ARGS` applies to
+all selected backends. Structured `$@[backend: ARGS]` blocks apply args only to
+matching backends:
+
+```taf
+<container:IMAGE$@[all: --network host][docker: --gpus all][apptainer: --nv]>
+```
+
+Structured targets are `all`, `container` as an alias for `all`, `docker`,
+`podman`, `apptainer`, and `/` combinations such as `docker/podman`. Runtime
+argument selection happens after backend selection, so a generic
+`<container:...>` tag may compile to different final run args when a backend is
+forced by context or `TAFFISH_CONTAINER_BACKEND`.
+
 Unknown tags are handled by the emitter registry and may error.
 
 ## Unstable Areas

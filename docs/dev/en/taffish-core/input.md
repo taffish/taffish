@@ -66,6 +66,9 @@ Unknown keys are preserved in `taf-context-extras` for future extension.
 | `:docker-run-args` | Extra Docker run args. |
 | `:podman-run-args` | Extra Podman run args. |
 | `:apptainer-exec-args` | Extra Apptainer exec args. |
+| `:docker-env-run-args` | Docker args from `TAFFISH_DOCKER_RUN_ARGS`. |
+| `:podman-env-run-args` | Podman args from `TAFFISH_PODMAN_RUN_ARGS`. |
+| `:apptainer-env-exec-args` | Apptainer args from `TAFFISH_APPTAINER_RUN_ARGS`. |
 | `:apptainer-image-dir` | SIF search and cache directories. |
 | `:apptainer-quiet-p` | Whether to use quiet mode. |
 | `:apptainer-auto-pull-p` | Whether to auto-pull when SIF does not exist. |
@@ -87,4 +90,3 @@ When changing `input.lisp`, check:
 4. Whether the system config layer should expose corresponding settings.
 
 Do not implement CLI help, project config reading, or shell generation in the input layer.
-

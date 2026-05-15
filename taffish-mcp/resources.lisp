@@ -303,6 +303,7 @@ Optional arguments:
 - If containerBackend is omitted, TAFFISH_CONTAINER_BACKEND is used when set.
 - Explicit containerBackend has priority over TAFFISH_CONTAINER_BACKEND.
 - Container backend availability is detected from local executables and passed into the compiler context.
+- TAFFISH_DOCKER_RUN_ARGS, TAFFISH_PODMAN_RUN_ARGS, and TAFFISH_APPTAINER_RUN_ARGS append local backend-specific runtime args to generated shell only.
 
 Limits:
 - File tools read only paths ending in .taf.

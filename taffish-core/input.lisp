@@ -35,6 +35,9 @@ The first element is treated as command name, and the rest as argv."
     (:docker-run-args . nil)
     (:podman-run-args . nil)
     (:apptainer-exec-args . nil)
+    (:docker-env-run-args . nil)
+    (:podman-env-run-args . nil)
+    (:apptainer-env-exec-args . nil)
 
     (:apptainer-image-dir . ("${TAFFISH_SYSTEM_HOME:-/opt/taffish}/images/sif"
                              "${TAFFISH_USER_HOME:-$HOME/.local/share/taffish}/images/sif"))
@@ -86,6 +89,9 @@ CONTEXT should be an alist, for example:
                   (:docker-run-args . nil)
                   (:podman-run-args . nil)
                   (:apptainer-exec-args . nil)
+                  (:docker-env-run-args . nil)
+                  (:podman-env-run-args . nil)
+                  (:apptainer-env-exec-args . nil)
                   (:apptainer-image-dir . (\"${TAFFISH_SYSTEM_HOME:-/opt/taffish}/images/sif\"
                                            \"${TAFFISH_USER_HOME:-$HOME/.local/share/taffish}/images/sif\"))
                   (:apptainer-quiet-p . t)

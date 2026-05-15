@@ -202,6 +202,8 @@ notes:
 
 - The default backend order should prefer Apptainer, then Podman, then Docker.
 - Generated shell should preserve the container debug prelude.
+- Structured container `$@[backend: ARGS]` blocks should apply only to matching backends.
+- `TAFFISH_DOCKER_RUN_ARGS`, `TAFFISH_PODMAN_RUN_ARGS`, and `TAFFISH_APPTAINER_RUN_ARGS` should append local runtime args after tag args.
 - Container execution should mount home and workdir unless configuration explicitly disables them.
 - Unescaped user input should not be concatenated directly into shell commands.
 - Image tags should align with taf-app version ids.

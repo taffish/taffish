@@ -20,14 +20,14 @@ This directory does not try to replace the website or Hub user guide. Paper narr
 - [Developer Manual](dev/README.en.md)
 - [TAFFISH Specification Draft](standards/README.en.md)
 - [TAFFISH System Architecture](architecture/README.en.md)
-- [Release Notes](releases/v0.8.1.md)
+- [Release Notes](releases/v0.9.0.md)
 
 Chinese entries:
 
 - [Chinese Developer Manual](dev/README.zh-CN.md)
 - [Chinese TAFFISH Specification Draft](standards/README.zh-CN.md)
 - [Chinese TAFFISH System Architecture](architecture/README.zh-CN.md)
-- [Chinese Release Notes](releases/v0.8.1.zh-CN.md)
+- [Chinese Release Notes](releases/v0.9.0.zh-CN.md)
 
 ## Writing Principles
 
