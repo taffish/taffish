@@ -21,7 +21,7 @@ taffish-core
 | Subsystem | Path | Role |
 | --- | --- | --- |
 | project | `project/` | taf-app project creation, checking, compilation, build, run, and publish. |
-| hub | `hub/` | Index update, query, search, install, uninstall, and lookup. |
+| hub | `hub/` | Index update, query, search, install, maintenance, uninstall, and lookup. |
 | system | `system/` | Home directories, config, history, and diagnostics. |
 
 ## Public API
@@ -31,7 +31,7 @@ APIs exported by `taf-core/package.lisp` cover three capability groups:
 | Category | Examples |
 | --- | --- |
 | Project | `project-new`, `project-check`, `project-compile`, `project-build`, `project-run`, `project-publish` |
-| Hub | `hub-update`, `hub-info`, `hub-search`, `hub-install`, `hub-uninstall`, `hub-list`, `hub-which` |
+| Hub | `hub-update`, `hub-info`, `hub-search`, `hub-install`, `hub-install-all`, `hub-outdated`, `hub-upgrade`, `hub-prune`, `hub-uninstall`, `hub-list`, `hub-which` |
 | System | `system-config`, `system-config-path`, `system-config-init`, `system-doctor`, `system-history`, `system-record-history-event` |
 
 The exact export list should be checked in `taf-core/package.lisp`.
@@ -58,6 +58,7 @@ The exact export list should be checked in `taf-core/package.lisp`.
 - [Hub System](hub-system.md)
 - [hub/update, info, search](hub-index-query.md)
 - [hub/install, uninstall](hub-install-uninstall.md)
+- [hub/outdated, install-all, upgrade, prune](hub-maintenance.md)
 - [hub/list, which](hub-list-which.md)
 - [System Layer](system-layer.md)
 - [system/home And config](system-home-config.md)

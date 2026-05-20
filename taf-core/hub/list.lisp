@@ -49,6 +49,7 @@
 (defun %hub-list-local-item (entry)
   (list :name (getf entry :package-name)
         :version-id (getf entry :version-id)
+        :kind (%hub-list-metadata-string entry "kind")
         :artifact-name (getf entry :artifact-name)
         :command-name (getf entry :command-base)
         :launcher-file (getf entry :launcher-file)
@@ -138,6 +139,7 @@
   (han.json:json-object
    (cons "name" (%hub-list-string-or-null (getf item :name)))
    (cons "version_id" (%hub-list-string-or-null (getf item :version-id)))
+   (cons "kind" (%hub-list-string-or-null (getf item :kind)))
    (cons "artifact_name" (%hub-list-string-or-null (getf item :artifact-name)))
    (cons "command_name" (%hub-list-string-or-null (getf item :command-name)))
    (cons "launcher_file" (%hub-list-string-or-null (getf item :launcher-file)))
@@ -198,6 +200,7 @@
           (getf item :name)
           (getf item :version-id)
           (getf item :artifact-name))
+  (%print-hub-info-field "kind" (getf item :kind))
   (%print-hub-info-field "command" (getf item :launcher-file))
   (%print-hub-info-field "bin" (getf item :bin-dir))
   (%print-hub-info-field

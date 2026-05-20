@@ -65,7 +65,7 @@ TAFFISH is organized as several GitHub repositories and one static web Hub:
 | [taffish/taffish](https://github.com/taffish/taffish) | This repository. Source code, installers, source-tree documentation under `docs/`, completion files, Vim files, and binary release payloads for `taf`, `taffish`, and `taffish-mcp`. |
 | [TAFFISH Hub](https://taffish.github.io) | Web registry for browsing available TAFFISH apps, tools, flows, versions, dependencies, and install commands. |
 | [taffish/taffish-docs](https://github.com/taffish/taffish-docs) | Public documentation repository for user guides, app-author guides, tutorials, and curated ecosystem documentation. |
-| [taffish/taffish-index](https://github.com/taffish/taffish-index) | Static package index consumed by `taf update`, `taf search`, `taf info`, and `taf install`. |
+| [taffish/taffish-index](https://github.com/taffish/taffish-index) | Static package index consumed by `taf update`, `taf search`, `taf info`, `taf install`, `taf outdated`, and `taf upgrade`. |
 | [taffish/taffish.github.io](https://github.com/taffish/taffish.github.io) | Source repository for the web Hub. |
 | [taffish/.github](https://github.com/taffish/.github) | Organization profile and high-level project overview. |
 | [taffish-org on Gitee](https://gitee.com/taffish-org) | China mirror organization for installation and index access when GitHub raw URLs are unstable. |
@@ -129,7 +129,7 @@ Pinned version install. The installer may come from `main`, but downloaded
 files are pinned to the selected git tag:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sh -s -- --version 0.9.0 --user
+curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sh -s -- --version 0.10.0 --user
 ```
 
 ### For Users in China
@@ -162,7 +162,7 @@ curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffis
 Pinned version install:
 
 ```sh
-curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffish.gitee.sh | sh -s -- --version 0.9.0 --user
+curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffish.gitee.sh | sh -s -- --version 0.10.0 --user
 ```
 
 To force the installer to replace an existing config with the Gitee/China
@@ -320,7 +320,7 @@ curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/instal
 
 ## Runtime Config and Mirrors
 
-Current TAFFISH is `0.9.0`. Runtime config support was introduced in `0.2.0`
+Current TAFFISH is `0.10.0`. Runtime config support was introduced in `0.2.0`
 to provide stable mirror/custom source settings. The default config paths are:
 
 ```text
@@ -388,7 +388,7 @@ and the same TAFFISH index schema.
 --bin-dir DIR             Override executable install directory
 --taffish-home DIR        Override TAFFISH runtime home
 --repo OWNER/REPO         GitHub repository [taffish/taffish]
---version VERSION         Release version [0.9.0]
+--version VERSION         Release version [0.10.0]
 --provider PROVIDER       Raw provider: github or gitee [github]
 --raw-base-url URL        Override raw base URL pointing at a fixed tag
 --os OS                   Override target OS (darwin|macos|linux)
@@ -418,7 +418,7 @@ curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/instal
 From a downloaded release bundle:
 
 ```sh
-sh install/install-taffish.sh --archive ./taffish-0.9.0-target.tar.gz --user
+sh install/install-taffish.sh --archive ./taffish-0.10.0-target.tar.gz --user
 ```
 
 From an explicit bundle URL:
@@ -512,8 +512,8 @@ This does not override explicit `<docker:...>`, `<podman:...>`, or
 `<apptainer:...>` tags. `taf run --backend ...` has priority over the
 environment variable.
 
-TAFFISH `0.9.0` adds two ways to pass backend-specific runtime arguments.
-Use `.taf` tag arguments for app-level requirements:
+TAFFISH supports two ways to pass backend-specific runtime arguments. Use
+`.taf` tag arguments for app-level requirements:
 
 ```taf
 <container:ghcr.io/taffish/my-gpu-tool:1.0.0-r1$@[docker: --gpus all][podman: --device nvidia.com/gpu=all][apptainer: --nv]>
@@ -805,6 +805,44 @@ Install an app or command:
 taf install taf-my-tool
 ```
 
+Plan or install all indexed apps:
+
+```sh
+taf install --all
+taf install --all --kind tool --yes
+taf install --all --flows --yes
+```
+
+`taf install --all` is dry-run by default. Use `--yes` to actually install.
+Use `--kind tool|flow|all`, `--tools`, or `--flows` to limit the batch.
+Add `--prune-old` to remove older local versions after a successful batch
+install. `taf uninstall`, `taf upgrade --prune-old`, and `taf prune` only
+remove TAFFISH app source/wrapper files; they do not remove shared Docker,
+Podman, Apptainer, or SIF image caches.
+
+Check and apply local app updates:
+
+```sh
+taf outdated
+taf outdated --json
+taf upgrade
+taf upgrade --yes
+taf upgrade taf-my-tool --yes --prune-old
+```
+
+`taf outdated` and `taf upgrade` compare local install metadata with the
+current local index, so run `taf update` first. Local/private installs made
+with `taf install --from` are treated as private and are skipped by public
+index upgrades.
+
+Remove older local versions while keeping the newest installed version:
+
+```sh
+taf prune
+taf prune --yes
+taf prune --kind flow --yes
+```
+
 Install a private/local app project without publishing it to the public Hub:
 
 ```sh
@@ -862,7 +900,8 @@ TAFFISH `0.6.0` added AI-readable taf-app inspection, current project
 inspection, and safe app invocation compile. TAFFISH `0.7.0` aligns MCP
 compile tools with the runtime container backend override. TAFFISH `0.8.0`
 surfaces smoke/trust metadata for containerized taf-app inspection without
-running smoke tests or containers:
+running smoke tests or containers. TAFFISH `0.10.0` adds safe package
+maintenance planners for outdated/install-all/upgrade/prune workflows:
 
 - `taffish_get_version` / `taffish_get_help`
 - `taffish_validate_source` / `taffish_validate_file`
@@ -872,6 +911,10 @@ running smoke tests or containers:
 - `taffish_inspect_app`
 - `taffish_summarize_app_usage`
 - `taffish_compile_app_invocation`
+- `taffish_check_outdated`
+- `taffish_plan_install_all`
+- `taffish_plan_upgrade`
+- `taffish_plan_prune`
 - `taffish_check_project`
 - `taffish_inspect_project`
 - `taffish_summarize_project_usage`
@@ -990,7 +1033,7 @@ https://gitee.com/taffish-org/taffish/raw/v<version>/target/...
 ## Release Verification
 
 The current binary release payload is kept under `target/` so GitHub and Gitee
-raw installers can use the same tag-fixed file layout. The 0.9.0 release
+raw installers can use the same tag-fixed file layout. The 0.10.0 release
 includes these verification files:
 
 ```text
@@ -1000,7 +1043,7 @@ target/TAFFISH-RELEASE-KEY.asc
 ```
 
 The copyable GitHub release note draft is kept at
-[docs/releases/v0.9.0.md](docs/releases/v0.9.0.md).
+[docs/releases/v0.10.0.md](docs/releases/v0.10.0.md).
 
 The raw installers primarily download and install versioned files; they do not
 currently verify `SHA256SUMS` or the GPG signature automatically. For
@@ -1029,15 +1072,15 @@ fingerprint with this public fingerprint:
 F863 33E6 0BD6 74F1 59A5  651A B919 3F30 C424 7BB2
 ```
 
-Current `0.9.0` checksum manifest:
+Current `0.10.0` checksum manifest:
 
 ```text
-cb9374bae0727270d4ff5775a04284b0e89609e468de496c552b6ac9fa0b05b5  taf-darwin-arm64-0.9.0
-676f2ff10b377489bcfab76a74afaed004d81af167fd1ac9a1faa6aff62c8dd0  taf-linux-amd64-0.9.0
-fbe969c25f5dd73ee09e9f117105e28b4facb9c1fc697b42fd599e540e4244b5  taffish-darwin-arm64-0.9.0
-a847f315bb46f399a7a00a018570fb7e316412313ba28346eb00f9ab4e1a455b  taffish-linux-amd64-0.9.0
-570332129dbf45daa6d70785091fd87df315eb83c0b19a6452175713127935ea  taffish-mcp-darwin-arm64-0.9.0
-4fb3c1fdceeba6aaf8a6645b3042d4d7b5de31e0f01809fa2fddf7babc3226c5  taffish-mcp-linux-amd64-0.9.0
+ac403e7913bbe291c8a900952db237cfbabdf3e57ee6616bc55911d1fb99979b  taf-darwin-arm64-0.10.0
+1e5b6ffb967768c49f4d88fb960d991998c81c3d4c8e50a2e541ff134d6484f8  taf-linux-amd64-0.10.0
+82c84886247a19c8d49ad27245ed85a08429bf309a0268439782f83eb3a4f7d6  taffish-darwin-arm64-0.10.0
+8bc8456d10280d381bab73ddbe001aca1be6ead72b0f551e6b5a731ec043fe16  taffish-linux-amd64-0.10.0
+2f5875dfbef59e7ba4aa533fa334e0464317eba7473e35cbb6726dbc35488e28  taffish-mcp-darwin-arm64-0.10.0
+cdea1678a198ff372f3717bf0b99bdf7f6ac3e1325e417065f5b1e52456b779d  taffish-mcp-linux-amd64-0.10.0
 ```
 
 This confirms that the checksum manifest was signed by the TAFFISH release key.

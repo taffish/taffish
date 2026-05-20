@@ -26,6 +26,12 @@ Compile tools may return generated shell code, but they do not execute it. App i
 Smoke and trust metadata are exposed as data for inspection. MCP does not run
 smoke commands, pull images, or start containers to verify them.
 
+Package maintenance tools are planner-oriented. `taffish_check_outdated`,
+`taffish_plan_install_all`, `taffish_plan_upgrade`, and `taffish_plan_prune`
+call the same `taf-core` maintenance APIs as the CLI, but always use dry-run
+semantics from MCP. They may read the local index and install metadata; they
+must not install, upgrade, prune, delete, or run containers.
+
 For compile tools that expose `containerBackend`, the effective backend priority is:
 
 1. explicit MCP tool argument `containerBackend`.
@@ -66,6 +72,9 @@ Tool names use a stable `taffish_` prefix. The names should remain short enough 
 2. `taffish_inspect_app`, `taffish_summarize_app_usage`, and `taffish_compile_app_invocation` are taf-app helpers. Inspection/summary results should surface smoke/trust metadata when available.
 3. `taffish_check_project`, `taffish_inspect_project`, and `taffish_compile_project` are current-project helpers. Project inspection/summary results should surface smoke/trust metadata when available.
 4. Hub/system helpers provide safe query and dry-run operations.
+5. `taffish_check_outdated`, `taffish_plan_install_all`,
+   `taffish_plan_upgrade`, and `taffish_plan_prune` are package-maintenance
+   planners; MCP should use them before suggesting mutating CLI commands.
 
 Errors should use structured output when practical:
 
@@ -104,3 +113,4 @@ When changing `taffish-mcp`, check:
 4. Does the returned JSON preserve arrays as arrays and objects as objects?
 5. Does the error result contain enough structure for an AI client?
 6. Do resources/prompts explain the intended safe workflow without overloading context?
+7. If it plans a mutating CLI operation, is the MCP version still dry-run only?

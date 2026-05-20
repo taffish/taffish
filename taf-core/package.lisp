@@ -25,6 +25,10 @@
    :hub-install
    :hub-install-from-project
    :hub-install-many
+   :hub-install-all
+   :hub-outdated
+   :hub-upgrade
+   :hub-prune
    :hub-uninstall
    :hub-uninstall-many
    :hub-list

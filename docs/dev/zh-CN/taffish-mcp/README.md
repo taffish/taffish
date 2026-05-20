@@ -26,6 +26,12 @@ MCP server 暴露的是偏只读和偏编译的能力。它有意不暴露：
 Smoke 和 trust 元数据只作为数据暴露给 AI 检查。MCP 不会运行 smoke command，
 也不会拉取镜像或启动容器来验证它们。
 
+Package 维护工具以 planner 为核心。`taffish_check_outdated`、
+`taffish_plan_install_all`、`taffish_plan_upgrade` 和 `taffish_plan_prune`
+调用的仍然是 CLI 使用的 `taf-core` 维护 API，但在 MCP 中始终保持 dry-run
+语义。它们可以读取本地 index 和 install metadata，但不能安装、升级、清理、
+删除文件或运行容器。
+
 对于暴露 `containerBackend` 的 compile 工具，有效 backend 的优先级是：
 
 1. 显式 MCP tool 参数 `containerBackend`。
@@ -65,6 +71,9 @@ Tool 名字统一使用稳定的 `taffish_` 前缀。名字应该足够短，方
 2. `taffish_inspect_app`、`taffish_summarize_app_usage`、`taffish_compile_app_invocation` 是 taf-app helper。检查/摘要结果应在可用时暴露 smoke/trust 元数据。
 3. `taffish_check_project`、`taffish_inspect_project`、`taffish_compile_project` 是当前项目 helper。项目检查/摘要结果应在可用时暴露 smoke/trust 元数据。
 4. Hub/system helper 提供安全查询和 dry-run 操作。
+5. `taffish_check_outdated`、`taffish_plan_install_all`、
+   `taffish_plan_upgrade` 和 `taffish_plan_prune` 是 package 维护 planner；
+   MCP 应先用它们生成计划，再建议用户执行有副作用的 CLI 命令。
 
 错误结果应尽量使用结构化输出：
 
@@ -103,3 +112,4 @@ Resources 是 AI 在选择工具前可以读取的参考材料，应该保持简
 4. 返回 JSON 是否保持数组为数组、对象为对象。
 5. 错误结果是否有足够结构，方便 AI 客户端处理。
 6. resources/prompts 是否说明了推荐安全流程，但不过度占用上下文。
+7. 如果它计划一个有副作用的 CLI 操作，MCP 版本是否仍然只做 dry-run。

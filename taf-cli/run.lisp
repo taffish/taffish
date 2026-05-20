@@ -9,7 +9,7 @@
 ;;;; ------------------------------------------------------------
 
 (defparameter *taf-version*
-  "taf 0.9.0 (2026-05, Kaiyuan Han)")
+  "taf 0.10.0 (2026-05, Kaiyuan Han)")
 
 (defun run-taf-version ()
   (format t "~A~%" *taf-version*))
@@ -40,8 +40,9 @@
 
 (defun %get-taf-help-string ()
   "Usage:
-  taf [-h | --help | help]
-  taf [-v | --version | version]
+  taf [-h | --help]
+  taf [-v | --version]
+  taf help [COMMAND]
   taf <COMMAND> [-h | --help]
   taf <COMMAND> [ARGS...]
 
@@ -59,6 +60,12 @@ Hub commands:
   info [OPTIONS] <APP|COMMAND>... Show indexed app/version information
   install [OPTIONS] <APP|COMMAND>...
                                   Install apps or commands from local index
+  outdated [OPTIONS] [APP|COMMAND...]
+                                  Show installed apps older than local index
+  upgrade [OPTIONS] [APP|COMMAND...]
+                                  Install newer indexed versions
+  prune [OPTIONS] [APP|COMMAND...]
+                                  Remove older locally installed versions
   uninstall [OPTIONS] <APP|COMMAND>...
                                   Uninstall local apps or commands
   list [OPTIONS]                  List installed or indexed apps
@@ -69,12 +76,62 @@ System commands:
   doctor [OPTIONS]
                                   Check or initialize TAFFISH environment
   config [OPTIONS]                Show TAFFISH config
-  history [OPTIONS]               Show or clear local run history")
+  history [OPTIONS]               Show or clear local run history
 
-(defun run-taf-help ()
-  (format t "~A~%" *taf-version*)
-  (%format-split-line *taf-version* #\-)
-  (format t "~A~%" (%get-taf-help-string)))
+Examples:
+  taf help install
+  taf update
+  taf install fastqc
+  taf run -- --help")
+
+(defun %get-taf-command-help-string (command)
+  (let ((cmd (and command
+                  (string-trim '(#\Space #\Tab) command))))
+    (cond
+      ((or (null cmd)
+           (string= cmd "")
+           (member cmd '("-h" "--help" "help") :test #'string-equal))
+       (%get-taf-help-string))
+      ((member cmd '("-v" "--version" "version") :test #'string-equal)
+       *taf-version*)
+      ;; project
+      ((string= cmd "new") (%get-taf-new-help-string))
+      ((string= cmd "check") (%get-taf-check-help-string))
+      ((string= cmd "compile") (%get-taf-compile-help-string))
+      ((string= cmd "build") (%get-taf-build-help-string))
+      ((string= cmd "run") (%get-taf-run-help-string))
+      ((string= cmd "publish") (%get-taf-publish-help-string))
+      ;; hub
+      ((string= cmd "update") (%get-taf-update-help-string))
+      ((string= cmd "search") (%get-taf-search-help-string))
+      ((string= cmd "info") (%get-taf-info-help-string))
+      ((string= cmd "install") (%get-taf-install-help-string))
+      ((string= cmd "outdated") (%get-taf-outdated-help-string))
+      ((string= cmd "upgrade") (%get-taf-upgrade-help-string))
+      ((string= cmd "prune") (%get-taf-prune-help-string))
+      ((string= cmd "uninstall") (%get-taf-uninstall-help-string))
+      ((string= cmd "list") (%get-taf-list-help-string))
+      ((string= cmd "which") (%get-taf-which-help-string))
+      ;; system
+      ((string= cmd "doctor") (%get-taf-doctor-help-string))
+      ((string= cmd "config") (%get-taf-config-help-string))
+      ((string= cmd "history") (%get-taf-history-help-string))
+      (t
+       (error "[help] unknown command: ~S~%Run `taf --help` to list commands."
+              command)))))
+
+(defun run-taf-help (&optional raw-args)
+  (cond
+    ((null raw-args)
+     (format t "~A~%" *taf-version*)
+     (%format-split-line *taf-version* #\-)
+     (format t "~A~%" (%get-taf-help-string)))
+    ((null (cdr raw-args))
+     (format t "~A~%" (%get-taf-command-help-string (car raw-args))))
+    (t
+     (error "[help] expected at most one command, got: ~S~%~A"
+            raw-args
+            (%get-taf-help-string)))))
 
 ;;;; ------------------------------------------------------------
 ;;;; run: project: new
@@ -765,6 +822,21 @@ Options:
                  (list :query item :version-id nil))
                items)))))
 
+(defun %taf-hub-targets-from-optional-positionals (positionals label help-string)
+  (if positionals
+      (%taf-hub-targets-from-positionals positionals label help-string)
+      nil))
+
+(defun %taf-hub-parse-kind (value label)
+  (cond
+    ((null value) :all)
+    ((member value '("tool" "tools") :test #'string-equal) :tool)
+    ((member value '("flow" "flows") :test #'string-equal) :flow)
+    ((string-equal value "all") :all)
+    (t
+     (error "[~A] --kind must be tool, flow, or all, but got: ~S"
+            label value))))
+
 (defun %get-taf-info-help-string ()
   "Usage:
   taf info [-h | --help]
@@ -875,45 +947,55 @@ Options:
 (defun %get-taf-install-help-string ()
   "Usage:
   taf install [-h | --help]
-  taf install [-u | --user | -s | --system] [-n | --dry-run]
-              [-f | --force] [--prompt]
-              <APP-NAME|TAF-COMMAND>...
-  taf install [-u | --user | -s | --system] [-n | --dry-run]
-              [-f | --force] [--prompt]
-              <APP-NAME|TAF-COMMAND> <VERSION-ID>
-  taf install [-u | --user | -s | --system] [-n | --dry-run]
-              [-f | --force] --from <PROJECT-DIR>
+  taf install [OPTIONS] <APP-NAME|TAF-COMMAND>...
+  taf install [OPTIONS] <APP-NAME|TAF-COMMAND> <VERSION-ID>
+  taf install [OPTIONS] --from <PROJECT-DIR>
+  taf install [OPTIONS] --all
 
 Install a TAFFISH app from the local index or a local project.
 
+Modes:
+  indexed target       Install one or more apps/commands from index/current.json
+  indexed exact        Install one app/command at an explicit VERSION-ID
+  local project        Install a private project with --from <PROJECT-DIR>
+  batch index          Plan or install all indexed apps selected by --kind
+
 Details:
-  - reads index/current.json for the selected scope
   - accepts package names, for example my-tool
   - accepts command names, for example taf-my-tool
   - accepts exact versioned command names, for example taf-my-tool-v0.1.0-r1
-  - accepts multiple app/command targets in one command
   - defaults to the package latest version when VERSION-ID is omitted
-  - for batch exact versions, prefer exact versioned command names
   - installs dependencies declared by the selected version record first
-  - clones or copies the indexed source ref and builds the wrapper
   - installs the exact command, for example taf-my-tool-v0.1.0-r1
   - refreshes the unversioned command alias, for example taf-my-tool,
     to the latest installed local version
   - run `taf update` first if the local index is missing
-  - --from installs a private/local TAFFISH project from PROJECT-DIR or
-    any child directory by searching upward for taffish.toml, and records
-    origin as [local-project] <PROJECT-ROOT>
-  - --from does not read the index and does not auto-install dependencies
+  - --from searches upward for taffish.toml and records origin as
+    [local-project] <PROJECT-ROOT>; it does not read the index
+  - --all is dry-run by default; pass --yes to install
 
 Options:
   -u, --user                Install into user home [default]
   -s, --system              Install app data into system home and command
                             into TAFFISH_SYSTEM_BIN_DIR [/usr/local/bin]
   -n, --dry-run             Print install plan without changing files
+  -y, --yes                 Apply --all install plan; only valid with --all
   -f, --force               Replace an existing installation of this version
+  -a, --all                 Install all indexed apps selected by --kind
+  -k, --kind <KIND>         Filter --all by tool, flow, or all [all]
+      --tools               Shortcut for --kind tool
+      --flows               Shortcut for --kind flow
+      --prune-old           Keep only newest local versions after --all
+  -j, --json                Print --all plan/result as JSON; only with --all
   --from <PROJECT-DIR>      Install from a local TAFFISH project directory
   --prompt                  Allow git to ask credentials through terminal
-  -h, --help                Show this help")
+  -h, --help                Show this help
+
+Examples:
+  taf install fastqc
+  taf install taf-fastqc-v0.12.1-r1
+  taf install --from .
+  taf install --all --tools --yes")
 
 (defun %taf-install-targets-from-positionals (positionals)
   (%taf-hub-targets-from-positionals
@@ -924,9 +1006,14 @@ Options:
 (defun %parse-taf-install-args (raw-args)
   (let ((scope :user)
         (dry-run-p nil)
+        (yes-p nil)
         (force-p nil)
         (prompt-p nil)
         (from-dir nil)
+        (all-p nil)
+        (kind :all)
+        (json-p nil)
+        (prune-old-p nil)
         (positionals nil)
         (user-seen-p nil)
         (system-seen-p nil))
@@ -942,10 +1029,12 @@ Options:
                  ((null args)
                   (when (and user-seen-p system-seen-p)
                     (error "[install] --user and --system can't be used together."))
+                  (when (and dry-run-p yes-p)
+                    (error "[install] --dry-run and --yes can't be used together."))
                   (cond
                     (from-dir
-                     (when positionals
-                       (error "[install] --from can't be combined with app/command targets.~%~A"
+                     (when (or positionals all-p json-p prune-old-p yes-p)
+                       (error "[install] --from can't be combined with --all, --yes, --json, --prune-old, or app/command targets.~%~A"
                               (%get-taf-install-help-string)))
                      (values :install-from-project
                              scope
@@ -955,8 +1044,34 @@ Options:
                              force-p
                              prompt-p
                              nil
-                             from-dir))
+                             from-dir
+                             nil
+                             kind
+                             nil
+                             nil
+                             nil))
+                    (all-p
+                     (when positionals
+                       (error "[install] --all can't be combined with app/command targets.~%~A"
+                              (%get-taf-install-help-string)))
+                     (values :install-all
+                             scope
+                             nil
+                             nil
+                             dry-run-p
+                             force-p
+                             prompt-p
+                             nil
+                             nil
+                             t
+                             kind
+                             yes-p
+                             json-p
+                             prune-old-p))
                     (t
+                     (when (or json-p prune-old-p yes-p)
+                       (error "[install] --json, --yes, and --prune-old are only supported with --all.~%~A"
+                              (%get-taf-install-help-string)))
                      (let* ((targets
                               (%taf-install-targets-from-positionals
                                positionals))
@@ -969,11 +1084,16 @@ Options:
                                force-p
                                prompt-p
                                targets
+                               nil
+                               nil
+                               kind
+                               nil
+                               nil
                                nil)))))
                  ((and (null (cdr args))
                        (member (car args) '("-h" "--help") :test #'string-equal)
                        (null positionals))
-                  (values :help nil nil nil nil nil nil nil nil))
+                  (values :help nil nil nil nil nil nil nil nil nil nil nil nil nil))
                  ((%taf-option-p (car args) "-u" "--user")
                   (setf scope :user
                         user-seen-p t)
@@ -985,8 +1105,31 @@ Options:
                  ((%taf-option-p (car args) "-n" "--dry-run")
                   (setf dry-run-p t)
                   (parse (cdr args)))
+                 ((%taf-option-p (car args) "-y" "--yes")
+                  (setf yes-p t)
+                  (parse (cdr args)))
                  ((%taf-option-p (car args) "-f" "--force")
                   (setf force-p t)
+                  (parse (cdr args)))
+                 ((%taf-option-p (car args) "-a" "--all")
+                  (setf all-p t)
+                  (parse (cdr args)))
+                 ((%taf-option-p (car args) "-k" "--kind")
+                  (setf kind (%taf-hub-parse-kind
+                              (require-value args "--kind")
+                              "install"))
+                  (parse (cddr args)))
+                 ((string= (car args) "--tools")
+                  (setf kind :tool)
+                  (parse (cdr args)))
+                 ((string= (car args) "--flows")
+                  (setf kind :flow)
+                  (parse (cdr args)))
+                 ((%taf-option-p (car args) "-j" "--json")
+                  (setf json-p t)
+                  (parse (cdr args)))
+                 ((string= (car args) "--prune-old")
+                  (setf prune-old-p t)
                   (parse (cdr args)))
                  ((string= (car args) "--prompt")
                   (setf prompt-p t)
@@ -1011,8 +1154,10 @@ Options:
 
 (defun run-taf-install (raw-args)
   (multiple-value-bind
-        (mode scope query version-id dry-run-p force-p prompt-p targets from-dir)
+        (mode scope query version-id dry-run-p force-p prompt-p targets from-dir
+         all-p kind yes-p json-p prune-old-p)
       (%parse-taf-install-args raw-args)
+    (declare (ignore all-p))
     (case mode
       (:help
        (format t "~A~%" (%get-taf-install-help-string)))
@@ -1037,6 +1182,15 @@ Options:
                                  :dry-run-p dry-run-p
                                  :force-p force-p
                                  :prompt-p prompt-p)))
+      (:install-all
+       (taf.core:hub-install-all :scope scope
+                                 :kind kind
+                                 :dry-run-p dry-run-p
+                                 :yes-p yes-p
+                                 :force-p force-p
+                                 :prompt-p prompt-p
+                                 :prune-old-p prune-old-p
+                                 :json-p json-p))
       (t
        (error "[install] unknown install mode: ~S" mode)))))
 
@@ -1144,6 +1298,428 @@ Options:
                           :json-p json-p))
       (t
        (error "[list] unknown list mode: ~S" mode)))))
+
+;;;; ------------------------------------------------------------
+;;;; run: hub: outdated
+;;;; ------------------------------------------------------------
+
+(defun %get-taf-outdated-help-string ()
+  "Usage:
+  taf outdated [-h | --help]
+  taf outdated [-u | --user | -s | --system] [-a | --all] [-j | --json]
+               [-k | --kind <tool|flow|all>] [APP-NAME|TAF-COMMAND...]
+
+Show installed TAFFISH apps that are older than the local index.
+
+Details:
+  - reads local install metadata and index/current.json
+  - with no target, checks all locally installed apps
+  - default text output shows only changes and prints no changes when current
+  - --json keeps current/skipped items for automation
+  - local/private --from installs are shown as skipped, not upgraded
+  - use taf upgrade to apply install-latest actions
+
+Options:
+  -u, --user                Check user home [default]
+  -s, --system              Check system home
+  -a, --all                 Explicitly check all installed apps [default]
+  -k, --kind <KIND>         Filter by tool, flow, or all [all]
+      --tools               Shortcut for --kind tool
+      --flows               Shortcut for --kind flow
+  -j, --json                Print result as JSON
+  -h, --help                Show this help
+
+Examples:
+  taf outdated
+  taf outdated --json
+  taf outdated --tools taf-fastqc")
+
+(defun %parse-taf-outdated-args (raw-args)
+  (let ((scope :user)
+        (kind :all)
+        (json-p nil)
+        (positionals nil)
+        (user-seen-p nil)
+        (system-seen-p nil)
+        (all-seen-p nil))
+    (labels ((option-like-p (value)
+               (and (stringp value)
+                    (> (length value) 0)
+                    (char= (char value 0) #\-)))
+             (require-value (args option)
+               (or (cadr args)
+                   (error "[outdated] ~A requires a value." option)))
+             (parse (args)
+               (cond
+                 ((null args)
+                  (when (and user-seen-p system-seen-p)
+                    (error "[outdated] --user and --system can't be used together."))
+                  (when (and all-seen-p positionals)
+                    (error "[outdated] --all can't be combined with explicit targets.~%~A"
+                           (%get-taf-outdated-help-string)))
+                  (values :outdated
+                          scope
+                          kind
+                          json-p
+                          (%taf-hub-targets-from-optional-positionals
+                           positionals
+                           "outdated"
+                           (%get-taf-outdated-help-string))))
+                 ((and (null (cdr args))
+                       (member (car args) '("-h" "--help") :test #'string-equal)
+                       (null positionals))
+                  (values :help nil nil nil nil))
+                 ((%taf-option-p (car args) "-u" "--user")
+                  (setf scope :user
+                        user-seen-p t)
+                  (parse (cdr args)))
+                 ((%taf-option-p (car args) "-s" "--system")
+                  (setf scope :system
+                        system-seen-p t)
+                  (parse (cdr args)))
+                 ((%taf-option-p (car args) "-a" "--all")
+                  (setf all-seen-p t)
+                  (parse (cdr args)))
+                 ((%taf-option-p (car args) "-k" "--kind")
+                  (setf kind (%taf-hub-parse-kind
+                              (require-value args "--kind")
+                              "outdated"))
+                  (parse (cddr args)))
+                 ((string= (car args) "--tools")
+                  (setf kind :tool)
+                  (parse (cdr args)))
+                 ((string= (car args) "--flows")
+                  (setf kind :flow)
+                  (parse (cdr args)))
+                 ((%taf-option-p (car args) "-j" "--json")
+                  (setf json-p t)
+                  (parse (cdr args)))
+                 ((and (member (car args) '("-h" "--help") :test #'string-equal)
+                       positionals)
+                  (error "[outdated] -h/--help must be used alone.~%~A"
+                         (%get-taf-outdated-help-string)))
+                 ((option-like-p (car args))
+                  (error "[outdated] unknown option: ~S~%~A"
+                         (car args)
+                         (%get-taf-outdated-help-string)))
+                 (t
+                  (push (car args) positionals)
+                  (parse (cdr args))))))
+      (parse raw-args))))
+
+(defun run-taf-outdated (raw-args)
+  (multiple-value-bind (mode scope kind json-p targets)
+      (%parse-taf-outdated-args raw-args)
+    (case mode
+      (:help
+       (format t "~A~%" (%get-taf-outdated-help-string)))
+      (:outdated
+       (taf.core:hub-outdated :scope scope
+                              :kind kind
+                              :json-p json-p
+                              :targets targets))
+      (t
+       (error "[outdated] unknown outdated mode: ~S" mode)))))
+
+;;;; ------------------------------------------------------------
+;;;; run: hub: upgrade
+;;;; ------------------------------------------------------------
+
+(defun %get-taf-upgrade-help-string ()
+  "Usage:
+  taf upgrade [-h | --help]
+  taf upgrade [-u | --user | -s | --system] [-n | --dry-run | -y | --yes]
+              [-a | --all] [-k | --kind <tool|flow|all>] [-f | --force]
+              [--prompt] [--prune-old] [-j | --json]
+              [APP-NAME|TAF-COMMAND...]
+
+Install newer indexed versions for locally installed TAFFISH apps.
+
+Details:
+  - with no target, checks all locally installed apps
+  - dry-run is the default; pass --yes to apply the plan
+  - default text output shows only changes and prints no changes when current
+  - --json keeps current/skipped items for automation
+  - local/private --from installs are skipped
+  - --prune-old removes older local versions after successful upgrades
+
+Options:
+  -u, --user                Upgrade user home [default]
+  -s, --system              Upgrade system home
+  -n, --dry-run             Print upgrade plan without changing files [default]
+  -y, --yes                 Apply the upgrade plan
+  -f, --force               Replace existing install paths if needed
+  -a, --all                 Explicitly upgrade all installed apps [default]
+  -k, --kind <KIND>         Filter by tool, flow, or all [all]
+      --tools               Shortcut for --kind tool
+      --flows               Shortcut for --kind flow
+      --prune-old           Keep only newest local versions after upgrade
+      --prompt              Allow git to ask credentials through terminal
+  -j, --json                Print result as JSON
+  -h, --help                Show this help
+
+Examples:
+  taf upgrade
+  taf upgrade --yes
+  taf upgrade taf-fastqc --yes --prune-old")
+
+(defun %parse-taf-upgrade-args (raw-args)
+  (let ((scope :user)
+        (dry-run-p nil)
+        (yes-p nil)
+        (force-p nil)
+        (prompt-p nil)
+        (kind :all)
+        (json-p nil)
+        (prune-old-p nil)
+        (positionals nil)
+        (user-seen-p nil)
+        (system-seen-p nil)
+        (all-seen-p nil))
+    (labels ((option-like-p (value)
+               (and (stringp value)
+                    (> (length value) 0)
+                    (char= (char value 0) #\-)))
+             (require-value (args option)
+               (or (cadr args)
+                   (error "[upgrade] ~A requires a value." option)))
+             (parse (args)
+               (cond
+                 ((null args)
+                  (when (and user-seen-p system-seen-p)
+                    (error "[upgrade] --user and --system can't be used together."))
+                  (when (and dry-run-p yes-p)
+                    (error "[upgrade] --dry-run and --yes can't be used together."))
+                  (when (and all-seen-p positionals)
+                    (error "[upgrade] --all can't be combined with explicit targets.~%~A"
+                           (%get-taf-upgrade-help-string)))
+                  (values :upgrade
+                          scope
+                          kind
+                          dry-run-p
+                          yes-p
+                          force-p
+                          prompt-p
+                          prune-old-p
+                          json-p
+                          (%taf-hub-targets-from-optional-positionals
+                           positionals
+                           "upgrade"
+                           (%get-taf-upgrade-help-string))))
+                 ((and (null (cdr args))
+                       (member (car args) '("-h" "--help") :test #'string-equal)
+                       (null positionals))
+                  (values :help nil nil nil nil nil nil nil nil nil))
+                 ((%taf-option-p (car args) "-u" "--user")
+                  (setf scope :user
+                        user-seen-p t)
+                  (parse (cdr args)))
+                 ((%taf-option-p (car args) "-s" "--system")
+                  (setf scope :system
+                        system-seen-p t)
+                  (parse (cdr args)))
+                 ((%taf-option-p (car args) "-n" "--dry-run")
+                  (setf dry-run-p t)
+                  (parse (cdr args)))
+                 ((%taf-option-p (car args) "-y" "--yes")
+                  (setf yes-p t)
+                  (parse (cdr args)))
+                 ((%taf-option-p (car args) "-f" "--force")
+                  (setf force-p t)
+                  (parse (cdr args)))
+                 ((%taf-option-p (car args) "-a" "--all")
+                  (setf all-seen-p t)
+                  (parse (cdr args)))
+                 ((%taf-option-p (car args) "-k" "--kind")
+                  (setf kind (%taf-hub-parse-kind
+                              (require-value args "--kind")
+                              "upgrade"))
+                  (parse (cddr args)))
+                 ((string= (car args) "--tools")
+                  (setf kind :tool)
+                  (parse (cdr args)))
+                 ((string= (car args) "--flows")
+                  (setf kind :flow)
+                  (parse (cdr args)))
+                 ((string= (car args) "--prompt")
+                  (setf prompt-p t)
+                  (parse (cdr args)))
+                 ((string= (car args) "--prune-old")
+                  (setf prune-old-p t)
+                  (parse (cdr args)))
+                 ((%taf-option-p (car args) "-j" "--json")
+                  (setf json-p t)
+                  (parse (cdr args)))
+                 ((and (member (car args) '("-h" "--help") :test #'string-equal)
+                       positionals)
+                  (error "[upgrade] -h/--help must be used alone.~%~A"
+                         (%get-taf-upgrade-help-string)))
+                 ((option-like-p (car args))
+                  (error "[upgrade] unknown option: ~S~%~A"
+                         (car args)
+                         (%get-taf-upgrade-help-string)))
+                 (t
+                  (push (car args) positionals)
+                  (parse (cdr args))))))
+      (parse raw-args))))
+
+(defun run-taf-upgrade (raw-args)
+  (multiple-value-bind
+        (mode scope kind dry-run-p yes-p force-p prompt-p prune-old-p json-p targets)
+      (%parse-taf-upgrade-args raw-args)
+    (case mode
+      (:help
+       (format t "~A~%" (%get-taf-upgrade-help-string)))
+      (:upgrade
+       (taf.core:hub-upgrade :scope scope
+                             :kind kind
+                             :dry-run-p dry-run-p
+                             :yes-p yes-p
+                             :force-p force-p
+                             :prompt-p prompt-p
+                             :prune-old-p prune-old-p
+                             :json-p json-p
+                             :targets targets))
+      (t
+       (error "[upgrade] unknown upgrade mode: ~S" mode)))))
+
+;;;; ------------------------------------------------------------
+;;;; run: hub: prune
+;;;; ------------------------------------------------------------
+
+(defun %get-taf-prune-help-string ()
+  "Usage:
+  taf prune [-h | --help]
+  taf prune [-u | --user | -s | --system] [-n | --dry-run | -y | --yes]
+            [-a | --all] [-k | --kind <tool|flow|all>] [-j | --json]
+            [APP-NAME|TAF-COMMAND...]
+
+Remove older locally installed TAFFISH app versions.
+
+Details:
+  - with no target, checks all locally installed apps
+  - keeps the newest local version for each selected app
+  - dry-run is the default; pass --yes to delete old versions
+  - default text output shows only removable versions and prints no changes
+  - keeps shared container images and SIF files
+
+Options:
+  -u, --user                Prune user home [default]
+  -s, --system              Prune system home
+  -n, --dry-run             Print prune plan without deleting [default]
+  -y, --yes                 Apply the prune plan
+  -a, --all                 Explicitly prune all installed apps [default]
+  -k, --kind <KIND>         Filter by tool, flow, or all [all]
+      --tools               Shortcut for --kind tool
+      --flows               Shortcut for --kind flow
+  -j, --json                Print result as JSON
+  -h, --help                Show this help
+
+Examples:
+  taf prune
+  taf prune --yes
+  taf prune --kind flow --yes")
+
+(defun %parse-taf-prune-args (raw-args)
+  (let ((scope :user)
+        (dry-run-p nil)
+        (yes-p nil)
+        (kind :all)
+        (json-p nil)
+        (positionals nil)
+        (user-seen-p nil)
+        (system-seen-p nil)
+        (all-seen-p nil))
+    (labels ((option-like-p (value)
+               (and (stringp value)
+                    (> (length value) 0)
+                    (char= (char value 0) #\-)))
+             (require-value (args option)
+               (or (cadr args)
+                   (error "[prune] ~A requires a value." option)))
+             (parse (args)
+               (cond
+                 ((null args)
+                  (when (and user-seen-p system-seen-p)
+                    (error "[prune] --user and --system can't be used together."))
+                  (when (and dry-run-p yes-p)
+                    (error "[prune] --dry-run and --yes can't be used together."))
+                  (when (and all-seen-p positionals)
+                    (error "[prune] --all can't be combined with explicit targets.~%~A"
+                           (%get-taf-prune-help-string)))
+                  (values :prune
+                          scope
+                          kind
+                          dry-run-p
+                          yes-p
+                          json-p
+                          (%taf-hub-targets-from-optional-positionals
+                           positionals
+                           "prune"
+                           (%get-taf-prune-help-string))))
+                 ((and (null (cdr args))
+                       (member (car args) '("-h" "--help") :test #'string-equal)
+                       (null positionals))
+                  (values :help nil nil nil nil nil nil))
+                 ((%taf-option-p (car args) "-u" "--user")
+                  (setf scope :user
+                        user-seen-p t)
+                  (parse (cdr args)))
+                 ((%taf-option-p (car args) "-s" "--system")
+                  (setf scope :system
+                        system-seen-p t)
+                  (parse (cdr args)))
+                 ((%taf-option-p (car args) "-n" "--dry-run")
+                  (setf dry-run-p t)
+                  (parse (cdr args)))
+                 ((%taf-option-p (car args) "-y" "--yes")
+                  (setf yes-p t)
+                  (parse (cdr args)))
+                 ((%taf-option-p (car args) "-a" "--all")
+                  (setf all-seen-p t)
+                  (parse (cdr args)))
+                 ((%taf-option-p (car args) "-k" "--kind")
+                  (setf kind (%taf-hub-parse-kind
+                              (require-value args "--kind")
+                              "prune"))
+                  (parse (cddr args)))
+                 ((string= (car args) "--tools")
+                  (setf kind :tool)
+                  (parse (cdr args)))
+                 ((string= (car args) "--flows")
+                  (setf kind :flow)
+                  (parse (cdr args)))
+                 ((%taf-option-p (car args) "-j" "--json")
+                  (setf json-p t)
+                  (parse (cdr args)))
+                 ((and (member (car args) '("-h" "--help") :test #'string-equal)
+                       positionals)
+                  (error "[prune] -h/--help must be used alone.~%~A"
+                         (%get-taf-prune-help-string)))
+                 ((option-like-p (car args))
+                  (error "[prune] unknown option: ~S~%~A"
+                         (car args)
+                         (%get-taf-prune-help-string)))
+                 (t
+                  (push (car args) positionals)
+                  (parse (cdr args))))))
+      (parse raw-args))))
+
+(defun run-taf-prune (raw-args)
+  (multiple-value-bind (mode scope kind dry-run-p yes-p json-p targets)
+      (%parse-taf-prune-args raw-args)
+    (case mode
+      (:help
+       (format t "~A~%" (%get-taf-prune-help-string)))
+      (:prune
+       (taf.core:hub-prune :scope scope
+                           :kind kind
+                           :dry-run-p dry-run-p
+                           :yes-p yes-p
+                           :json-p json-p
+                           :targets targets))
+      (t
+       (error "[prune] unknown prune mode: ~S" mode)))))
 
 ;;;; ------------------------------------------------------------
 ;;;; run: hub: uninstall

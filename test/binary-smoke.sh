@@ -131,6 +131,26 @@ contains "$taf_version" "taf $VERSION" "taf --version"
 contains "$taffish_version" "taffish $VERSION" "taffish --version"
 contains "$mcp_version" "taffish-mcp $VERSION" "taffish-mcp --version"
 
+taf_help=$("$TAF_BIN" --help)
+taf_help_install=$("$TAF_BIN" help install)
+taf_install_help=$("$TAF_BIN" install --help)
+taf_help_upgrade=$("$TAF_BIN" help upgrade)
+taf_help_prune=$("$TAF_BIN" help prune)
+
+contains "$taf_help" "taf help [COMMAND]" "taf --help command help route"
+contains "$taf_help" "Project commands:" "taf --help project commands"
+contains "$taf_help" "outdated [OPTIONS]" "taf --help hub maintenance commands"
+contains "$taf_help_install" "Modes:" "taf help install modes"
+contains "$taf_help_install" "taf install --all --tools --yes" "taf help install examples"
+contains "$taf_install_help" "Modes:" "taf install --help command help"
+contains "$taf_install_help" "--from searches upward for taffish.toml" \
+  "taf install --help local project details"
+contains "$taf_help_upgrade" "taf upgrade [-h | --help]" "taf help upgrade usage"
+contains "$taf_help_upgrade" "no changes" "taf help upgrade no changes detail"
+contains "$taf_help_prune" "taf prune [-h | --help]" "taf help prune usage"
+contains "$taf_help_prune" "keeps shared container images" \
+  "taf help prune container cache detail"
+
 cat > "$TMP_ROOT/minimal.taf" <<'EOF'
 ARGS
 <(--/-n)name>

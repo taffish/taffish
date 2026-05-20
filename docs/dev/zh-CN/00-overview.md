@@ -57,9 +57,9 @@ taf compile / build / run
   -> 调用 taffish-core
   -> 生成目标脚本或可分发产物
 
-taf hub/info/search/install/list/which
+taf hub/info/search/install/outdated/upgrade/prune/list/which
   -> 读取本地 hub index
-  -> 定位包、命令、artifact、版本和下载源
+  -> 定位、安装、维护和清理包、命令、artifact、版本和下载源
 
 taf system/config/history/doctor
   -> 管理系统目录、配置、历史、诊断信息
@@ -96,4 +96,4 @@ TAFFISH 的核心价值来自三件事的组合：
 
 维护代码时要保护这三个性质。任何改动如果让 `.taf` 变得难以静态检查、让输出 shell 变得不透明，或者让 hub 中的 app 难以长期维护，都应该谨慎评估。
 
-当前稳定编译主路径是 `parse-taf -> bind-taf -> compile-taf-result`。`compile-taf-program` 在 0.9.0 中是内部保留函数，不导出、未实现，调用方不应把它当成公开入口。
+当前稳定编译主路径是 `parse-taf -> bind-taf -> compile-taf-result`。`compile-taf-program` 是内部保留函数，不导出、未实现，调用方不应把它当成公开入口。

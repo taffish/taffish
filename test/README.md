@@ -7,7 +7,7 @@ tests complement the Common Lisp unit tests by exercising the delivered
 Run the full external suite for the current platform:
 
 ```sh
-test/run-tests.sh --version 0.9.0
+test/run-tests.sh --version 0.10.0
 ```
 
 For local unsuffixed builds:
@@ -29,6 +29,11 @@ Current suites:
   shims for deterministic backend discovery.
 - `taf-project/conformance.sh`: real `taf new/check/compile/build` project
   workflows and built-wrapper behavior.
+- `taf-hub/conformance.sh`: real local Hub package-maintenance workflows,
+  including `install --all`, `outdated`, `upgrade --prune-old`, and `prune`
+  against a temporary local index and local source projects. It also checks
+  that default text output hides unchanged/current apps while JSON output keeps
+  structured detail.
 
 The default suite does not pull images or run containers. Container tests
 compile TAF and inspect generated shell contracts so they stay fast and

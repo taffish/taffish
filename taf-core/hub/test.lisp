@@ -1391,6 +1391,211 @@ echo after"))
     (check-equal (getf (second dependencies) :query) "taf-dep-tool")
     (check-equal (getf (second dependencies) :version-id) "0.2.0-r1")))
 
+(deftest test-taf-hub-outdated-detects-local-older-version ()
+  (with-taf-hub-temp-dir (root)
+    (let* ((user-home (han.path:join-path root "user-home"))
+           (system-home (han.path:join-path root "system-home"))
+           (source-r1 nil)
+           (source-r2 nil))
+      (ensure-directories-exist (han.path:join-path root "v1/"))
+      (ensure-directories-exist (han.path:join-path root "v2/"))
+      (uiop:with-current-directory ((han.path:join-path root "v1/"))
+        (taf.core:project-new "multi-demo"
+                              '("--tool" "--version" "0.1.0"
+                                "--release" "1"))
+        (setf source-r1 (han.path:join-path root "v1" "multi-demo")))
+      (uiop:with-current-directory ((han.path:join-path root "v2/"))
+        (taf.core:project-new "multi-demo"
+                              '("--tool" "--version" "0.1.0"
+                                "--release" "2"))
+        (setf source-r2 (han.path:join-path root "v2" "multi-demo")))
+      (%taf-hub-write-current-index
+       user-home
+       (%taf-hub-sample-install-multi-version-index source-r1 source-r2))
+      (taf.core:hub-install
+       :query "multi-demo"
+       :version-id "0.1.0-r1"
+       :user-home user-home
+       :system-home system-home
+       :verbose nil)
+      (let* ((result (taf.core:hub-outdated
+                      :user-home user-home
+                      :system-home system-home
+                      :verbose nil))
+             (items (getf result :items))
+             (item (first items)))
+        (check-equal (length items) 1)
+        (check-equal (getf item :package-name) "multi-demo")
+        (check-equal (getf item :installed-version-id) "0.1.0-r1")
+        (check-equal (getf item :latest-version-id) "0.1.0-r2")
+        (check-equal (getf item :status) :outdated)
+        (check-equal (getf item :action) :install-latest)))))
+
+(deftest test-taf-hub-upgrade-installs-index-latest ()
+  (with-taf-hub-temp-dir (root)
+    (let* ((user-home (han.path:join-path root "user-home"))
+           (system-home (han.path:join-path root "system-home"))
+           (source-r1 nil)
+           (source-r2 nil))
+      (ensure-directories-exist (han.path:join-path root "v1/"))
+      (ensure-directories-exist (han.path:join-path root "v2/"))
+      (uiop:with-current-directory ((han.path:join-path root "v1/"))
+        (taf.core:project-new "multi-demo"
+                              '("--tool" "--version" "0.1.0"
+                                "--release" "1"))
+        (setf source-r1 (han.path:join-path root "v1" "multi-demo")))
+      (uiop:with-current-directory ((han.path:join-path root "v2/"))
+        (taf.core:project-new "multi-demo"
+                              '("--tool" "--version" "0.1.0"
+                                "--release" "2"))
+        (setf source-r2 (han.path:join-path root "v2" "multi-demo")))
+      (%taf-hub-write-current-index
+       user-home
+       (%taf-hub-sample-install-multi-version-index source-r1 source-r2))
+      (taf.core:hub-install
+       :query "multi-demo"
+       :version-id "0.1.0-r1"
+       :user-home user-home
+       :system-home system-home
+       :verbose nil)
+      (let* ((dry-run (taf.core:hub-upgrade
+                       :user-home user-home
+                       :system-home system-home
+                       :verbose nil))
+             (applied (taf.core:hub-upgrade
+                       :user-home user-home
+                       :system-home system-home
+                       :yes-p t
+                       :prune-old-p t
+                       :verbose nil))
+             (prune-result (getf applied :prune-result))
+             (installed (taf.core:hub-list
+                         :mode :local
+                         :user-home user-home
+                         :system-home system-home
+                         :verbose nil)))
+        (check-equal (getf dry-run :dry-run-p) t)
+        (check-equal (getf (first (getf dry-run :items)) :action)
+                     :install-latest)
+        (check-equal (getf applied :dry-run-p) nil)
+        (check-true prune-result)
+        (check-equal (getf (getf prune-result :summary) :prunable) 1)
+        (check-equal (length (getf installed :items)) 1)
+        (check-equal (getf (first (getf installed :items)) :version-id)
+                     "0.1.0-r2")))))
+
+(deftest test-taf-hub-install-all-dry-run-filters-kind ()
+  (with-taf-hub-temp-dir (root)
+    (let* ((user-home (han.path:join-path root "user-home"))
+           (system-home (han.path:join-path root "system-home")))
+      (%taf-hub-write-current-index user-home (%taf-hub-sample-search-index))
+      (let* ((result (taf.core:hub-install-all
+                      :kind :flow
+                      :dry-run-p t
+                      :user-home user-home
+                      :system-home system-home
+                      :verbose nil))
+             (items (getf result :items)))
+        (check-equal (getf result :dry-run-p) t)
+        (check-equal (length items) 1)
+        (check-equal (getf (first items) :package-name) "hic-loop-flow")
+        (check-equal (getf (first items) :kind) "flow")
+        (check-equal (getf (first items) :action) :install)))))
+
+(deftest test-taf-hub-prune-keeps-newest-local-version ()
+  (with-taf-hub-temp-dir (root)
+    (let* ((user-home (han.path:join-path root "user-home"))
+           (system-home (han.path:join-path root "system-home"))
+           (source-r1 nil)
+           (source-r2 nil))
+      (ensure-directories-exist (han.path:join-path root "v1/"))
+      (ensure-directories-exist (han.path:join-path root "v2/"))
+      (uiop:with-current-directory ((han.path:join-path root "v1/"))
+        (taf.core:project-new "multi-demo"
+                              '("--tool" "--version" "0.1.0"
+                                "--release" "1"))
+        (setf source-r1 (han.path:join-path root "v1" "multi-demo")))
+      (uiop:with-current-directory ((han.path:join-path root "v2/"))
+        (taf.core:project-new "multi-demo"
+                              '("--tool" "--version" "0.1.0"
+                                "--release" "2"))
+        (setf source-r2 (han.path:join-path root "v2" "multi-demo")))
+      (%taf-hub-write-current-index
+       user-home
+       (%taf-hub-sample-install-multi-version-index source-r1 source-r2))
+      (taf.core:hub-install-many
+       :targets '("taf-multi-demo-v0.1.0-r1" "taf-multi-demo-v0.1.0-r2")
+       :user-home user-home
+       :system-home system-home
+       :verbose nil)
+      (let* ((dry-run (taf.core:hub-prune
+                       :user-home user-home
+                       :system-home system-home
+                       :verbose nil))
+             (item (first (getf dry-run :items))))
+        (check-equal (getf dry-run :dry-run-p) t)
+        (check-equal (getf item :action) :remove-old)
+        (check-equal (getf item :remove-versions) '("0.1.0-r1")))
+      (taf.core:hub-prune
+       :user-home user-home
+       :system-home system-home
+       :yes-p t
+       :verbose nil)
+      (let* ((installed (taf.core:hub-list
+                         :mode :local
+                         :user-home user-home
+                         :system-home system-home
+                         :verbose nil))
+             (items (getf installed :items)))
+        (check-equal (length items) 1)
+        (check-equal (getf (first items) :version-id) "0.1.0-r2")))))
+
+(deftest test-taf-hub-maintenance-text-hides-skip-items ()
+  (with-taf-hub-temp-dir (root)
+    (let* ((user-home (han.path:join-path root "user-home"))
+           (system-home (han.path:join-path root "system-home"))
+           (source-r1 nil)
+           (source-r2 nil))
+      (ensure-directories-exist (han.path:join-path root "v1/"))
+      (ensure-directories-exist (han.path:join-path root "v2/"))
+      (uiop:with-current-directory ((han.path:join-path root "v1/"))
+        (taf.core:project-new "multi-demo"
+                              '("--tool" "--version" "0.1.0"
+                                "--release" "1"))
+        (setf source-r1 (han.path:join-path root "v1" "multi-demo")))
+      (uiop:with-current-directory ((han.path:join-path root "v2/"))
+        (taf.core:project-new "multi-demo"
+                              '("--tool" "--version" "0.1.0"
+                                "--release" "2"))
+        (setf source-r2 (han.path:join-path root "v2" "multi-demo")))
+      (%taf-hub-write-current-index
+       user-home
+       (%taf-hub-sample-install-multi-version-index source-r1 source-r2))
+      (taf.core:hub-install
+       :query "multi-demo"
+       :version-id "0.1.0-r2"
+       :user-home user-home
+       :system-home system-home
+       :verbose nil)
+      (dolist (thunk
+               (list
+                (lambda ()
+                  (taf.core:hub-outdated
+                   :user-home user-home
+                   :system-home system-home))
+                (lambda ()
+                  (taf.core:hub-install-all
+                   :user-home user-home
+                   :system-home system-home))
+                (lambda ()
+                  (taf.core:hub-upgrade
+                   :user-home user-home
+                   :system-home system-home))))
+        (let ((out (with-output-to-string (*standard-output*)
+                     (funcall thunk))))
+          (check-equal (%taf-hub-string-contains-p out "no changes") t)
+          (check-equal (%taf-hub-string-contains-p out "multi-demo") nil))))))
+
 (deftest test-taf-hub-list-local-installed-user-scope ()
   (with-taf-hub-temp-dir (root)
     (let* ((user-home (han.path:join-path root "user-home"))

@@ -189,6 +189,34 @@
                  (%tool-schema
                   :properties (list (cons "mode" (%schema-string "Accepted: local/installed or online/index. Returned mode is canonicalized to local or online."))
                                     (cons "limit" (%schema-integer "Maximum result count.")))))
+          (%tool "taffish_check_outdated"
+                 "Check Outdated TAFFISH Apps"
+                 "Compare local installs with the local index and return an upgrade plan. Read-only."
+                 (%tool-schema
+                  :properties (list (cons "target" (%schema-string "Optional single app or command."))
+                                    (cons "targets" (%schema-string-array "Optional apps or commands."))
+                                    (cons "kind" (%schema-string "Filter: tool, flow, or all. Default all.")))))
+          (%tool "taffish_plan_install_all"
+                 "Plan Install All TAFFISH Apps"
+                 "Plan installation of all indexed apps selected by kind. Dry-run only; does not write files."
+                 (%tool-schema
+                  :properties (list (cons "kind" (%schema-string "Filter: tool, flow, or all. Default all."))
+                                    (cons "pruneOld" (%schema-boolean "Plan keeping only newest local versions after install. Does not delete.")))))
+          (%tool "taffish_plan_upgrade"
+                 "Plan TAFFISH Upgrade"
+                 "Plan installing newer indexed versions for local apps. Dry-run only; does not install."
+                 (%tool-schema
+                  :properties (list (cons "target" (%schema-string "Optional single app or command."))
+                                    (cons "targets" (%schema-string-array "Optional apps or commands."))
+                                    (cons "kind" (%schema-string "Filter: tool, flow, or all. Default all."))
+                                    (cons "pruneOld" (%schema-boolean "Plan pruning old versions after upgrade. Does not delete.")))))
+          (%tool "taffish_plan_prune"
+                 "Plan TAFFISH Prune"
+                 "Plan removal of older local app versions. Dry-run only; does not delete files."
+                 (%tool-schema
+                  :properties (list (cons "target" (%schema-string "Optional single app or command."))
+                                    (cons "targets" (%schema-string-array "Optional apps or commands."))
+                                    (cons "kind" (%schema-string "Filter: tool, flow, or all. Default all.")))))
           (%tool "taffish_locate_app"
                  "Locate TAFFISH App"
                  "Show local install paths and metadata for an installed app or command."
@@ -286,10 +314,19 @@
         (and target (list target))
         (error "target or targets is required."))))
 
+(defun %mcp-optional-targets (arguments)
+  (let ((targets (%json-string-array-or-single arguments "targets"))
+        (target (%json-string arguments "target")))
+    (or targets
+        (and target (list target)))))
+
 (defun %mcp-target-plists (targets version)
   (if (and version (= (length targets) 1))
       (list (list :query (first targets) :version-id version))
       targets))
+
+(defun %mcp-kind (arguments)
+  (or (%json-string arguments "kind") "all"))
 
 (defun %call-get-version (arguments)
   (declare (ignore arguments))
@@ -307,6 +344,10 @@
                      "app_invocation_compile"
                      "hub_read"
                      "hub_safe_install_dry_run"
+                     "hub_outdated"
+                     "hub_upgrade_plan"
+                     "hub_install_all_plan"
+                     "hub_prune_plan"
                      "project_check"
                      "project_inspect"
                      "project_usage"
@@ -426,6 +467,65 @@
     (%tool-success (format nil "Listed ~A TAFFISH app(s)."
                            (length (getf result :items)))
                    result)))
+
+(defun %call-check-outdated (arguments)
+  (let ((result (taf.core:hub-outdated
+                 :targets (%mcp-optional-targets arguments)
+                 :scope (%mcp-scope arguments)
+                 :user-home (%json-string arguments "userHome")
+                 :system-home (%json-string arguments "systemHome")
+                 :kind (%mcp-kind arguments)
+                 :verbose nil)))
+    (%tool-success
+     (format nil "Found ~A outdated TAFFISH app(s)."
+             (getf (getf result :summary) :outdated))
+     (append (list :ok t) result))))
+
+(defun %call-plan-install-all (arguments)
+  (let ((result (taf.core:hub-install-all
+                 :scope (%mcp-scope arguments)
+                 :user-home (%json-string arguments "userHome")
+                 :system-home (%json-string arguments "systemHome")
+                 :kind (%mcp-kind arguments)
+                 :dry-run-p t
+                 :yes-p nil
+                 :prune-old-p (%json-bool arguments "pruneOld" nil)
+                 :verbose nil)))
+    (%tool-success
+     (format nil "Planned install-all for ~A TAFFISH app(s)."
+             (getf (getf result :summary) :total))
+     (append (list :ok t) result))))
+
+(defun %call-plan-upgrade (arguments)
+  (let ((result (taf.core:hub-upgrade
+                 :targets (%mcp-optional-targets arguments)
+                 :scope (%mcp-scope arguments)
+                 :user-home (%json-string arguments "userHome")
+                 :system-home (%json-string arguments "systemHome")
+                 :kind (%mcp-kind arguments)
+                 :dry-run-p t
+                 :yes-p nil
+                 :prune-old-p (%json-bool arguments "pruneOld" nil)
+                 :verbose nil)))
+    (%tool-success
+     (format nil "Planned upgrade for ~A TAFFISH app(s)."
+             (getf (getf result :summary) :installable))
+     (append (list :ok t) result))))
+
+(defun %call-plan-prune (arguments)
+  (let ((result (taf.core:hub-prune
+                 :targets (%mcp-optional-targets arguments)
+                 :scope (%mcp-scope arguments)
+                 :user-home (%json-string arguments "userHome")
+                 :system-home (%json-string arguments "systemHome")
+                 :kind (%mcp-kind arguments)
+                 :dry-run-p t
+                 :yes-p nil
+                 :verbose nil)))
+    (%tool-success
+     (format nil "Planned prune for ~A TAFFISH app(s)."
+             (getf (getf result :summary) :prunable))
+     (append (list :ok t) result))))
 
 (defun %call-which (arguments)
   (let ((result (taf.core:hub-which :query (%json-string arguments "target")
@@ -608,6 +708,10 @@
           ((string= name "taffish_summarize_app_usage") (%call-summarize-app-usage args))
           ((string= name "taffish_compile_app_invocation") (%call-compile-app-invocation args))
           ((string= name "taffish_list_apps") (%call-list-apps args))
+          ((string= name "taffish_check_outdated") (%call-check-outdated args))
+          ((string= name "taffish_plan_install_all") (%call-plan-install-all args))
+          ((string= name "taffish_plan_upgrade") (%call-plan-upgrade args))
+          ((string= name "taffish_plan_prune") (%call-plan-prune args))
           ((string= name "taffish_locate_app") (%call-which args))
           ((string= name "taffish_list_history") (%call-history-list args))
           ((string= name "taffish_install_app") (%call-install-app args))

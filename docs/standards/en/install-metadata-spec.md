@@ -6,10 +6,11 @@ This page defines `taffish.install/v1`, the `install.json` written after app ins
 
 | Scope | Status | Notes |
 | --- | --- | --- |
-| `install.json` location | Draft v0.1 stable | `list`, `which`, and `uninstall` depend on this layout. |
+| `install.json` location | Draft v0.1 stable | `list`, `which`, `uninstall`, `outdated`, `upgrade`, and `prune` depend on this layout. |
 | Core fields | Draft v0.1 stable | Removing or renaming them requires a migration strategy. |
 | Command alias refresh | Draft v0.1 stable | Multi-version installation depends on this rule. |
 | Source commit reproduction | Draft v0.1 semi-stable | When the index provides `source.commit`, install verifies the checked source commit before building. |
+| Package maintenance plan | Draft v0.1 semi-stable | `outdated`, `upgrade`, `install --all`, and `prune` use local metadata plus the local index. |
 
 ## File Location
 
@@ -45,6 +46,7 @@ When reading install metadata, consumers currently depend mostly on field presen
 | `installed_at` | string | UTC time, formatted as `YYYY-MM-DDTHH:MM:SSZ`. |
 | `scope` | string | `user` or `system`. |
 | `name` | string | Package name. |
+| `kind` | string/null | App kind, usually `tool` or `flow`. New installs should write it; readers should tolerate older metadata without it. |
 | `version_id` | string | `<version>-r<release>`. |
 | `artifact_name` | string | Versioned artifact command name. |
 | `command_name` | string/null | Unversioned command alias name. |
@@ -115,6 +117,32 @@ Refresh rules:
 3. Select the newest version by version id ordering.
 4. Write or update the alias launcher.
 5. If no candidate remains, remove the alias launcher.
+
+## Package Maintenance Behavior
+
+`taf outdated`, `taf upgrade`, `taf install --all`, and `taf prune` consume the
+same install metadata.
+
+Rules:
+
+1. The local index defines the public latest version.
+2. The newest local version is selected by version-id ordering.
+3. `origin_kind = local-project` means the install is local/private and should
+   not be automatically upgraded from the public index.
+4. `kind` may be used for batch filters; readers must fall back to index or
+   source metadata when older `install.json` files lack the field.
+5. `taf prune` removes old TAFFISH install roots and launchers, but must not
+   remove shared Docker/Podman/Apptainer images, caches, or SIF files.
+
+Machine-readable maintenance output uses:
+
+```text
+taffish.package-plan/v1
+```
+
+JSON package plans keep the full item list, including current and skipped
+items. Human text output may suppress skipped items and report `no changes`
+when no local state change is planned.
 
 ## Uninstall Behavior
 

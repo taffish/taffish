@@ -24,7 +24,7 @@ POSIX shell 工具
 Git
 ```
 
-0.9.0 的维护者构建路径：
+当前开发 release 的维护者构建路径：
 
 | 平台 | 官方二进制构建路径 | 说明 |
 | --- | --- | --- |
@@ -80,14 +80,14 @@ target/taffish-mcp
 ```
 
 这些不带后缀的文件是本地构建输出。维护者发布 release tag 前，会把它们重命名/复制为
-`taf-darwin-arm64-0.9.0` 这类版本化文件名。
+`taf-darwin-arm64-0.10.0` 这类版本化文件名。
 
 ## 二进制冒烟测试
 
 构建完成或准备 release 载荷后，可以对当前平台运行二进制冒烟测试：
 
 ```sh
-test/binary-smoke.sh --version 0.9.0
+test/binary-smoke.sh --version 0.10.0
 ```
 
 如果测试的是不带后缀的本地构建输出，可以显式传入路径：
@@ -107,7 +107,7 @@ test/binary-smoke.sh \
 如果要运行更完整的外部测试套件：
 
 ```sh
-test/run-tests.sh --version 0.9.0
+test/run-tests.sh --version 0.10.0
 ```
 
 这个入口会包含 binary smoke test，并额外运行真实 `taffish` conformance case
@@ -133,9 +133,9 @@ target/taffish-mcp
 
 ## 手动 release 载荷
 
-0.9.0 release 会把手动构建的二进制载荷保留在 `target/` 下，这样 GitHub 和 Gitee raw 安装器可以从不可变 git tag 下载文件。
+维护者 release 会把手动构建的二进制载荷保留在 `target/` 下，这样 GitHub 和 Gitee raw 安装器可以从不可变 git tag 下载文件。
 
-0.9.0 维护者 release 载荷包含：
+维护者 release 载荷包含：
 
 ```text
 target/SHA256SUMS
@@ -161,4 +161,4 @@ gpg --verify SHA256SUMS.asc SHA256SUMS
 
 ## 当前公开 API 边界
 
-`compile-taf-program` 在 0.9.0 中不是完成态公开 API。稳定的用户侧编译路径是 `taffish` 命令，以及 `taffish-mcp` 暴露的 source/file compile tools。除非模块文档明确标为稳定，否则更底层的实验性入口应视为实现细节。
+`compile-taf-program` 不是完成态公开 API。稳定的用户侧编译路径是 `taffish` 命令，以及 `taffish-mcp` 暴露的 source/file compile tools。除非模块文档明确标为稳定，否则更底层的实验性入口应视为实现细节。

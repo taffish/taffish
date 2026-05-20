@@ -6,10 +6,11 @@
 
 | 范围 | 状态 | 说明 |
 | --- | --- | --- |
-| `install.json` 位置 | Draft v0.1 稳定 | `list`、`which`、`uninstall` 都依赖该布局。 |
+| `install.json` 位置 | Draft v0.1 稳定 | `list`、`which`、`uninstall`、`outdated`、`upgrade`、`prune` 都依赖该布局。 |
 | 核心字段 | Draft v0.1 稳定 | 删除或改名需要迁移策略。 |
 | command alias 刷新 | Draft v0.1 稳定 | 多版本安装依赖该规则。 |
 | source commit 精确复现 | Draft v0.1 半稳定 | index 提供 `source.commit` 时，install 会在构建前校验实际源码 commit。 |
+| package maintenance plan | Draft v0.1 半稳定 | `outdated`、`upgrade`、`install --all` 和 `prune` 使用本地 metadata 与本地 index。 |
 
 ## 文件位置
 
@@ -47,6 +48,7 @@
 | `installed_at` | string | UTC 时间，形如 `YYYY-MM-DDTHH:MM:SSZ`。 |
 | `scope` | string | `user` 或 `system`。 |
 | `name` | string | package name。 |
+| `kind` | string/null | app 类型，通常是 `tool` 或 `flow`。新安装应写入该字段；读取方应兼容缺少该字段的旧 metadata。 |
 | `version_id` | string | `<version>-r<release>`。 |
 | `artifact_name` | string | versioned artifact command 名。 |
 | `command_name` | string/null | unversioned command alias 名。 |
@@ -116,6 +118,30 @@ exec <command_file> "$@"
 3. 按 version id 版本顺序选择最新版本。
 4. 写入或更新 alias launcher。
 5. 如果没有候选版本，删除 alias launcher。
+
+## package maintenance 行为
+
+`taf outdated`、`taf upgrade`、`taf install --all` 和 `taf prune` 消费同一套
+install metadata。
+
+规则：
+
+1. 本地 index 定义公开 latest 版本。
+2. 本地最新版本按 version-id 顺序选择。
+3. `origin_kind = local-project` 表示本地/私有安装，不应从公开 index 自动升级。
+4. `kind` 可用于批量过滤；读取旧 `install.json` 时如果缺少该字段，应回退到 index
+   或源码 metadata。
+5. `taf prune` 只删除旧 TAFFISH install root 和 launcher，不能删除共享的
+   Docker/Podman/Apptainer 镜像、cache 或 SIF 文件。
+
+机器可读维护输出使用：
+
+```text
+taffish.package-plan/v1
+```
+
+JSON package plan 保留完整 item 列表，包括 current 和 skipped items。面向人的
+文本输出可以隐藏 skipped items，并在没有本地状态变化计划时报告 `no changes`。
 
 ## 卸载行为
 

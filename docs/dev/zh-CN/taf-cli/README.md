@@ -13,6 +13,9 @@
 3. 调用 `taf-core` 对应 API。
 4. 把结果展示给用户。
 
+help 是公开 CLI 表面的一部分。`taf --help` 应保持简洁，而 `taf help <command>`
+和 `taf <command> --help` 应把用户带到同一份 command-specific help 文本。
+
 ## 系统位置
 
 ```text
@@ -44,6 +47,24 @@ user
 | `taffish.toml` 是否合法 | `taf-core/project/check.lisp` |
 | hub index 如何解析 | `taf-core/hub/info.lisp` |
 | config 默认值是什么 | `taf-core/system/config.lisp` |
+
+## Hub 维护命令
+
+package 维护命令面采用保守 CLI 模式：
+
+| 命令 | 默认行为 |
+| --- | --- |
+| `taf install --all` | 为 `--kind`、`--tools` 或 `--flows` 选中的全部 indexed apps 输出 dry-run 计划。 |
+| `taf outdated` | 只读比较本地 install metadata 和本地 index。 |
+| `taf upgrade` | 输出 dry-run upgrade 计划；必须显式 `--yes` 才会安装新 indexed 版本。 |
+| `taf prune` | 输出 dry-run cleanup 计划；必须显式 `--yes` 才会删除本地旧 app 版本。 |
+
+这些命令要和对应 `taf-core` API 保持 `--user` / `--system`、`--json`、
+kind filter 和 target 解析一致。它们不能删除共享容器镜像缓存。
+
+默认文本输出以“变化”为中心。当所有 item 都已经是 current 或被 skipped 时，
+命令应输出简短的 `no changes`，而不是逐条列出所有未变化 app。JSON 输出仍然是
+完整机器可读 plan，会保留 current/skipped items，供自动化使用。
 
 ## 修改指南
 

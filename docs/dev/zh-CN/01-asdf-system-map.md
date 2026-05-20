@@ -1,6 +1,6 @@
 # ASDF 系统与模块地图
 
-TAFFISH 使用 ASDF 描述 Common Lisp 系统。当前主系统是 `taffish`，版本为 `0.9.0`，依赖内置基础库 `han`。ASDF 文件不仅是构建配置，也是一份非常重要的架构地图。
+TAFFISH 使用 ASDF 描述 Common Lisp 系统。当前主系统是 `taffish`，版本为 `0.10.0`，依赖内置基础库 `han`。ASDF 文件不仅是构建配置，也是一份非常重要的架构地图。
 
 ## 主系统加载顺序
 
@@ -46,6 +46,7 @@ taf-core
   hub/uninstall
   hub/list
   hub/which
+  hub/upgrade
   system/home
   system/config
   system/history

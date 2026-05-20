@@ -1,6 +1,6 @@
 # ASDF System And Module Map
 
-TAFFISH uses ASDF to describe Common Lisp systems. The current main system is `taffish`, version `0.9.0`, and it depends on the built-in base library `han`. The ASDF file is not just build configuration; it is also an important architecture map.
+TAFFISH uses ASDF to describe Common Lisp systems. The current main system is `taffish`, version `0.10.0`, and it depends on the built-in base library `han`. The ASDF file is not just build configuration; it is also an important architecture map.
 
 ## Main System Load Order
 
@@ -46,6 +46,7 @@ taf-core
   hub/uninstall
   hub/list
   hub/which
+  hub/upgrade
   system/home
   system/config
   system/history

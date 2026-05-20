@@ -80,13 +80,13 @@ curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffis
 Pinned version:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sh -s -- --version 0.9.0 --user
+curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sh -s -- --version 0.10.0 --user
 ```
 
 Install from a local tarball:
 
 ```sh
-sh install/install-taffish.sh --user --archive ./taffish-0.9.0-target.tar.gz
+sh install/install-taffish.sh --user --archive ./taffish-0.10.0-target.tar.gz
 ```
 
 Install from an explicit URL:

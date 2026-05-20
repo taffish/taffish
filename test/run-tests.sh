@@ -114,6 +114,7 @@ export PATH=$TAFFISH_TEST_BIN_DIR:$PATH
 . "$REPO_ROOT/test/lib/harness.sh"
 . "$REPO_ROOT/test/taffish/conformance.sh"
 . "$REPO_ROOT/test/taf-project/conformance.sh"
+. "$REPO_ROOT/test/taf-hub/conformance.sh"
 
 harness_log "version: $VERSION"
 harness_log "platform: $OS/$ARCH"
@@ -131,5 +132,6 @@ run_case "binary/smoke" \
 
 run_taffish_conformance
 run_taf_project_conformance
+run_taf_hub_conformance
 
 finish_tests

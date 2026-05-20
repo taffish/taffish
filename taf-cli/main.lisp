@@ -29,6 +29,9 @@
       ((string= cmd-string "search")    :search)
       ((string= cmd-string "info")      :info)
       ((string= cmd-string "install")   :install)
+      ((string= cmd-string "outdated")  :outdated)
+      ((string= cmd-string "upgrade")   :upgrade)
+      ((string= cmd-string "prune")     :prune)
       ((string= cmd-string "uninstall") :uninstall)
       ((string= cmd-string "list")      :list)
       ((string= cmd-string "which")     :which)
@@ -49,7 +52,7 @@
         (multiple-value-bind (cmd args)
             (%parse-raw-argv raw-argv)
           (case cmd
-            (:help    (run-taf-help))
+            (:help    (run-taf-help args))
             (:version (run-taf-version))
             ;; project
             (:new     (run-taf-new     args))
@@ -63,6 +66,9 @@
             (:search  (run-taf-search args))
             (:info    (run-taf-info   args))
             (:install (run-taf-install args))
+            (:outdated (run-taf-outdated args))
+            (:upgrade (run-taf-upgrade args))
+            (:prune   (run-taf-prune args))
             (:uninstall (run-taf-uninstall args))
             (:list    (run-taf-list args))
             (:which   (run-taf-which args))

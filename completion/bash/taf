@@ -7,7 +7,7 @@ _taf_complete()
 
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
-    commands="new check compile build run publish update search info install uninstall list which doctor config history help version"
+    commands="new check compile build run publish update search info install outdated upgrade prune uninstall list which doctor config history help version"
 
     if [[ ${COMP_CWORD} -eq 1 ]]; then
         COMPREPLY=( $(compgen -W "-h --help help -v --version version ${commands}" -- "$cur") )
@@ -15,6 +15,11 @@ _taf_complete()
     fi
 
     cmd="${COMP_WORDS[1]}"
+
+    if [[ "$cmd" == "help" && ${COMP_CWORD} -eq 2 ]]; then
+        COMPREPLY=( $(compgen -W "$commands" -- "$cur") )
+        return 0
+    fi
 
     case "$prev" in
         --backend|-b)
@@ -31,6 +36,12 @@ _taf_complete()
         --limit)
             case "$cmd" in
                 search|list) COMPREPLY=( $(compgen -W "10 20 50 100" -- "$cur") ) ;;
+            esac
+            return 0
+            ;;
+        --kind|-k)
+            case "$cmd" in
+                install|outdated|upgrade|prune) COMPREPLY=( $(compgen -W "tool flow all" -- "$cur") ) ;;
             esac
             return 0
             ;;
@@ -114,7 +125,16 @@ _taf_complete()
             opts="-u --user -s --system -j --json -h --help"
             ;;
         install)
-            opts="-u --user -s --system -n --dry-run -f --force --from --prompt -h --help"
+            opts="-u --user -s --system -n --dry-run -y --yes -f --force -a --all -k --kind --tools --flows --prune-old -j --json --from --prompt -h --help"
+            ;;
+        outdated)
+            opts="-u --user -s --system -a --all -k --kind --tools --flows -j --json -h --help"
+            ;;
+        upgrade)
+            opts="-u --user -s --system -n --dry-run -y --yes -f --force -a --all -k --kind --tools --flows --prune-old --prompt -j --json -h --help"
+            ;;
+        prune)
+            opts="-u --user -s --system -n --dry-run -y --yes -a --all -k --kind --tools --flows -j --json -h --help"
             ;;
         uninstall)
             opts="-u --user -s --system -n --dry-run -f --force -h --help"

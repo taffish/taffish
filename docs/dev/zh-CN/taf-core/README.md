@@ -21,7 +21,7 @@ taffish-core
 | 子系统 | 路径 | 作用 |
 | --- | --- | --- |
 | project | `project/` | taf-app 项目创建、检查、编译、构建、运行、发布。 |
-| hub | `hub/` | index 更新、查询、搜索、安装、卸载、定位。 |
+| hub | `hub/` | index 更新、查询、搜索、安装、维护、卸载、定位。 |
 | system | `system/` | home 目录、配置、历史、诊断。 |
 
 ## 公开 API
@@ -31,7 +31,7 @@ taffish-core
 | 类别 | 示例 |
 | --- | --- |
 | 项目能力 | `project-new`、`project-check`、`project-compile`、`project-build`、`project-run`、`project-publish` |
-| hub 能力 | `hub-update`、`hub-info`、`hub-search`、`hub-install`、`hub-uninstall`、`hub-list`、`hub-which` |
+| hub 能力 | `hub-update`、`hub-info`、`hub-search`、`hub-install`、`hub-install-all`、`hub-outdated`、`hub-upgrade`、`hub-prune`、`hub-uninstall`、`hub-list`、`hub-which` |
 | 系统能力 | `system-config`、`system-config-path`、`system-config-init`、`system-doctor`、`system-history`、`system-record-history-event` |
 
 具体导出以 `taf-core/package.lisp` 为准。
@@ -58,6 +58,7 @@ taffish-core
 - [Hub 系统](hub-system.md)
 - [hub/update、info、search](hub-index-query.md)
 - [hub/install、uninstall](hub-install-uninstall.md)
+- [hub/outdated、install-all、upgrade、prune](hub-maintenance.md)
 - [hub/list、which](hub-list-which.md)
 - [系统层](system-layer.md)
 - [system/home 与 config](system-home-config.md)

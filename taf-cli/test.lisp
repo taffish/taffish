@@ -19,9 +19,42 @@
 (deftest test-taf-cli-version-string-basic ()
   (check-equal (stringp taf.cli:*taf-version*) t)
   (check-equal (%taf-cli-string-contains-p taf.cli:*taf-version* "taf") t)
-  (check-equal (%taf-cli-string-contains-p taf.cli:*taf-version* "0.9.0") t)
+  (check-equal (%taf-cli-string-contains-p taf.cli:*taf-version* "0.10.0") t)
   (check-equal taf.cli:*taf-version*
-               "taf 0.9.0 (2026-05, Kaiyuan Han)"))
+               "taf 0.10.0 (2026-05, Kaiyuan Han)"))
+
+(deftest test-taf-cli-help-string-basic ()
+  (let ((help-string (taf.cli::%get-taf-help-string)))
+    (check-equal (%taf-cli-string-contains-p help-string "taf help [COMMAND]") t)
+    (check-equal (%taf-cli-string-contains-p help-string "taf help install") t)
+    (check-equal (%taf-cli-string-contains-p help-string "Project commands:") t)
+    (check-equal (%taf-cli-string-contains-p help-string "Hub commands:") t)
+    (check-equal (%taf-cli-string-contains-p help-string "System commands:") t)))
+
+(deftest test-taf-cli-command-help-string-basic ()
+  (check-equal
+   (%taf-cli-string-contains-p
+    (taf.cli::%get-taf-command-help-string "install")
+    "taf install")
+   t)
+  (check-equal
+   (%taf-cli-string-contains-p
+    (taf.cli::%get-taf-command-help-string "upgrade")
+    "taf upgrade")
+   t)
+  (check-equal
+   (%taf-cli-string-contains-p
+    (taf.cli::%get-taf-command-help-string "help")
+    "taf help [COMMAND]")
+   t)
+  (check-equal
+   (taf.cli::%get-taf-command-help-string "version")
+   taf.cli:*taf-version*)
+  (check-equal
+   (%taf-cli-signal-error-p
+    (lambda ()
+      (taf.cli::%get-taf-command-help-string "unknown-command")))
+   t))
 
 (deftest test-taf-cli-new-help-string-basic ()
   (let ((help-string (taf.cli::%get-taf-new-help-string)))
@@ -468,6 +501,10 @@
 (deftest test-taf-cli-install-help-string-basic ()
   (let ((help-string (taf.cli::%get-taf-install-help-string)))
     (check-equal (%taf-cli-string-contains-p help-string "taf install [-h | --help]") t)
+    (check-equal (%taf-cli-string-contains-p help-string "Modes:") t)
+    (check-equal (%taf-cli-string-contains-p help-string "Examples:") t)
+    (check-equal (%taf-cli-string-contains-p help-string "indexed target") t)
+    (check-equal (%taf-cli-string-contains-p help-string "local project") t)
     (check-equal (%taf-cli-string-contains-p help-string "<APP-NAME|TAF-COMMAND>") t)
     (check-equal (%taf-cli-string-contains-p help-string "VERSION-ID") t)
     (check-equal (%taf-cli-string-contains-p help-string "-u, --user") t)
@@ -482,7 +519,7 @@
                                              "taf-my-tool-v0.1.0-r1")
                  t)
     (check-equal (%taf-cli-string-contains-p help-string "[local-project]") t)
-    (check-equal (%taf-cli-string-contains-p help-string "searching upward") t)
+    (check-equal (%taf-cli-string-contains-p help-string "searches upward") t)
     (check-equal (%taf-cli-string-contains-p help-string "exact command") t)))
 
 (deftest test-taf-cli-parse-taf-install-args-default ()
@@ -560,6 +597,27 @@
     (check-equal targets nil)
     (check-equal from-dir "/tmp/private-app")))
 
+(deftest test-taf-cli-parse-taf-install-args-all-tools-json ()
+  (multiple-value-bind
+        (mode scope query version-id dry-run-p force-p prompt-p targets from-dir
+         all-p kind yes-p json-p prune-old-p)
+      (taf.cli::%parse-taf-install-args
+       '("--all" "--tools" "--yes" "--json" "--prune-old"))
+    (check-equal mode :install-all)
+    (check-equal scope :user)
+    (check-equal query nil)
+    (check-equal version-id nil)
+    (check-equal dry-run-p nil)
+    (check-equal force-p nil)
+    (check-equal prompt-p nil)
+    (check-equal targets nil)
+    (check-equal from-dir nil)
+    (check-equal all-p t)
+    (check-equal kind :tool)
+    (check-equal yes-p t)
+    (check-equal json-p t)
+    (check-equal prune-old-p t)))
+
 (deftest test-taf-cli-parse-taf-install-args-help ()
   (multiple-value-bind
         (mode scope query version-id dry-run-p force-p prompt-p)
@@ -605,7 +663,104 @@
    (%taf-cli-signal-error-p
     (lambda ()
       (taf.cli::%parse-taf-install-args '("--from"))))
+   t)
+  (check-equal
+   (%taf-cli-signal-error-p
+    (lambda ()
+      (taf.cli::%parse-taf-install-args '("--all" "install-demo"))))
+   t)
+  (check-equal
+   (%taf-cli-signal-error-p
+    (lambda ()
+      (taf.cli::%parse-taf-install-args '("--all" "--dry-run" "--yes"))))
    t))
+
+(deftest test-taf-cli-outdated-help-string-basic ()
+  (let ((help-string (taf.cli::%get-taf-outdated-help-string)))
+    (check-equal (%taf-cli-string-contains-p help-string "taf outdated") t)
+    (check-equal (%taf-cli-string-contains-p help-string "[-a | --all]") t)
+    (check-equal (%taf-cli-string-contains-p help-string "-k, --kind") t)
+    (check-equal (%taf-cli-string-contains-p help-string "--tools") t)
+    (check-equal (%taf-cli-string-contains-p help-string "--json") t)
+    (check-equal (%taf-cli-string-contains-p help-string "no changes") t)
+    (check-equal (%taf-cli-string-contains-p help-string "Examples:") t)))
+
+(deftest test-taf-cli-parse-taf-outdated-args-targets ()
+  (multiple-value-bind (mode scope kind json-p targets)
+      (taf.cli::%parse-taf-outdated-args
+       '("-s" "-j" "--kind" "flow" "taf-flow-a" "taf-flow-b"))
+    (check-equal mode :outdated)
+    (check-equal scope :system)
+    (check-equal kind :flow)
+    (check-equal json-p t)
+    (check-equal (length targets) 2)
+    (check-equal (getf (first targets) :query) "taf-flow-a")
+    (check-equal (getf (second targets) :query) "taf-flow-b")))
+
+(deftest test-taf-cli-upgrade-help-string-basic ()
+  (let ((help-string (taf.cli::%get-taf-upgrade-help-string)))
+    (check-equal (%taf-cli-string-contains-p help-string "taf upgrade") t)
+    (check-equal (%taf-cli-string-contains-p help-string "[-a | --all]") t)
+    (check-equal (%taf-cli-string-contains-p help-string "--prune-old") t)
+    (check-equal (%taf-cli-string-contains-p help-string "--yes") t)
+    (check-equal (%taf-cli-string-contains-p help-string "--prompt") t)
+    (check-equal (%taf-cli-string-contains-p help-string "no changes") t)
+    (check-equal (%taf-cli-string-contains-p help-string "Examples:") t)))
+
+(deftest test-taf-cli-parse-taf-upgrade-args-default-all ()
+  (multiple-value-bind
+        (mode scope kind dry-run-p yes-p force-p prompt-p prune-old-p json-p targets)
+      (taf.cli::%parse-taf-upgrade-args nil)
+    (check-equal mode :upgrade)
+    (check-equal scope :user)
+    (check-equal kind :all)
+    (check-equal dry-run-p nil)
+    (check-equal yes-p nil)
+    (check-equal force-p nil)
+    (check-equal prompt-p nil)
+    (check-equal prune-old-p nil)
+    (check-equal json-p nil)
+    (check-equal targets nil)))
+
+(deftest test-taf-cli-parse-taf-upgrade-args-yes-kind-target ()
+  (multiple-value-bind
+        (mode scope kind dry-run-p yes-p force-p prompt-p prune-old-p json-p targets)
+      (taf.cli::%parse-taf-upgrade-args
+       '("-s" "--yes" "--flows" "--force" "--prompt" "--prune-old" "-j"
+         "taf-flow-v1.0.0-r1"))
+    (check-equal mode :upgrade)
+    (check-equal scope :system)
+    (check-equal kind :flow)
+    (check-equal dry-run-p nil)
+    (check-equal yes-p t)
+    (check-equal force-p t)
+    (check-equal prompt-p t)
+    (check-equal prune-old-p t)
+    (check-equal json-p t)
+    (check-equal (length targets) 1)
+    (check-equal (getf (first targets) :query) "taf-flow-v1.0.0-r1")))
+
+(deftest test-taf-cli-prune-help-string-basic ()
+  (let ((help-string (taf.cli::%get-taf-prune-help-string)))
+    (check-equal (%taf-cli-string-contains-p help-string "taf prune") t)
+    (check-equal (%taf-cli-string-contains-p help-string "[-a | --all]") t)
+    (check-equal (%taf-cli-string-contains-p help-string "--yes") t)
+    (check-equal (%taf-cli-string-contains-p help-string "--kind") t)
+    (check-equal (%taf-cli-string-contains-p help-string "SIF files") t)
+    (check-equal (%taf-cli-string-contains-p help-string "no changes") t)
+    (check-equal (%taf-cli-string-contains-p help-string "Examples:") t)))
+
+(deftest test-taf-cli-parse-taf-prune-args-targets ()
+  (multiple-value-bind (mode scope kind dry-run-p yes-p json-p targets)
+      (taf.cli::%parse-taf-prune-args
+       '("-n" "--tools" "-j" "taf-tool-a" "taf-tool-b"))
+    (check-equal mode :prune)
+    (check-equal scope :user)
+    (check-equal kind :tool)
+    (check-equal dry-run-p t)
+    (check-equal yes-p nil)
+    (check-equal json-p t)
+    (check-equal (length targets) 2)))
 
 (deftest test-taf-cli-list-help-string-basic ()
   (let ((help-string (taf.cli::%get-taf-list-help-string)))

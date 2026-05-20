@@ -69,7 +69,7 @@
 | `normalize-input-context` | 规范化运行上下文。 |
 | `bind-taf` | 执行参数和上下文绑定。 |
 | `compile-taf-result` | 从绑定结果生成 shell。 |
-| `compile-taf-program` | 内部保留函数；0.9.0 中不导出，且当前未实现。未来公开前需要先明确默认绑定策略。 |
+| `compile-taf-program` | 内部保留函数；不导出，且当前未实现。未来公开前需要先明确默认绑定策略。 |
 | `compile-taf` | 根据输入类型分发到具体编译函数。 |
 | `taffish-to-shell` | 面向外部调用的转换入口。 |
 

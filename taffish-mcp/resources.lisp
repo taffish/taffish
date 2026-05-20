@@ -211,7 +211,8 @@ TAFFISH MCP exposes conservative tools for AI clients.
 Tool groups:
 - Metadata: taffish_get_version, taffish_get_help.
 - Compiler: taffish_validate_source, taffish_compile_source, taffish_summarize_source, and their file variants.
-- Hub: taffish_update_index, taffish_search_apps, taffish_get_app_info, taffish_list_apps, taffish_locate_app.
+- Hub: taffish_update_index, taffish_search_apps, taffish_get_app_info, taffish_list_apps, taffish_locate_app, taffish_check_outdated.
+- Hub plans: taffish_plan_install_all, taffish_plan_upgrade, and taffish_plan_prune are dry-run only.
 - App inspection: taffish_resolve_app, taffish_inspect_app, taffish_summarize_app_usage, taffish_compile_app_invocation.
 - Local management: taffish_install_app and taffish_uninstall_app default to dryRun=true.
 - Project: taffish_create_project writes a new project; taffish_check_project, taffish_inspect_project, taffish_summarize_project_usage, and taffish_compile_project are read-only; taffish_build_project writes a command wrapper.
@@ -223,6 +224,7 @@ Recommended flows:
 - Understand an installed app: taffish_resolve_app, taffish_summarize_app_usage, then taffish_inspect_app if full local source/docs are needed.
 - Test app arguments safely: taffish_summarize_app_usage, then taffish_compile_app_invocation. Do not execute returned shell through MCP.
 - Find/install apps: taffish_search_apps or taffish_get_app_info, then taffish_install_app with dryRun=true before any real install.
+- Maintain local apps: taffish_check_outdated, taffish_plan_upgrade, and taffish_plan_prune before asking the user to run CLI mutating commands.
 - Review containerized trust metadata: inspect smoke, trust, container.digest, and container.platforms when they are available. MCP does not run smoke tests.
 
 The server intentionally does not expose taf run, taf publish, or container image build tools. App invocation compile returns shell code but never runs it.
@@ -251,6 +253,8 @@ Compiler, read-only:
 Hub and local package state:
 - taffish_update_index writes index files.
 - taffish_search_apps, taffish_get_app_info, taffish_list_apps, taffish_locate_app are read-oriented.
+- taffish_check_outdated compares installed apps with index latest.
+- taffish_plan_install_all, taffish_plan_upgrade, and taffish_plan_prune are dry-run only package-management planners.
 - taffish_install_app and taffish_uninstall_app default to dryRun=true.
 
 App inspection:
@@ -279,6 +283,7 @@ Default-safe behavior:
 - Compiler source/file tools never execute generated shell code.
 - App invocation compile tools never execute generated shell code.
 - Install and uninstall tools default to dryRun=true.
+- Install-all, upgrade, and prune tools are exposed only as dry-run plan tools.
 - Project build writes local target files but does not build container images.
 - Project inspection and project usage tools read local project files but do not execute generated shell code.
 - Smoke metadata is exposed as data only. MCP does not execute smoke commands, pull images, or start containers to verify them.
@@ -358,8 +363,10 @@ Recommended AI flow:
 1. Use taffish_get_config or taffish_get_config_paths if source/mirror behavior matters.
 2. Use taffish_update_index only when the user wants fresh online metadata.
 3. Use taffish_search_apps or taffish_get_app_info to resolve app/version information.
-4. Use taffish_install_app with dryRun=true first.
-5. Ask the user before dryRun=false.
+4. Use taffish_check_outdated for local update status.
+5. Use taffish_plan_install_all, taffish_plan_upgrade, or taffish_plan_prune for safe package-management plans.
+6. Use taffish_install_app with dryRun=true first for a specific install.
+7. Ask the user before dryRun=false or before recommending CLI --yes commands.
 
 Installed version-pinned commands are reproducibility anchors, for example taf-example-v1.0.0-r1. Unversioned aliases may track the local latest installed version."))
         ((string= uri "taffish://mcp/app-inspection-model")

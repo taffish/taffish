@@ -212,6 +212,60 @@ Supports `dry-run-p`. Dry-run should not write files.
 
 Safety note: source URLs are resolved through system config rewrite rules. Installation runs git and build logic.
 
+### `taf.core:hub-install-all`
+
+Stability: stable.
+
+Role: plan or install all indexed apps selected by kind.
+
+Side effects: same as `hub-install` for each package when `yes-p` is true.
+
+Supports `dry-run-p`; dry-run is the expected default at the CLI and MCP
+planner layers. Optional `prune-old-p` removes older local versions only after
+successful non-dry-run installation.
+
+### `taf.core:hub-outdated`
+
+Stability: stable.
+
+Role: compare local install metadata with the local index and report outdated,
+current, ahead, missing-index, local-project, or not-installed states.
+
+Side effects: prints when verbose by default; does not modify files.
+
+### `taf.core:hub-upgrade`
+
+Stability: stable.
+
+Role: plan or install newer indexed versions for locally installed apps.
+
+Side effects: same as `hub-install` for outdated packages when `yes-p` is true.
+Local/private `local-project` installs are skipped.
+
+Supports `dry-run-p`; dry-run should not write files.
+
+### `taf.core:hub-prune`
+
+Stability: stable.
+
+Role: remove older local app versions while keeping the newest local version.
+
+Side effects:
+
+1. Delete older install roots.
+2. Delete older artifact launchers.
+3. Refresh the unversioned command alias.
+
+Supports `dry-run-p`. It does not remove Docker/Podman/Apptainer images,
+Apptainer caches, or SIF files.
+
+### Package Maintenance Output
+
+`hub-install-all`, `hub-outdated`, `hub-upgrade`, and `hub-prune` return or print
+the same package-plan structure. JSON output preserves every item. Default text
+output is optimized for humans and may suppress `skip` items; if every item is
+skipped, it reports `no changes`.
+
 ### `taf.core:hub-uninstall` / `hub-uninstall-many`
 
 Stability: stable.
@@ -314,6 +368,9 @@ Default `safe t` means write failure returns nil and does not interrupt the main
 | `project-publish` | Performs git/gh publication operations. |
 | `hub-update` | Writes index and may access the network. |
 | `hub-install` | Clones/copies/builds/writes launchers. |
+| `hub-install-all` | May clone/copy/build/write many launchers when `yes-p` is true. |
+| `hub-upgrade` | May install newer app versions when `yes-p` is true. |
+| `hub-prune` | Deletes older local install roots and launchers when `yes-p` is true. |
 | `hub-uninstall` | Deletes install directories and launchers. |
 | `system-config-init` | Writes config. |
 | `system-doctor :init-p t` | Creates directories. |

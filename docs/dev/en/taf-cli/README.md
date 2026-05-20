@@ -13,6 +13,10 @@
 3. Calling corresponding `taf-core` APIs.
 4. Presenting results to users.
 
+Help is part of the public CLI surface. `taf --help` should stay concise,
+while `taf help <command>` and `taf <command> --help` should route users to the
+same command-specific help text.
+
 ## System Position
 
 ```text
@@ -45,6 +49,26 @@ Examples:
 | How Hub index is parsed | `taf-core/hub/info.lisp` |
 | What config defaults are | `taf-core/system/config.lisp` |
 
+## Hub Maintenance Commands
+
+The package-maintenance command surface follows a conservative CLI pattern:
+
+| Command | Default behavior |
+| --- | --- |
+| `taf install --all` | Dry-run plan for all indexed apps selected by `--kind`, `--tools`, or `--flows`. |
+| `taf outdated` | Read-only comparison between local install metadata and the local index. |
+| `taf upgrade` | Dry-run upgrade plan; requires `--yes` to install newer indexed versions. |
+| `taf prune` | Dry-run cleanup plan; requires `--yes` to remove older local app versions. |
+
+These commands must keep `--user` / `--system`, `--json`, kind filters, and
+target parsing consistent with the corresponding `taf-core` APIs. They must
+not remove shared container image caches.
+
+Default text output is change-oriented. When every item is already current or
+otherwise skipped, the command should print a short `no changes` message
+instead of listing every unchanged app. JSON output remains the full
+machine-readable plan and keeps current/skipped items for automation.
+
 ## Modification Guide
 
 When changing `taf-cli`, check:
@@ -55,4 +79,3 @@ When changing `taf-cli`, check:
 4. Whether business logic has accidentally moved into the CLI layer.
 
 Long-term, `taf-cli` command design directly affects TAFFISH user experience. It should stay stable, concise, and easy to debug.
-

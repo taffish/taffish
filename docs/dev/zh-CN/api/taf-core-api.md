@@ -212,6 +212,58 @@
 
 安全说明：source URL 会通过 system config 的 rewrite 规则解析。安装会运行 git 和 build 逻辑。
 
+### `taf.core:hub-install-all`
+
+稳定性：稳定。
+
+作用：按 kind 过滤后计划或安装 index 中的所有 app。
+
+副作用：当 `yes-p` 为真时，对每个 package 执行和 `hub-install` 相同的安装副作用。
+
+支持 `dry-run-p`；CLI 和 MCP planner 层默认应使用 dry-run。可选的 `prune-old-p`
+只会在非 dry-run 且安装成功后移除本地旧版本。
+
+### `taf.core:hub-outdated`
+
+稳定性：稳定。
+
+作用：把本地 install metadata 和本地 index 进行比较，报告 outdated、current、
+ahead、missing-index、local-project 或 not-installed 状态。
+
+副作用：默认 verbose 时打印，不修改文件。
+
+### `taf.core:hub-upgrade`
+
+稳定性：稳定。
+
+作用：计划或安装本地已安装 app 的 index latest 版本。
+
+副作用：当 `yes-p` 为真时，对 outdated package 执行和 `hub-install` 相同的安装副作用。
+本地/私有 `local-project` 安装会被跳过。
+
+支持 `dry-run-p`；dry-run 不应写文件。
+
+### `taf.core:hub-prune`
+
+稳定性：稳定。
+
+作用：移除本地旧 app 版本，只保留本地最新版本。
+
+副作用：
+
+1. 删除旧 install root。
+2. 删除旧 artifact launcher。
+3. 刷新不带版本号的 command alias。
+
+支持 `dry-run-p`。它不会删除 Docker/Podman/Apptainer 镜像、Apptainer cache
+或 SIF 文件。
+
+### Package Maintenance 输出
+
+`hub-install-all`、`hub-outdated`、`hub-upgrade` 和 `hub-prune` 返回或打印同一类
+package-plan 结构。JSON 输出保留每个 item。默认文本输出面向人类阅读，可能隐藏
+`skip` items；如果所有 item 都被 skipped，则报告 `no changes`。
+
 ### `taf.core:hub-uninstall` / `hub-uninstall-many`
 
 稳定性：稳定。
@@ -314,6 +366,9 @@ profile：
 | `project-publish` | git/gh 发布操作。 |
 | `hub-update` | 写 index，可能访问网络。 |
 | `hub-install` | clone/copy/build/write launcher。 |
+| `hub-install-all` | `yes-p` 为真时可能批量 clone/copy/build/write launcher。 |
+| `hub-upgrade` | `yes-p` 为真时可能安装新版本 app。 |
+| `hub-prune` | `yes-p` 为真时删除旧本地安装目录和 launcher。 |
 | `hub-uninstall` | 删除安装目录和 launcher。 |
 | `system-config-init` | 写 config。 |
 | `system-doctor :init-p t` | 创建目录。 |

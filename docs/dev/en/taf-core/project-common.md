@@ -18,7 +18,7 @@ These two files are the common foundation of `taf-core`:
 | --- | --- |
 | Defaults | `*default-github-host*`, `*default-github-owner*`, `*default-container-registry*`, `*default-docker-base-image*`, `*default-index-repository*`, `*default-index-branch*` |
 | Project | `project-new`, `project-check`, `project-compile`, `project-build`, `project-run`, `project-publish` |
-| Hub | `hub-update`, `hub-search`, `hub-info`, `hub-info-many`, `hub-install`, `hub-install-many`, `hub-uninstall`, `hub-uninstall-many`, `hub-list`, `hub-which`, `hub-which-many` |
+| Hub | `hub-update`, `hub-search`, `hub-info`, `hub-info-many`, `hub-install`, `hub-install-from-project`, `hub-install-many`, `hub-install-all`, `hub-outdated`, `hub-upgrade`, `hub-prune`, `hub-uninstall`, `hub-uninstall-many`, `hub-list`, `hub-which`, `hub-which-many` |
 | System | `system-config`, `system-config-path`, `system-config-init`, `system-doctor`, `system-history`, `system-record-history-event` |
 
 ## Default Naming Rules
@@ -70,4 +70,3 @@ When changing the common layer, check:
 2. Whether `taf check` still recognizes old projects.
 3. Whether repository, command, and artifact names in the Hub index are affected.
 4. Whether GitHub and Gitee mirror configuration still keeps boundaries clear.
-

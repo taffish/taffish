@@ -9,7 +9,7 @@
 ;;;; ------------------------------------------------------------
 
 (defparameter *taffish-version*
-  "taffish 0.9.0 (2026-05, Kaiyuan Han)")
+  "taffish 0.10.0 (2026-05, Kaiyuan Han)")
 
 (defun run-taffish-version ()
   (format t "~A~%" *taffish-version*))

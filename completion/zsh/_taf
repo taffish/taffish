@@ -13,6 +13,9 @@ _taf() {
     'search:Search apps from local index'
     'info:Show app information'
     'install:Install apps from TAFFISH-HUB'
+    'outdated:Show installed apps older than local index'
+    'upgrade:Install newer indexed versions'
+    'prune:Remove older local app versions'
     'uninstall:Uninstall local apps'
     'list:List installed or indexed apps'
     'which:Show paths and metadata'
@@ -112,10 +115,60 @@ _taf() {
         '(-h --help)'{-h,--help}'[show help]' \
         '(-u --user -s --system)'{-u,--user}'[install into user home]' \
         '(-u --user -s --system)'{-s,--system}'[install into system home]' \
-        '(-n --dry-run)'{-n,--dry-run}'[print plan only]' \
+        '(-n --dry-run -y --yes)'{-n,--dry-run}'[print plan only]' \
+        '(-n --dry-run -y --yes)'{-y,--yes}'[apply install-all plan]' \
         '(-f --force)'{-f,--force}'[replace existing version]' \
+        '(-a --all)'{-a,--all}'[install all indexed apps]' \
+        '(-k --kind)'{-k,--kind}'[filter by kind]:kind:(tool flow all)' \
+        '--tools[filter by tool]' \
+        '--flows[filter by flow]' \
+        '--prune-old[remove older versions after install-all]' \
+        '(-j --json)'{-j,--json}'[print JSON]' \
         '--from[install from local TAFFISH project directory]:project directory:_files -/' \
         '--prompt[allow git credential prompts]' \
+        '*:app or command:'
+      ;;
+    outdated)
+      _arguments \
+        '(-h --help)'{-h,--help}'[show help]' \
+        '(-u --user -s --system)'{-u,--user}'[check user home]' \
+        '(-u --user -s --system)'{-s,--system}'[check system home]' \
+        '(-a --all)'{-a,--all}'[check all installed apps]' \
+        '(-k --kind)'{-k,--kind}'[filter by kind]:kind:(tool flow all)' \
+        '--tools[filter by tool]' \
+        '--flows[filter by flow]' \
+        '(-j --json)'{-j,--json}'[print JSON]' \
+        '*:app or command:'
+      ;;
+    upgrade)
+      _arguments \
+        '(-h --help)'{-h,--help}'[show help]' \
+        '(-u --user -s --system)'{-u,--user}'[upgrade user home]' \
+        '(-u --user -s --system)'{-s,--system}'[upgrade system home]' \
+        '(-n --dry-run -y --yes)'{-n,--dry-run}'[print plan only]' \
+        '(-n --dry-run -y --yes)'{-y,--yes}'[apply upgrade plan]' \
+        '(-f --force)'{-f,--force}'[replace existing paths]' \
+        '(-a --all)'{-a,--all}'[upgrade all installed apps]' \
+        '(-k --kind)'{-k,--kind}'[filter by kind]:kind:(tool flow all)' \
+        '--tools[filter by tool]' \
+        '--flows[filter by flow]' \
+        '--prune-old[remove older versions after upgrade]' \
+        '--prompt[allow git credential prompts]' \
+        '(-j --json)'{-j,--json}'[print JSON]' \
+        '*:app or command:'
+      ;;
+    prune)
+      _arguments \
+        '(-h --help)'{-h,--help}'[show help]' \
+        '(-u --user -s --system)'{-u,--user}'[prune user home]' \
+        '(-u --user -s --system)'{-s,--system}'[prune system home]' \
+        '(-n --dry-run -y --yes)'{-n,--dry-run}'[print plan only]' \
+        '(-n --dry-run -y --yes)'{-y,--yes}'[apply prune plan]' \
+        '(-a --all)'{-a,--all}'[prune all installed apps]' \
+        '(-k --kind)'{-k,--kind}'[filter by kind]:kind:(tool flow all)' \
+        '--tools[filter by tool]' \
+        '--flows[filter by flow]' \
+        '(-j --json)'{-j,--json}'[print JSON]' \
         '*:app or command:'
       ;;
     uninstall)
@@ -170,6 +223,9 @@ _taf() {
         '(-j --json)'{-j,--json}'[print raw JSONL]' \
         '(-p --path)'{-p,--path}'[print history path]' \
         '(-c --clear)'{-c,--clear}'[clear history file]'
+      ;;
+    help)
+      _describe -t commands 'taf command' commands
       ;;
     *)
       _message 'taf command'

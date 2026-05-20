@@ -239,6 +239,7 @@
      (cons "scope" (string-downcase (string (getf result :scope))))
      (cons "name" (getf result :package-name))
      (cons "version_id" (getf result :version-id))
+     (cons "kind" (or (%hub-json-string record "kind") :null))
      (cons "artifact_name" (getf result :artifact-name))
      (cons "command_name" (or (getf result :command-name) :null))
      (cons "command_file" (getf result :command-file))

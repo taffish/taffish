@@ -217,7 +217,7 @@ Initial MCP project test release.
        (han.path:delete-directory-tree ,root :if-does-not-exist :ignore))))
 
 (han.test:deftest test-taffish-mcp-version-string-basic ()
-  (han.test:check-true (search "taffish-mcp 0.9.0" *taffish-mcp-version*)))
+  (han.test:check-true (search "taffish-mcp 0.10.0" *taffish-mcp-version*)))
 
 (han.test:deftest test-taffish-mcp-initialize-response ()
   (let* ((raw "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-06-18\"}}")
@@ -246,6 +246,10 @@ Initial MCP project test release.
     (han.test:check-true (member "taffish_inspect_app" names :test #'string=))
     (han.test:check-true (member "taffish_summarize_app_usage" names :test #'string=))
     (han.test:check-true (member "taffish_compile_app_invocation" names :test #'string=))
+    (han.test:check-true (member "taffish_check_outdated" names :test #'string=))
+    (han.test:check-true (member "taffish_plan_install_all" names :test #'string=))
+    (han.test:check-true (member "taffish_plan_upgrade" names :test #'string=))
+    (han.test:check-true (member "taffish_plan_prune" names :test #'string=))
     (han.test:check-true (member "taffish_build_project" names :test #'string=))
     (han.test:check-true (member "taffish_create_project" names :test #'string=))
     (han.test:check-true (member "taffish_inspect_project" names :test #'string=))
@@ -263,7 +267,7 @@ Initial MCP project test release.
          (structured (%mcp-test-structured result)))
     (han.test:check-equal nil (han.json:get-json result "isError"))
     (han.test:check-true
-     (search "taffish-mcp 0.9.0"
+     (search "taffish-mcp 0.10.0"
              (han.json:get-json structured "taffish_mcp")))
     (han.test:check-true
      (> (length (han.json:get-json structured "features")) 0))
@@ -274,7 +278,11 @@ Initial MCP project test release.
     (han.test:check-true
      (loop with features = (han.json:get-json structured "features")
            for i from 0 below (length features)
-           thereis (string= "project_usage" (aref features i))))))
+           thereis (string= "project_usage" (aref features i))))
+    (han.test:check-true
+     (loop with features = (han.json:get-json structured "features")
+           for i from 0 below (length features)
+           thereis (string= "hub_upgrade_plan" (aref features i))))))
 
 (han.test:deftest test-taffish-mcp-get-help ()
   (let* ((result (call-tool
@@ -590,6 +598,86 @@ Initial MCP project test release.
       (han.test:check-equal t (han.json:get-json structured "dry_run_p"))
       (han.test:check-equal "already-installed"
                             (han.json:get-json error "kind")))))
+
+(han.test:deftest test-taffish-mcp-check-outdated-current-install ()
+  (with-mcp-installed-app (root user-home system-home)
+    (let* ((result (call-tool
+                    "taffish_check_outdated"
+                    (%json-object
+                     (cons "userHome" (han.path:->namestring user-home))
+                     (cons "systemHome" (han.path:->namestring system-home)))))
+           (structured (%mcp-test-structured result))
+           (summary (han.json:get-json structured "summary")))
+      (han.test:check-equal nil (han.json:get-json result "isError"))
+      (han.test:check-equal t (han.json:get-json structured "ok"))
+      (han.test:check-equal "outdated"
+                            (han.json:get-json structured "operation"))
+      (han.test:check-equal 1 (han.json:get-json summary "total"))
+      (han.test:check-equal 0 (han.json:get-json summary "outdated"))
+      (han.test:check-equal 1 (han.json:get-json summary "current")))))
+
+(han.test:deftest test-taffish-mcp-plan-install-all-is-dry-run ()
+  (let* ((root (%mcp-test-temp-root))
+         (user-home (han.path:join-path root "user-home"))
+         (system-home (han.path:join-path root "system-home"))
+         (source-root (han.path:join-path root "source-root/")))
+    (unwind-protect
+         (progn
+           (ensure-directories-exist source-root)
+           (uiop:with-current-directory (source-root)
+             (taf.core:project-new "mcp-demo" '("--tool")))
+           (%mcp-test-write-current-index
+            user-home
+            (%mcp-test-app-index
+             (han.path:join-path source-root "mcp-demo")))
+           (let* ((result (call-tool
+                           "taffish_plan_install_all"
+                           (%json-object
+                            (cons "kind" "tool")
+                            (cons "userHome" (han.path:->namestring user-home))
+                            (cons "systemHome" (han.path:->namestring system-home)))))
+                  (structured (%mcp-test-structured result))
+                  (summary (han.json:get-json structured "summary")))
+             (han.test:check-equal nil (han.json:get-json result "isError"))
+             (han.test:check-equal t (han.json:get-json structured "ok"))
+             (han.test:check-equal "install_all"
+                                   (han.json:get-json structured "operation"))
+             (han.test:check-equal t
+                                   (han.json:get-json structured "dry_run_p"))
+             (han.test:check-equal 1 (han.json:get-json summary "total"))
+             (han.test:check-equal 1 (han.json:get-json summary "install"))))
+      (han.path:delete-directory-tree root :if-does-not-exist :ignore))))
+
+(han.test:deftest test-taffish-mcp-plan-upgrade-and-prune-are-dry-run ()
+  (with-mcp-installed-app (root user-home system-home)
+    (let* ((upgrade-result (call-tool
+                            "taffish_plan_upgrade"
+                            (%json-object
+                             (cons "target" "mcp-demo")
+                             (cons "userHome" (han.path:->namestring user-home))
+                             (cons "systemHome" (han.path:->namestring system-home)))))
+           (upgrade (%mcp-test-structured upgrade-result))
+           (upgrade-summary (han.json:get-json upgrade "summary"))
+           (prune-result (call-tool
+                          "taffish_plan_prune"
+                          (%json-object
+                           (cons "target" "mcp-demo")
+                           (cons "userHome" (han.path:->namestring user-home))
+                           (cons "systemHome" (han.path:->namestring system-home)))))
+           (prune (%mcp-test-structured prune-result))
+           (prune-summary (han.json:get-json prune "summary")))
+      (han.test:check-equal nil (han.json:get-json upgrade-result "isError"))
+      (han.test:check-equal t (han.json:get-json upgrade "ok"))
+      (han.test:check-equal "upgrade" (han.json:get-json upgrade "operation"))
+      (han.test:check-equal t (han.json:get-json upgrade "dry_run_p"))
+      (han.test:check-equal 1 (han.json:get-json upgrade-summary "total"))
+      (han.test:check-equal 0 (han.json:get-json upgrade-summary "installable"))
+      (han.test:check-equal nil (han.json:get-json prune-result "isError"))
+      (han.test:check-equal t (han.json:get-json prune "ok"))
+      (han.test:check-equal "prune" (han.json:get-json prune "operation"))
+      (han.test:check-equal t (han.json:get-json prune "dry_run_p"))
+      (han.test:check-equal 1 (han.json:get-json prune-summary "total"))
+      (han.test:check-equal 0 (han.json:get-json prune-summary "prunable")))))
 
 (han.test:deftest test-taffish-mcp-compile-app-invocation-reports-invalid ()
   (with-mcp-installed-app (root user-home system-home)

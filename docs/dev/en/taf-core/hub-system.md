@@ -1,6 +1,6 @@
 # taf-core Hub System
 
-The Hub system lives in `taf-core/hub/` and handles TAFFISH app indexing, query, search, install, uninstall, and lookup.
+The Hub system lives in `taf-core/hub/` and handles TAFFISH app indexing, query, search, install, maintenance, uninstall, and lookup.
 
 ## Role
 
@@ -17,6 +17,7 @@ The Hub system lifts taf-apps from "local projects" into "discoverable, installa
 | `uninstall.lisp` | Uninstall packages. |
 | `list.lisp` | List local installations. |
 | `which.lisp` | Locate commands or install paths. |
+| `upgrade.lisp` | Plan and apply outdated/install-all/upgrade/prune operations. |
 
 ## Index Contract
 
@@ -53,7 +54,7 @@ When changing the Hub system, check:
 
 1. Whether index schema changes.
 2. Whether local cache paths change.
-3. Whether install, uninstall, list, and which remain consistent.
+3. Whether install, uninstall, list, which, outdated, upgrade, and prune remain consistent.
 4. Whether GitHub/Gitee mirrors resolve correctly.
 5. Whether errors help users distinguish network issues, index issues, and package issues.
 
