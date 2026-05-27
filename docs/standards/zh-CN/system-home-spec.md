@@ -73,6 +73,22 @@ logs/
 
 这些目录是 TAFFISH 本地状态的长期布局，不能随意改名。
 
+## 共享 Apptainer SIF 缓存
+
+`images/sif/` 用于保存生成 shell 自动拉取的 Apptainer SIF 文件。对于用户级 home，
+这个目录通常只属于当前用户。
+
+对于系统级 home，TAFFISH 不要求安装器把 `<system-home>/images/sif/` 自动设置为
+所有用户可写。站点管理员应该明确选择策略：
+
+| 策略 | 含义 |
+| --- | --- |
+| 用户级缓存 | 用户运行 `taf doctor --init --user`，SIF 文件保存到自己的用户级 home。 |
+| 管理员预缓存 | root 先运行常用 app，让 SIF 在普通用户运行前已经存在于 system home。 |
+| 共享可写缓存 | 管理员设置 sticky 权限，例如 `chmod 1777 /opt/taffish/images/sif`。 |
+
+共享可写缓存是站点策略决定。它对共享服务器很方便，但不应该由安装器静默自动设置。
+
 ## hub index 文件
 
 当前 index 文件：

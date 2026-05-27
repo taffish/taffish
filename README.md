@@ -125,6 +125,11 @@ permission and installs the commands for all users on the machine:
 curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sudo sh -s -- --system
 ```
 
+If a shared server uses Apptainer, system-installed apps are visible to all
+users but first-run SIF image caching still needs a writable image directory.
+See [Apptainer shared SIF cache](#apptainer-shared-sif-cache-for-system-installs)
+before deploying TAFFISH for multiple users.
+
 Pinned version install. The installer may come from `main`, but downloaded
 files are pinned to the selected git tag:
 
@@ -158,6 +163,9 @@ permission:
 ```sh
 curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffish.gitee.sh | sudo sh -s -- --system
 ```
+
+If the server uses Apptainer, also review
+[Apptainer shared SIF cache](#apptainer-shared-sif-cache-for-system-installs).
 
 Pinned version install:
 
@@ -293,6 +301,11 @@ home = /opt/taffish
 
 TAFFISH home stores local apps, indexes, cached images, command launchers,
 completion files, Vim files, logs, and other runtime data.
+
+For system installs, app wrappers and metadata live under the system home, but
+container image caches are runtime state. Docker and Podman use their own image
+stores. Apptainer uses SIF files under `images/sif`; see the Apptainer section
+if multiple users should share system-level SIF files.
 
 Relevant environment variables:
 
@@ -656,6 +669,50 @@ sudo apt-get install -y squashfuse
 
 TAFFISH generated scripts use `apptainer --quiet` by default in `v0.1.2` and later builds to keep normal app output clean. Runtime errors are still reported.
 
+#### Apptainer Shared SIF Cache For System Installs
+
+When a TAFFISH app is installed with `taf install --system`, the command wrapper
+is available to all users, but TAFFISH does not automatically pull Apptainer SIF
+images during installation. The first run searches:
+
+```text
+${TAFFISH_SYSTEM_HOME:-/opt/taffish}/images/sif
+${TAFFISH_USER_HOME:-$HOME/.local/share/taffish}/images/sif
+```
+
+If no SIF exists, TAFFISH needs one writable directory to pull the image. On a
+shared server, choose one of these policies:
+
+1. Per-user cache, safest default:
+
+```sh
+taf doctor --init --user
+```
+
+Each user gets their own writable `~/.local/share/taffish/images/sif` cache.
+
+2. Administrator pre-cache:
+
+```sh
+sudo taf-<app>-v<version>-r<release> -- --help
+```
+
+This lets root pull the SIF into `/opt/taffish/images/sif` once. Later users
+can read the existing SIF without needing write access to the system cache.
+
+3. Shared writable system cache:
+
+```sh
+sudo mkdir -p /opt/taffish/images/sif
+sudo chmod 1777 /opt/taffish/images/sif
+```
+
+`1777` is the sticky-directory mode used by `/tmp`: local users can create SIF
+files there, but cannot delete files owned by other users. Use this only when
+you intentionally want a shared writable cache on a trusted server. If your
+cluster has stricter policy, prefer administrator pre-caching or per-user
+caches instead.
+
 ## TAF App Smoke Metadata
 
 TAFFISH `0.8.0` adds declarative smoke metadata for containerized taf-apps.
@@ -992,6 +1049,34 @@ Install `squashfs-tools`:
 ```sh
 sudo apt-get install -y squashfs-tools
 ```
+
+### Apptainer says `no writable apptainer image directory found`
+
+This usually happens when a TAFFISH app was installed with `taf install
+--system`, but no administrator has pre-cached the SIF image and the current
+user has no initialized user TAFFISH home.
+
+For a single user, initialize the user home:
+
+```sh
+taf doctor --init --user
+```
+
+For a shared server, the administrator can either pre-cache common SIF files:
+
+```sh
+sudo taf-<app>-v<version>-r<release> -- --help
+```
+
+or intentionally allow a shared writable system SIF cache:
+
+```sh
+sudo mkdir -p /opt/taffish/images/sif
+sudo chmod 1777 /opt/taffish/images/sif
+```
+
+Only use the `1777` option when you accept a shared cache writable by local
+users. See [Apptainer shared SIF cache](#apptainer-shared-sif-cache-for-system-installs).
 
 ### Apptainer prints `Converting SIF file to temporary sandbox...` every run
 

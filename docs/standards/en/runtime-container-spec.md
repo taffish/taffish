@@ -150,6 +150,19 @@ Apptainer execution flow:
 6. If pulling from Docker/OCI sources, require `mksquashfs`.
 7. Run with `apptainer exec --pwd <workdir>`.
 
+For system installs, a command wrapper can be globally visible even when no
+system SIF has been pre-cached yet. If neither the system SIF directory nor the
+current user's SIF directory is writable, generated shell reports:
+
+```text
+[TAFFISH] no writable apptainer image directory found
+```
+
+This is expected behavior. Administrators can pre-cache SIF files, users can
+initialize their own TAFFISH user home, or the site can intentionally configure
+a sticky shared SIF directory such as `/opt/taffish/images/sif` with mode
+`1777`.
+
 SIF filenames are derived from image strings by converting:
 
 ```text

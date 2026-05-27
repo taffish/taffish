@@ -114,6 +114,10 @@ curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/instal
 curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sudo sh -s -- --system
 ```
 
+如果共享服务器使用 Apptainer，系统级安装的 app 会对所有用户可见，但首次运行时
+SIF 镜像缓存仍然需要一个可写目录。部署给多用户前请先看
+[Apptainer 系统级共享 SIF 缓存](#apptainer-系统级共享-sif-缓存)。
+
 固定版本安装。安装器本身可以来自 `main`，实际下载内容会固定到指定 git tag：
 
 ```sh
@@ -140,6 +144,9 @@ curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffis
 ```sh
 curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffish.gitee.sh | sudo sh -s -- --system
 ```
+
+如果服务器使用 Apptainer，也请查看
+[Apptainer 系统级共享 SIF 缓存](#apptainer-系统级共享-sif-缓存)。
 
 固定版本安装：
 
@@ -266,6 +273,10 @@ home = /opt/taffish
 ```
 
 TAFFISH home 用于保存本地 apps、indexes、缓存镜像、命令启动器、补全文件、Vim 文件、日志和其他运行时数据。
+
+对于系统级安装，app wrapper 和 metadata 位于 system home 下，但容器镜像缓存属于
+运行时状态。Docker 和 Podman 使用自己的 image store；Apptainer 使用 `images/sif`
+下的 SIF 文件。如果多用户需要共享系统级 SIF 文件，请看 Apptainer 部分。
 
 相关环境变量：
 
@@ -611,6 +622,46 @@ sudo apt-get install -y squashfuse
 
 `v0.1.2` 及之后构建的 TAFFISH 生成脚本默认使用 `apptainer --quiet`，让正常 app 输出更干净。运行时错误仍然会报告。
 
+#### Apptainer 系统级共享 SIF 缓存
+
+使用 `taf install --system` 安装 TAFFISH app 时，命令 wrapper 会对所有用户可见，
+但 TAFFISH 不会在安装阶段自动拉取 Apptainer SIF 镜像。第一次运行时会按顺序查找：
+
+```text
+${TAFFISH_SYSTEM_HOME:-/opt/taffish}/images/sif
+${TAFFISH_USER_HOME:-$HOME/.local/share/taffish}/images/sif
+```
+
+如果没有已有 SIF，TAFFISH 需要一个可写目录来拉取镜像。在共享服务器上，可以选择以下策略：
+
+1. 用户级缓存，最安全的默认方案：
+
+```sh
+taf doctor --init --user
+```
+
+每个用户都会拥有自己的 `~/.local/share/taffish/images/sif` 可写缓存。
+
+2. 管理员预缓存：
+
+```sh
+sudo taf-<app>-v<version>-r<release> -- --help
+```
+
+这会让 root 先把 SIF 拉取到 `/opt/taffish/images/sif`。之后普通用户只需要读取已有
+SIF，不需要写入系统缓存。
+
+3. 共享可写系统缓存：
+
+```sh
+sudo mkdir -p /opt/taffish/images/sif
+sudo chmod 1777 /opt/taffish/images/sif
+```
+
+`1777` 是 `/tmp` 使用的 sticky directory 权限：本地用户可以在其中创建 SIF 文件，
+但不能删除其他用户拥有的文件。只有在你明确希望可信服务器上的本地用户共享一个可写缓存时
+才使用这个方案。如果集群有更严格的安全策略，优先使用管理员预缓存或用户级缓存。
+
 ## TAF App Smoke 元数据
 
 TAFFISH `0.8.0` 增加了面向容器化 taf-app 的声明式 smoke 元数据。
@@ -934,6 +985,33 @@ brew install zstd
 ```sh
 sudo apt-get install -y squashfs-tools
 ```
+
+### Apptainer 提示 `no writable apptainer image directory found`
+
+这通常表示 TAFFISH app 是通过 `taf install --system` 安装的，但是管理员还没有预先
+缓存 SIF 镜像，而当前用户也还没有初始化自己的用户级 TAFFISH home。
+
+单用户可以先初始化用户 home：
+
+```sh
+taf doctor --init --user
+```
+
+共享服务器上，管理员可以预缓存常用 SIF：
+
+```sh
+sudo taf-<app>-v<version>-r<release> -- --help
+```
+
+也可以明确允许一个共享可写的系统级 SIF 缓存：
+
+```sh
+sudo mkdir -p /opt/taffish/images/sif
+sudo chmod 1777 /opt/taffish/images/sif
+```
+
+只有在你接受本地用户可以写入共享缓存时，才使用 `1777` 方案。更多说明见
+[Apptainer 系统级共享 SIF 缓存](#apptainer-系统级共享-sif-缓存)。
 
 ### Apptainer 每次运行都输出 `Converting SIF file to temporary sandbox...`
 

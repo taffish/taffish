@@ -73,6 +73,24 @@ logs/
 
 These directories are the long-term layout for TAFFISH local state and must not be renamed casually.
 
+## Shared Apptainer SIF Cache
+
+`images/sif/` stores Apptainer SIF files when generated shell needs to pull an
+image. For user homes, this directory is normally private to the current user.
+
+For system homes, TAFFISH does not require the installer to make
+`<system-home>/images/sif/` writable by every user. Site administrators should
+choose an explicit policy:
+
+| Policy | Meaning |
+| --- | --- |
+| per-user cache | Users run `taf doctor --init --user`; SIF files go under their own user home. |
+| administrator pre-cache | Root runs common apps once so SIF files exist in system home before users run them. |
+| shared writable cache | Administrator sets sticky permissions such as `chmod 1777 /opt/taffish/images/sif`. |
+
+The shared writable cache is a site policy decision. It is convenient for
+shared servers, but should not be silently applied by the installer.
+
 ## Hub Index Files
 
 Current index file:
@@ -132,4 +150,3 @@ If multiple versions exist for the same command alias, the alias should point to
 Initializing `system` scope requires root permissions. `taf doctor` should check whether directories exist, whether they are writable, and whether the command bin is in `PATH`.
 
 If directories are missing and `--init` was not passed, doctor status should be `needs-init`. If a directory is not writable, status should be `permission-warning`.
-

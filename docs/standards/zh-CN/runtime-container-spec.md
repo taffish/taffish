@@ -150,6 +150,17 @@ Apptainer 运行流程：
 6. 如果从 Docker/OCI 源 pull，要求 `mksquashfs` 可用。
 7. 使用 `apptainer exec --pwd <workdir>` 运行。
 
+对于系统级安装，命令 wrapper 可以对所有用户可见，但系统 SIF 未必已经预缓存。如果
+system SIF 目录和当前用户 SIF 目录都不可写，生成 shell 会报告：
+
+```text
+[TAFFISH] no writable apptainer image directory found
+```
+
+这是预期行为。管理员可以预缓存 SIF，用户可以初始化自己的 TAFFISH 用户级 home，
+或者站点明确配置 sticky 共享 SIF 目录，例如把 `/opt/taffish/images/sif` 设置为
+`1777`。
+
 SIF 文件名由 image 字符串转换：
 
 ```text

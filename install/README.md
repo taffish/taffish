@@ -55,6 +55,20 @@ bin  = /usr/local/bin
 home = /opt/taffish
 ```
 
+On shared servers that use Apptainer, a system install makes the commands
+available to all users, but first-run SIF image caching still needs a writable
+directory. Administrators can either pre-cache SIF files by running common apps
+once with `sudo`, or intentionally allow a sticky shared cache:
+
+```sh
+sudo mkdir -p /opt/taffish/images/sif
+sudo chmod 1777 /opt/taffish/images/sif
+```
+
+Use the `1777` option only when a shared writable cache is acceptable for the
+server. Otherwise, ask users to run `taf doctor --init --user` and keep
+per-user SIF caches.
+
 The installer respects these environment variables:
 
 ```text
