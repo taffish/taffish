@@ -81,7 +81,7 @@ Check the generated commands:
 
 These unsuffixed files are local build outputs. Maintainer release payloads are
 renamed/copied to versioned file names such as
-`taf-darwin-arm64-0.10.0` before publishing a release tag.
+`taf-darwin-arm64-0.10.1` before publishing a release tag.
 
 ## Binary Smoke Test
 
@@ -89,7 +89,7 @@ After building or preparing release payloads, run the binary smoke test for the
 current platform:
 
 ```sh
-test/binary-smoke.sh --version 0.10.0
+test/binary-smoke.sh --version 0.10.1
 ```
 
 For unsuffixed local build outputs, pass explicit paths:
@@ -109,7 +109,7 @@ compilation paths without pulling images or running containers.
 For the fuller external test suite, run:
 
 ```sh
-test/run-tests.sh --version 0.10.0
+test/run-tests.sh --version 0.10.1
 ```
 
 This wraps the binary smoke test and adds real `taffish` conformance cases plus

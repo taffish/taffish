@@ -134,7 +134,7 @@ Pinned version install. The installer may come from `main`, but downloaded
 files are pinned to the selected git tag:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sh -s -- --version 0.10.0 --user
+curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sh -s -- --version 0.10.1 --user
 ```
 
 ### For Users in China
@@ -170,7 +170,7 @@ If the server uses Apptainer, also review
 Pinned version install:
 
 ```sh
-curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffish.gitee.sh | sh -s -- --version 0.10.0 --user
+curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffish.gitee.sh | sh -s -- --version 0.10.1 --user
 ```
 
 To force the installer to replace an existing config with the Gitee/China
@@ -333,7 +333,7 @@ curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/instal
 
 ## Runtime Config and Mirrors
 
-Current TAFFISH is `0.10.0`. Runtime config support was introduced in `0.2.0`
+Current TAFFISH is `0.10.1`. Runtime config support was introduced in `0.2.0`
 to provide stable mirror/custom source settings. The default config paths are:
 
 ```text
@@ -401,7 +401,7 @@ and the same TAFFISH index schema.
 --bin-dir DIR             Override executable install directory
 --taffish-home DIR        Override TAFFISH runtime home
 --repo OWNER/REPO         GitHub repository [taffish/taffish]
---version VERSION         Release version [0.10.0]
+--version VERSION         Release version [0.10.1]
 --provider PROVIDER       Raw provider: github or gitee [github]
 --raw-base-url URL        Override raw base URL pointing at a fixed tag
 --os OS                   Override target OS (darwin|macos|linux)
@@ -431,7 +431,7 @@ curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/instal
 From a downloaded release bundle:
 
 ```sh
-sh install/install-taffish.sh --archive ./taffish-0.10.0-target.tar.gz --user
+sh install/install-taffish.sh --archive ./taffish-0.10.1-target.tar.gz --user
 ```
 
 From an explicit bundle URL:
@@ -958,7 +958,9 @@ inspection, and safe app invocation compile. TAFFISH `0.7.0` aligns MCP
 compile tools with the runtime container backend override. TAFFISH `0.8.0`
 surfaces smoke/trust metadata for containerized taf-app inspection without
 running smoke tests or containers. TAFFISH `0.10.0` adds safe package
-maintenance planners for outdated/install-all/upgrade/prune workflows:
+maintenance planners for outdated/install-all/upgrade/prune workflows. TAFFISH
+`0.10.1` fixes block-slot argument rendering and expands external TAFFISH
+conformance coverage:
 
 - `taffish_get_version` / `taffish_get_help`
 - `taffish_validate_source` / `taffish_validate_file`
@@ -1118,8 +1120,8 @@ https://gitee.com/taffish-org/taffish/raw/v<version>/target/...
 ## Release Verification
 
 The current binary release payload is kept under `target/` so GitHub and Gitee
-raw installers can use the same tag-fixed file layout. The 0.10.0 release
-includes these verification files:
+raw installers can use the same tag-fixed file layout. Each release includes
+these verification files:
 
 ```text
 target/SHA256SUMS
@@ -1128,7 +1130,7 @@ target/TAFFISH-RELEASE-KEY.asc
 ```
 
 The copyable GitHub release note draft is kept at
-[docs/releases/v0.10.0.md](docs/releases/v0.10.0.md).
+[docs/releases/v0.10.1.md](docs/releases/v0.10.1.md).
 
 The raw installers primarily download and install versioned files; they do not
 currently verify `SHA256SUMS` or the GPG signature automatically. For
@@ -1157,16 +1159,9 @@ fingerprint with this public fingerprint:
 F863 33E6 0BD6 74F1 59A5  651A B919 3F30 C424 7BB2
 ```
 
-Current `0.10.0` checksum manifest:
-
-```text
-ac403e7913bbe291c8a900952db237cfbabdf3e57ee6616bc55911d1fb99979b  taf-darwin-arm64-0.10.0
-1e5b6ffb967768c49f4d88fb960d991998c81c3d4c8e50a2e541ff134d6484f8  taf-linux-amd64-0.10.0
-82c84886247a19c8d49ad27245ed85a08429bf309a0268439782f83eb3a4f7d6  taffish-darwin-arm64-0.10.0
-8bc8456d10280d381bab73ddbe001aca1be6ead72b0f551e6b5a731ec043fe16  taffish-linux-amd64-0.10.0
-2f5875dfbef59e7ba4aa533fa334e0464317eba7473e35cbb6726dbc35488e28  taffish-mcp-darwin-arm64-0.10.0
-cdea1678a198ff372f3717bf0b99bdf7f6ac3e1325e417065f5b1e52456b779d  taffish-mcp-linux-amd64-0.10.0
-```
+The exact checksum manifest for a published version is the `target/SHA256SUMS`
+file in that tag. Do not reuse a previous release's manifest after rebuilding
+versioned binaries.
 
 This confirms that the checksum manifest was signed by the TAFFISH release key.
 It does not yet claim GitHub Actions provenance, artifact attestation, or

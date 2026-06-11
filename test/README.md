@@ -7,7 +7,7 @@ tests complement the Common Lisp unit tests by exercising the delivered
 Run the full external suite for the current platform:
 
 ```sh
-test/run-tests.sh --version 0.10.0
+test/run-tests.sh --version 0.10.1
 ```
 
 For local unsuffixed builds:

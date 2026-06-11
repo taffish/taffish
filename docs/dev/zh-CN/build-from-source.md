@@ -80,14 +80,14 @@ target/taffish-mcp
 ```
 
 这些不带后缀的文件是本地构建输出。维护者发布 release tag 前，会把它们重命名/复制为
-`taf-darwin-arm64-0.10.0` 这类版本化文件名。
+`taf-darwin-arm64-0.10.1` 这类版本化文件名。
 
 ## 二进制冒烟测试
 
 构建完成或准备 release 载荷后，可以对当前平台运行二进制冒烟测试：
 
 ```sh
-test/binary-smoke.sh --version 0.10.0
+test/binary-smoke.sh --version 0.10.1
 ```
 
 如果测试的是不带后缀的本地构建输出，可以显式传入路径：
@@ -107,7 +107,7 @@ test/binary-smoke.sh \
 如果要运行更完整的外部测试套件：
 
 ```sh
-test/run-tests.sh --version 0.10.0
+test/run-tests.sh --version 0.10.1
 ```
 
 这个入口会包含 binary smoke test，并额外运行真实 `taffish` conformance case

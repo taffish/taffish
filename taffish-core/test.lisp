@@ -674,6 +674,28 @@ c"))
     ;; <shell> should not wrap code into bash heredoc
     (check-equal (%string-contains-p shell "bash <<'EOF'") nil)))
 
+(deftest test-taffish-to-shell-block-slot-args-render-as-shell-tokens ()
+  (let* ((code (format nil
+                       "ARGS~%<(@:)only-step>~%RUN~%<shell>~%echo ::(@:)only-step::~%"))
+         (shell (taffish.core:taffish-to-shell
+                 code
+                 '("taf-demo" "@only-step:" "--xxx" "123")
+                 (%default-test-context))))
+    (check-equal (%string-contains-p shell "#S(ARG-TOKEN") nil)
+    (check-equal (%string-contains-p shell "echo --xxx 123") t)))
+
+(deftest test-taffish-to-shell-block-slot-args-quote-unsafe-shell-tokens ()
+  (let* ((code (format nil
+                       "ARGS~%<(@:)only-step>~%RUN~%<shell>~%printf '<%s>\\n' ::(@:)only-step::~%"))
+         (shell (taffish.core:taffish-to-shell
+                 code
+                 '("taf-demo" "@only-step:" "--name" "hello world" "a'b")
+                 (%default-test-context))))
+    (check-equal (%string-contains-p shell "#S(ARG-TOKEN") nil)
+    (check-equal (%string-contains-p shell "--name") t)
+    (check-equal (%string-contains-p shell "'hello world'") t)
+    (check-equal (%string-contains-p shell "'a'\\''b'") t)))
+
 (deftest test-taffish-to-shell-unknown-tag-error ()
   (let ((code (format nil
                       "RUN~%<unknown>~%  echo hello~%")))

@@ -4,6 +4,34 @@
 ;;;; compiler.lisp
 ;;;; ============================================================
 
+(defun %safe-shell-token-char-p (char)
+  (or (alphanumericp char)
+      (find char "-_./:=+,%@" :test #'char=)))
+
+(defun %shell-token-string (value)
+  "Return VALUE as a shell token, quoting only when the token needs it."
+  (let ((string (princ-to-string (or value ""))))
+    (if (and (> (length string) 0)
+             (loop for char across string
+                   always (%safe-shell-token-char-p char)))
+        string
+        (han.os:escape-sh-token string))))
+
+(defun %arg-token-list-p (value)
+  (and (consp value)
+       (every #'han.args:arg-token-p value)))
+
+(defun %resolve-arg-value-for-shell (value)
+  (cond
+    ((null value) "")
+    ((%arg-token-list-p value)
+     (format nil "~{~A~^ ~}"
+             (mapcar (lambda (token)
+                       (%shell-token-string
+                        (han.args:arg-token-text token)))
+                     value)))
+    (t value)))
+
 (defun %resolve-taf-token (taf-token args-result)
   (let ((kind (taf-token-kind taf-token))
         (token-value (taf-token-value taf-token)))
@@ -13,7 +41,7 @@
        (multiple-value-bind (arg-value status)
            (han.args:get-arg token-value args-result)
          (if status
-             (or arg-value "")
+             (%resolve-arg-value-for-shell arg-value)
              ;;(error "It's impossible to see this error!")
              (error "Failed to resolve arg token: ~A" token-value)))))))
 

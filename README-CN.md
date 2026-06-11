@@ -121,7 +121,7 @@ SIF 镜像缓存仍然需要一个可写目录。部署给多用户前请先看
 固定版本安装。安装器本身可以来自 `main`，实际下载内容会固定到指定 git tag：
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sh -s -- --version 0.10.0 --user
+curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sh -s -- --version 0.10.1 --user
 ```
 
 ### 中国地区用户
@@ -151,7 +151,7 @@ curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffis
 固定版本安装：
 
 ```sh
-curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffish.gitee.sh | sh -s -- --version 0.10.0 --user
+curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffish.gitee.sh | sh -s -- --version 0.10.1 --user
 ```
 
 如果需要强制把已有配置覆盖为 Gitee/中国镜像配置，添加 `--force-config`：
@@ -304,7 +304,7 @@ curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffis
 
 ## 运行时配置和镜像源
 
-当前 TAFFISH 是 `0.10.0`。运行时配置文件从 `0.2.0` 开始引入，用来稳定支持镜像源和自定义源。默认配置路径是：
+当前 TAFFISH 是 `0.10.1`。运行时配置文件从 `0.2.0` 开始引入，用来稳定支持镜像源和自定义源。默认配置路径是：
 
 ```text
 用户级 = ~/.local/share/taffish/config.toml
@@ -366,7 +366,7 @@ enabled = true
 --bin-dir DIR             覆盖可执行文件安装目录
 --taffish-home DIR        覆盖 TAFFISH 运行时 home
 --repo OWNER/REPO         GitHub 仓库 [taffish/taffish]
---version VERSION         Release 版本 [0.10.0]
+--version VERSION         Release 版本 [0.10.1]
 --provider PROVIDER       Raw 提供方：github 或 gitee [github]
 --raw-base-url URL        覆盖 raw base URL，应指向固定 tag
 --os OS                   覆盖目标 OS (darwin|macos|linux)
@@ -396,7 +396,7 @@ curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffis
 从已下载的 release bundle 安装：
 
 ```sh
-sh install/install-taffish.sh --archive ./taffish-0.10.0-target.tar.gz --user
+sh install/install-taffish.sh --archive ./taffish-0.10.1-target.tar.gz --user
 ```
 
 从显式 bundle URL 安装：
@@ -898,7 +898,9 @@ TAFFISH `0.4.0` 引入了 `taffish-mcp`，这是一个保守的 stdio MCP server
 compile 工具与运行时容器 backend override 保持一致。TAFFISH `0.8.0`
 会在容器化 taf-app inspection 中暴露 smoke/trust 元数据，但不会运行 smoke
 test 或启动容器。TAFFISH `0.10.0` 增加了用于
-outdated/install-all/upgrade/prune 工作流的安全 package 维护计划工具：
+outdated/install-all/upgrade/prune 工作流的安全 package 维护计划工具。
+TAFFISH `0.10.1` 修复 block-slot 参数渲染问题，并扩展外部 TAFFISH
+conformance 覆盖：
 
 - `taffish_get_version` / `taffish_get_help`
 - `taffish_validate_source` / `taffish_validate_file`
@@ -1051,7 +1053,7 @@ https://gitee.com/taffish-org/taffish/raw/v<version>/target/...
 
 ## Release 校验
 
-当前二进制 release 载荷保留在 `target/` 下，这样 GitHub 和 Gitee raw 安装器可以使用同一套固定 tag 的文件布局。0.10.0 release 包含这些校验文件：
+当前二进制 release 载荷保留在 `target/` 下，这样 GitHub 和 Gitee raw 安装器可以使用同一套固定 tag 的文件布局。每个 release 都包含这些校验文件：
 
 ```text
 target/SHA256SUMS
@@ -1060,8 +1062,8 @@ target/TAFFISH-RELEASE-KEY.asc
 ```
 
 可直接复制到 GitHub release 页面的 release note 草稿保存在
-[docs/releases/v0.10.0.zh-CN.md](docs/releases/v0.10.0.zh-CN.md)，英文版见
-[docs/releases/v0.10.0.md](docs/releases/v0.10.0.md)。
+[docs/releases/v0.10.1.zh-CN.md](docs/releases/v0.10.1.zh-CN.md)，英文版见
+[docs/releases/v0.10.1.md](docs/releases/v0.10.1.md)。
 
 Raw 安装器主要负责下载并安装固定版本文件；它当前不会自动校验 `SHA256SUMS`
 或 GPG 签名。如果需要高安全安装，应先下载对应 tag 内容或 release bundle，
@@ -1087,16 +1089,8 @@ gpg --verify SHA256SUMS.asc SHA256SUMS
 F863 33E6 0BD6 74F1 59A5  651A B919 3F30 C424 7BB2
 ```
 
-当前 `0.10.0` checksum manifest：
-
-```text
-ac403e7913bbe291c8a900952db237cfbabdf3e57ee6616bc55911d1fb99979b  taf-darwin-arm64-0.10.0
-1e5b6ffb967768c49f4d88fb960d991998c81c3d4c8e50a2e541ff134d6484f8  taf-linux-amd64-0.10.0
-82c84886247a19c8d49ad27245ed85a08429bf309a0268439782f83eb3a4f7d6  taffish-darwin-arm64-0.10.0
-8bc8456d10280d381bab73ddbe001aca1be6ead72b0f551e6b5a731ec043fe16  taffish-linux-amd64-0.10.0
-2f5875dfbef59e7ba4aa533fa334e0464317eba7473e35cbb6726dbc35488e28  taffish-mcp-darwin-arm64-0.10.0
-cdea1678a198ff372f3717bf0b99bdf7f6ac3e1325e417065f5b1e52456b779d  taffish-mcp-linux-amd64-0.10.0
-```
+每个已发布版本的准确 checksum manifest 以该 tag 内的 `target/SHA256SUMS`
+为准。重新构建带版本号的二进制后，不要复用旧 release 的 manifest。
 
 这可以确认 checksum manifest 由 TAFFISH release key 签名。它目前还不表示已经具备 GitHub Actions provenance、artifact attestation 或可复现构建。这些属于后续 release infrastructure 的供应链安全改进。
 

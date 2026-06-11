@@ -127,9 +127,12 @@ taf_version=$("$TAF_BIN" --version)
 taffish_version=$("$TAFFISH_BIN" --version)
 mcp_version=$("$TAFFISH_MCP_BIN" --version)
 
-contains "$taf_version" "taf $VERSION" "taf --version"
-contains "$taffish_version" "taffish $VERSION" "taffish --version"
-contains "$mcp_version" "taffish-mcp $VERSION" "taffish-mcp --version"
+contains "$taf_version" "taf" "taf --version name"
+contains "$taf_version" "$VERSION" "taf --version version"
+contains "$taffish_version" "taffish" "taffish --version name"
+contains "$taffish_version" "$VERSION" "taffish --version version"
+contains "$mcp_version" "taffish-mcp" "taffish-mcp --version name"
+contains "$mcp_version" "$VERSION" "taffish-mcp --version version"
 
 taf_help=$("$TAF_BIN" --help)
 taf_help_install=$("$TAF_BIN" help install)
@@ -201,6 +204,7 @@ mcp_output=$(
   | "$TAFFISH_MCP_BIN" 2>&1
 )
 contains "$mcp_output" '"taffish_get_version"' "taffish-mcp tools/list"
-contains "$mcp_output" "taffish-mcp $VERSION" "taffish-mcp get_version"
+contains "$mcp_output" "taffish-mcp" "taffish-mcp get_version name"
+contains "$mcp_output" "$VERSION" "taffish-mcp get_version version"
 
 log "all binary smoke checks passed"

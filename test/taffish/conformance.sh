@@ -40,6 +40,28 @@ printf '\''stdin:%s\n'\'' "::name::"'
   assert_eq "stdin:stream" "$output" "stdin source output" || return 1
 }
 
+_taffish_case_minimal_and_auto_run() {
+  dir=$TAFFISH_TEST_TMP_ROOT/taffish-minimal-auto-run
+  mkdir -p "$dir"
+
+  plain_file=$dir/plain.taf
+  cat > "$plain_file" <<'TAF'
+echo plain-auto-run
+TAF
+  shell=$($TAFFISH_BIN "$plain_file") || return 1
+  output=$(printf '%s\n' "$shell" | sh) || return 1
+  assert_eq "plain-auto-run" "$output" "plain code auto RUN/<taffish>" || return 1
+
+  shell_file=$dir/shell.taf
+  cat > "$shell_file" <<'TAF'
+<shell>
+echo shell-auto-run
+TAF
+  shell=$($TAFFISH_BIN "$shell_file") || return 1
+  output=$(printf '%s\n' "$shell" | sh) || return 1
+  assert_eq "shell-auto-run" "$output" "subtag auto RUN" || return 1
+}
+
 _taffish_case_required_arg_error() {
   dir=$TAFFISH_TEST_TMP_ROOT/taffish-required
   mkdir -p "$dir"
@@ -58,6 +80,44 @@ TAF
   set -e
   [ "$status" -ne 0 ] || harness_fail "required arg compile unexpectedly succeeded"
   assert_contains "$output" "input" "required arg error names input" || return 1
+}
+
+_taffish_case_parameter_dsl_refs_and_escapes() {
+  dir=$TAFFISH_TEST_TMP_ROOT/taffish-parameter-dsl
+  mkdir -p "$dir"
+  file=$dir/parameter-dsl.taf
+  cat > "$file" <<'TAF'
+ARGS
+<sample>
+  demo
+<prefix>
+  out-@{sample}
+<message>
+  hello, ::sample::
+<escaped-default>
+  \@\{\}\\
+RUN
+<shell>
+printf '%s\n' "prefix=::prefix::"
+printf '%s\n' "message=::message::"
+printf '%s\n' "escaped=[::escaped-default::]"
+printf '%s\n' "verbose=::(--/-v)verbose?::"
+printf '%s\n' "pos=::$1::->::$2::"
+printf '%s\n' '\: \< \# \\ \@'
+TAF
+
+  shell=$($TAFFISH_BIN "$file" input.fa output.txt --verbose) || return 1
+  output=$(printf '%s\n' "$shell" | sh) || return 1
+  expected=$(cat <<'OUT'
+prefix=out-demo
+message=hello, demo
+escaped=[@{}\]
+verbose=T
+pos=input.fa->output.txt
+: < # \ \@
+OUT
+)
+  assert_eq "$expected" "$output" "parameter DSL refs and escapes" || return 1
 }
 
 _taffish_case_block_query_default() {
@@ -82,6 +142,117 @@ TAF
   shell=$($TAFFISH_BIN "$file" --name Grace) || return 1
   output=$(printf '%s\n' "$shell" | sh) || return 1
   assert_eq "hello, Grace" "$output" "block arg query override" || return 1
+}
+
+_taffish_case_slot_block_args_compile_and_run() {
+  dir=$TAFFISH_TEST_TMP_ROOT/taffish-slot-block-args
+  mkdir -p "$dir"
+  file=$dir/slot-block-args.taf
+  cat > "$file" <<'TAF'
+ARGS
+<(@:)only-step>
+RUN
+<shell>
+printf '<%s>\n' ::(@:)only-step::
+TAF
+
+  shell=$($TAFFISH_BIN "$file" @only-step: --xxx 123 "hello world") || return 1
+  assert_not_contains "$shell" "ARG-TOKEN" "slot block args must not leak arg-token structs" || return 1
+  assert_contains "$shell" "'hello world'" "slot block args quote spaces" || return 1
+
+  output=$(printf '%s\n' "$shell" | sh) || return 1
+  expected=$(cat <<'OUT'
+<--xxx>
+<123>
+<hello world>
+OUT
+)
+  assert_eq "$expected" "$output" "slot block args output" || return 1
+}
+
+_taffish_case_builtins_compile_and_run() {
+  dir=$TAFFISH_TEST_TMP_ROOT/taffish-builtins
+  mkdir -p "$dir"
+  file=$dir/builtins.taf
+  cat > "$file" <<'TAF'
+<shell>
+printf '%s\n' "cmd=::*CMD*::"
+printf '%s\n' "argv=::*ARGV*::"
+printf '%s\n' "workdir=::*WORKDIR*::"
+printf '%s\n' "loaddir=::*LOADDIR*::"
+printf '%s\n' "cpus=::*CPUS*::"
+TAF
+
+  workdir=$dir/work
+  mkdir -p "$workdir"
+  workdir_real=$(cd "$workdir" && pwd -P) || return 1
+  loaddir_real=$(cd "$dir" && pwd -P) || return 1
+  shell=$(cd "$workdir" && "$TAFFISH_BIN" "$file" alpha beta) || return 1
+  output=$(cd "$workdir" && printf '%s\n' "$shell" | sh) || return 1
+  assert_contains "$output" "cmd=$TAFFISH_BIN" "builtin CMD" || return 1
+  assert_contains "$output" "argv=alpha beta" "builtin ARGV" || return 1
+  assert_contains "$output" "workdir=$workdir_real" "builtin WORKDIR" || return 1
+  assert_contains "$output" "loaddir=$loaddir_real" "builtin LOADDIR" || return 1
+  assert_contains "$output" "cpus=" "builtin CPUS present" || return 1
+}
+
+_taffish_case_taf_app_shell_arg_and_command_modes() {
+  dir=$TAFFISH_TEST_TMP_ROOT/taffish-taf-app-shell
+  mkdir -p "$dir"
+  file=$dir/taf-app-shell.taf
+  cat > "$file" <<'TAF'
+<taf-app:shell>
+printf '<%s>\n' default ::*ARGV*::
+TAF
+
+  shell=$($TAFFISH_BIN "$file" --alpha 1) || return 1
+  output=$(printf '%s\n' "$shell" | sh) || return 1
+  expected=$(cat <<'OUT'
+<default>
+<--alpha>
+<1>
+OUT
+)
+  assert_eq "$expected" "$output" "taf-app shell arg mode" || return 1
+
+  shell=$($TAFFISH_BIN "$file" echo command-mode) || return 1
+  output=$(printf '%s\n' "$shell" | sh) || return 1
+  assert_eq "command-mode" "$output" "taf-app shell command mode" || return 1
+}
+
+_taffish_case_taffish_embed_taf_app() {
+  dir=$TAFFISH_TEST_TMP_ROOT/taffish-embed-taf-app
+  mkdir -p "$dir/bin"
+  cat > "$dir/bin/taf-step-v0.1.0-r1" <<'SH'
+#!/bin/sh
+if [ "$1" = "--compile" ]; then
+  shift
+  printf '%s\n' '#!/bin/sh'
+  printf 'printf '"'"'embedded:%s\\n'"'"' %s\n' "$*"
+else
+  exit 2
+fi
+SH
+  chmod +x "$dir/bin/taf-step-v0.1.0-r1"
+
+  file=$dir/flow.taf
+  cat > "$file" <<'TAF'
+<taffish>
+echo before
+[[taf: taf-step-v0.1.0-r1 alpha beta]]
+echo \[[taf: taf-step-v0.1.0-r1 literal]]
+TAF
+
+  shell=$(PATH="$dir/bin:$PATH" "$TAFFISH_BIN" "$file") || return 1
+  assert_contains "$shell" "taf-step-v0.1.0-r1 --compile alpha beta" "embedded taf-app compile call" || return 1
+  output=$(PATH="$dir/bin:$PATH" sh -c "$shell") || return 1
+  expected=$(cat <<'OUT'
+before
+embedded:alpha beta
+[[taf: taf-step-v0.1.0-r1 literal]]
+OUT
+)
+  assert_eq "$expected" "$output" "taffish embedded taf-app output" || return 1
 }
 
 _taffish_case_legacy_container_args_compile() {
@@ -216,11 +387,46 @@ TAF
   assert_contains "$output" "gpu" "invalid structured target error" || return 1
 }
 
+_taffish_case_syntax_errors() {
+  dir=$TAFFISH_TEST_TMP_ROOT/taffish-syntax-errors
+  mkdir -p "$dir"
+
+  unclosed_arg=$dir/unclosed-arg.taf
+  cat > "$unclosed_arg" <<'TAF'
+<shell>
+echo ::name
+TAF
+  set +e
+  output=$($TAFFISH_BIN "$unclosed_arg" 2>&1)
+  status=$?
+  set -e
+  [ "$status" -ne 0 ] || harness_fail "unclosed arg unexpectedly compiled"
+  assert_contains "$output" "TAFFISH-ERROR" "unclosed arg error prefix" || return 1
+
+  unclosed_taf=$dir/unclosed-taf.taf
+  cat > "$unclosed_taf" <<'TAF'
+<taffish>
+[[taf: taf-demo-v0.1.0-r1 alpha
+TAF
+  set +e
+  output=$($TAFFISH_BIN "$unclosed_taf" 2>&1)
+  status=$?
+  set -e
+  [ "$status" -ne 0 ] || harness_fail "unclosed embedded taf unexpectedly compiled"
+  assert_contains "$output" "Missing right match" "unclosed embedded taf error" || return 1
+}
+
 run_taffish_conformance() {
   run_case "taffish/file-args-and-defaults" _taffish_case_file_args_and_defaults
   run_case "taffish/stdin-args" _taffish_case_stdin_args
+  run_case "taffish/minimal-and-auto-run" _taffish_case_minimal_and_auto_run
   run_case "taffish/required-arg-error" _taffish_case_required_arg_error
+  run_case "taffish/parameter-dsl-refs-and-escapes" _taffish_case_parameter_dsl_refs_and_escapes
   run_case "taffish/block-query-default" _taffish_case_block_query_default
+  run_case "taffish/slot-block-args-compile-and-run" _taffish_case_slot_block_args_compile_and_run
+  run_case "taffish/builtins-compile-and-run" _taffish_case_builtins_compile_and_run
+  run_case "taffish/taf-app-shell-arg-and-command-modes" _taffish_case_taf_app_shell_arg_and_command_modes
+  run_case "taffish/taffish-embed-taf-app" _taffish_case_taffish_embed_taf_app
   run_case "taffish/container-legacy-args-compile" _taffish_case_legacy_container_args_compile
   run_case "taffish/container-structured-docker-compile" _taffish_case_structured_container_args_docker_compile
   run_case "taffish/container-structured-combo-compile" _taffish_case_structured_container_args_combo_compile
@@ -228,4 +434,5 @@ run_taffish_conformance() {
   run_case "taffish/container-env-run-args-compile" _taffish_case_container_env_run_args_compile
   run_case "taffish/container-structured-generic-backend-selection" _taffish_case_structured_generic_backend_selection
   run_case "taffish/container-invalid-structured-args-error" _taffish_case_invalid_structured_container_args_error
+  run_case "taffish/syntax-errors" _taffish_case_syntax_errors
 }
