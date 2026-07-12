@@ -6,11 +6,11 @@
 
 | 范围 | 状态 | 说明 |
 | --- | --- | --- |
-| 项目根目录与 `taffish.toml` | Draft v0.1 稳定 | `taf` 项目命令依赖该约定定位项目。 |
-| `[package]`、`[repository]`、`[command]`、`[runtime]` | Draft v0.1 稳定 | 是 `project-check/build/publish/install` 的共同基础。 |
-| `[container]` | Draft v0.1 稳定 | image/tag 一致性已经由检查器保护。 |
-| `[dependencies]` | Draft v0.1 半稳定 | flow 依赖同步已实现，复杂依赖解析仍需 hub 迁移验证。 |
-| `[meta]`、`[upstream]` | Draft v0.1 可选 | 生态发现和上游溯源元数据。本地项目命令不强制要求。 |
+| 项目根目录与 `taffish.toml` | Draft v0.2 稳定 | `taf` 项目命令依赖该约定定位项目。 |
+| `[package]`、`[repository]`、`[command]`、`[runtime]` | Draft v0.2 稳定 | 是 `project-check/build/publish/install` 的共同基础。 |
+| `[container]` | Draft v0.2 稳定 | image/tag 一致性已经由检查器保护。 |
+| `[dependencies]` | Draft v0.2 半稳定 | 已实现 flow 依赖同步和递归安装；复杂多版本解析仍需持续生态验证。 |
+| `[meta]`、`[upstream]` | Draft v0.2 可选 | 生态发现和上游溯源元数据。本地项目命令不强制要求。 |
 | GitHub 发布流程 | 当前实现 | 当前 `taf publish` 面向 GitHub；Gitee 是镜像分发层。 |
 
 ## 项目根目录

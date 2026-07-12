@@ -39,20 +39,28 @@ release bundle first, verify `target/SHA256SUMS` and
 inspect TAF source, installed taf-apps, and current TAFFISH projects through
 structured tools/resources without running workflows.
 
-## Default paths
+## Default paths and scopes
 
-User install:
+| Scope | Core command bin | Installed app command bin | TAFFISH home |
+| --- | --- | --- | --- |
+| user | `~/.local/bin` | `~/.local/share/taffish/bin` | `~/.local/share/taffish` |
+| system | `/usr/local/bin` | `/usr/local/bin` | `/opt/taffish` |
 
-```text
-bin  = ~/.local/bin
-home = ~/.local/share/taffish
+The installer scope is not a persistent CLI mode. Scope-aware `taf` commands
+still default to user scope on each later invocation. Administrators must use
+`--system` when reading or maintaining system state, for example:
+
+```sh
+sudo taf update --system
+taf search --system fastqc
+sudo taf install --system fastqc
+taf list --system
 ```
 
-System install:
+User installs require both user command directories in `PATH`:
 
-```text
-bin  = /usr/local/bin
-home = /opt/taffish
+```sh
+export PATH="$HOME/.local/bin:$HOME/.local/share/taffish/bin:$PATH"
 ```
 
 On shared servers that use Apptainer, a system install makes the commands
@@ -76,6 +84,11 @@ TAFFISH_USER_HOME
 TAFFISH_SYSTEM_HOME
 TAFFISH_SYSTEM_BIN_DIR
 ```
+
+When a custom user home is selected, add its `bin` subdirectory to `PATH`.
+When custom system paths are selected, persist the same
+`TAFFISH_SYSTEM_HOME`/`TAFFISH_SYSTEM_BIN_DIR` values for administrators and
+users.
 
 ## Install From Raw Installer
 
@@ -141,6 +154,21 @@ Use `--os` / `--arch` to override platform detection.
 of network problems, the installer prints a warning but does not roll back the
 installation.
 
+For system installs, post-install initialization uses system scope explicitly:
+`taf doctor --init --system`, optional `taf config init --system`, and
+`taf update --system`.
+
 The installer does not edit shell rc files or vim configuration files. It
 prints the installed completion and vim paths so users can enable them
-explicitly.
+explicitly. See [the completion guide](../completion/README.md) and
+[the Vim guide](../vim-highlight/README.md).
+
+## Upgrade and removal
+
+Re-run the installer with the same scope and a selected `--version` to upgrade
+the three core binaries. `taf upgrade` upgrades taf-apps only.
+
+There is currently no dedicated core uninstaller. Uninstall unwanted apps
+with the matching scope first, preserve any customized `config.toml`, then
+remove the three core command files and the corresponding TAFFISH home only
+after confirming that no app, index, log, or cached image data is needed.

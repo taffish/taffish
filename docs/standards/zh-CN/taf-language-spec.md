@@ -6,9 +6,9 @@
 
 | 范围 | 状态 | 说明 |
 | --- | --- | --- |
-| 行类型、`ARGS`/`RUN`、子标签、参数 token | Draft v0.1 稳定 | 已由 lexer/parser/binder/compiler 共同实现。 |
-| `han.args` 参数规格嵌入 | Draft v0.1 稳定 | TAF 依赖 `han.args` 解释具体参数语义。 |
-| `<shell>` 与容器标签 | Draft v0.1 稳定 | 是当前 taf-app 的主要执行模型。 |
+| 行类型、`ARGS`/`RUN`、子标签、参数 token | Draft v0.2 稳定 | 已由 lexer/parser/binder/compiler 共同实现。 |
+| `han.args` 参数规格嵌入 | Draft v0.2 稳定 | TAF 依赖 `han.args` 解释具体参数语义。 |
+| `<shell>` 与容器标签 | Draft v0.2 稳定 | 是当前 taf-app 的主要执行模型。 |
 | `<taffish>` 内联组合语法 | Experimental | 已有实现基础，但完整语言边界仍需 hub/flow 案例验证。 |
 | `taf-app` 命令模式 | Experimental | 当前可用，但用户可见语义仍可能细化。 |
 

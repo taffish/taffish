@@ -14,12 +14,15 @@ Current English entry:
 
 - [English architecture docs](en/README.md)
 
-## Current Focus
+## Current Coverage
 
-The first phase records the GitHub organization architecture, automation pipelines, app release lifecycle, and `taffish-hub` architecture. These are the top-level designs shared by `taf new`, `taf publish`, `taffish-index`, GitHub Actions, GHCR, Gitee mirrors, and user installation paths.
+The current documents cover GitHub organization architecture, automation
+pipelines, app release lifecycle, and `taffish-hub` architecture. These are the
+top-level designs shared by `taf new`, `taf publish`, `taffish-index`, GitHub
+Actions, GHCR, Gitee mirrors, public docs, and user installation paths.
 
-Future topics can include:
+Important remaining topics include:
 
 1. China mirror synchronization architecture.
-2. Website and documentation-site architecture.
-3. Maintainer recovery runbook.
+2. Website and documentation deployment/recovery architecture.
+3. Maintainer incident and recovery runbooks.

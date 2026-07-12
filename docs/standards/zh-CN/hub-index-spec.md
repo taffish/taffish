@@ -6,9 +6,9 @@
 
 | 范围 | 状态 | 说明 |
 | --- | --- | --- |
-| `schema_version`、`packages`、`commands` | Draft v0.1 稳定 | 消费端命令已经依赖这些字段。 |
-| package entry 与 version record | Draft v0.1 待生态验证 | 字段结构已明确，但需要 taffish-hub 迁移验证生产端。 |
-| dependencies | Draft v0.1 半稳定 | 安装器支持递归安装和循环检测，但复杂生态还未充分验证。 |
+| `schema_version`、`packages`、`commands` | Draft v0.2 稳定 | 消费端命令已经依赖这些字段。 |
+| package entry 与 version record | Draft v0.2 已运行 | 公开 Hub 的 index 生产端与本地消费端都在使用这些记录。 |
+| dependencies | Draft v0.2 半稳定 | 已实现递归安装和循环检测；复杂多版本生态仍需持续验证。 |
 | 多源镜像 | 当前实现 | 通过 config source rewrite 实现，不属于 index schema 的直接职责。 |
 
 ## 文件格式

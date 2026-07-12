@@ -1,6 +1,10 @@
 # TAFFISH Conformance Checklist
 
-This page is for manually checking whether a `.taf` file, a taf-app project, a Hub index, or a local installation conforms to TAFFISH Specification Draft v0.1. It is not an automated test suite, but it should be treated as the blueprint for future conformance tests.
+This page is the broader manual checklist for deciding whether a `.taf` file,
+a taf-app project, a Hub index, or a local installation conforms to TAFFISH
+Specification Draft v0.2. The repository already has external conformance
+tests for compiler, project, and Hub workflows, but they do not yet encode
+every item on this page.
 
 ## Result Classes
 
@@ -255,11 +259,14 @@ Before releasing TAFFISH itself or taffish-hub, at least run:
 
 ## From Checklist To Automated Conformance Tests
 
-This page can later be split into automated commands:
+Current external suites live under `test/taffish`, `test/taf-project`, and
+`test/taf-hub`. A future dedicated interface may expose more of this checklist
+as commands such as:
 
 1. `taf conformance taf <file>`: check a single `.taf` file.
 2. `taf conformance project <dir>`: check a taf-app project.
 3. `taf conformance index <index.json>`: check a Hub index.
 4. `taf conformance install <home>`: check local installation state.
 
-Until that automation exists, this page is the manual reference for migrating taffish-hub and reviewing taf-apps.
+Until full checklist coverage exists, this page remains the manual reference
+for implementation changes, Hub curation, and taf-app review.

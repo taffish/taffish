@@ -6,11 +6,11 @@ This page defines taf-app project layout, `taffish.toml`, build artifacts, and r
 
 | Scope | Status | Notes |
 | --- | --- | --- |
-| Project root and `taffish.toml` | Draft v0.1 stable | `taf` project commands depend on this convention to locate projects. |
-| `[package]`, `[repository]`, `[command]`, `[runtime]` | Draft v0.1 stable | Shared foundation for `project-check`, `build`, `publish`, and `install`. |
-| `[container]` | Draft v0.1 stable | Image/tag consistency is already protected by checks. |
-| `[dependencies]` | Draft v0.1 semi-stable | Flow dependency synchronization exists; complex dependency resolution still needs Hub migration validation. |
-| `[meta]`, `[upstream]` | Draft v0.1 optional | Ecosystem discovery and upstream provenance metadata. Local project commands do not require them. |
+| Project root and `taffish.toml` | Draft v0.2 stable | `taf` project commands depend on this convention to locate projects. |
+| `[package]`, `[repository]`, `[command]`, `[runtime]` | Draft v0.2 stable | Shared foundation for `project-check`, `build`, `publish`, and `install`. |
+| `[container]` | Draft v0.2 stable | Image/tag consistency is already protected by checks. |
+| `[dependencies]` | Draft v0.2 semi-stable | Flow dependency synchronization and recursive installation exist; complex multi-version resolution still needs continued ecosystem validation. |
+| `[meta]`, `[upstream]` | Draft v0.2 optional | Ecosystem discovery and upstream provenance metadata. Local project commands do not require them. |
 | GitHub release flow | Current implementation | `taf publish` currently targets GitHub; Gitee is a mirror distribution layer. |
 
 ## Project Root

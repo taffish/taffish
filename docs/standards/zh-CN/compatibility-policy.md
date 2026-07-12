@@ -15,7 +15,7 @@ TAFFISH 需要保护的对象包括：
 
 ## 合规结果
 
-人工检查或未来自动一致性测试应给出三类结果：
+人工检查和自动一致性测试应给出三类结果：
 
 | 结果 | 含义 | 处理方式 |
 | --- | --- | --- |
@@ -94,7 +94,7 @@ TAFFISH 当前使用字符串 schema 版本：
 
 ## 一致性测试方向
 
-未来应建立一致性测试集合，至少覆盖：
+当前外部测试已经覆盖真实的编译器、项目和 Hub/package 工作流。后续应继续扩展到：
 
 1. TAF lexer/parser/binder/compiler 的黄金输出。
 2. `taffish.toml` schema 验证。
@@ -103,4 +103,4 @@ TAFFISH 当前使用字符串 schema 版本：
 5. config merge、index URL 解析、source rewrite。
 6. container backend 选择与生成 shell 的关键片段。
 
-一致性测试不是当前规范草案的前置条件，但它是规范走向 `v1.0` 的必要条件。
+在考虑规范 `v1.0` 之前，仍需要更完整的契约导向一致性测试覆盖。

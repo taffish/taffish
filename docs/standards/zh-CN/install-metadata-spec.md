@@ -6,11 +6,11 @@
 
 | 范围 | 状态 | 说明 |
 | --- | --- | --- |
-| `install.json` 位置 | Draft v0.1 稳定 | `list`、`which`、`uninstall`、`outdated`、`upgrade`、`prune` 都依赖该布局。 |
-| 核心字段 | Draft v0.1 稳定 | 删除或改名需要迁移策略。 |
-| command alias 刷新 | Draft v0.1 稳定 | 多版本安装依赖该规则。 |
-| source commit 精确复现 | Draft v0.1 半稳定 | index 提供 `source.commit` 时，install 会在构建前校验实际源码 commit。 |
-| package maintenance plan | Draft v0.1 半稳定 | `outdated`、`upgrade`、`install --all` 和 `prune` 使用本地 metadata 与本地 index。 |
+| `install.json` 位置 | Draft v0.2 稳定 | `list`、`which`、`uninstall`、`outdated`、`upgrade`、`prune` 都依赖该布局。 |
+| 核心字段 | Draft v0.2 稳定 | 删除或改名需要迁移策略。 |
+| command alias 刷新 | Draft v0.2 稳定 | 多版本安装依赖该规则。 |
+| source commit 精确复现 | Draft v0.2 半稳定 | index 提供 `source.commit` 时，install 会在构建前校验实际源码 commit。 |
+| package maintenance plan | Draft v0.2 半稳定 | `outdated`、`upgrade`、`install --all` 和 `prune` 使用本地 metadata 与本地 index。 |
 
 ## 文件位置
 

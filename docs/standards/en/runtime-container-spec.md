@@ -6,11 +6,11 @@ This page defines TAFFISH runtime context, generated shell behavior, and the mai
 
 | Scope | Status | Notes |
 | --- | --- | --- |
-| Known context fields | Draft v0.1 stable | Compilation and built-in parameters depend on these fields. |
-| Docker/Podman/Apptainer backend selection | Draft v0.1 stable | Core rule for current container portability. |
-| Default mounts and HOME/USER forwarding | Draft v0.1 semi-stable | Usable now, but advanced HPC contexts may need extensions. |
-| SIF cache and auto pull | Draft v0.1 semi-stable | Implemented; future work may add locks, metadata, and cleanup policy. |
-| Advanced backend arguments | Experimental | Can be passed through config, but the ecosystem should not depend on exact details. |
+| Known context fields | Draft v0.2 stable | Compilation and built-in parameters depend on these fields. |
+| Docker/Podman/Apptainer backend selection | Draft v0.2 stable | Core rule for current container portability. |
+| Default mounts and HOME/USER forwarding | Draft v0.2 semi-stable | Usable now, but advanced HPC contexts may need extensions. |
+| SIF cache and auto pull | Draft v0.2 semi-stable | Implemented; future work may add locks, metadata, and cleanup policy. |
+| Backend-specific runtime arguments | Draft v0.2 semi-stable | Structured tag arguments and local runtime environment variables are implemented; new targets or policy layers may still be added. |
 
 ## Runtime Context
 
@@ -66,6 +66,7 @@ Container subtags have forms such as:
 ```taf
 <CONTAINERS:IMAGE>
 <CONTAINERS:IMAGE$RUN-ARGS>
+<CONTAINERS:IMAGE$@[TARGET: RUN-ARGS][TARGET: RUN-ARGS]>
 <'CONTAINERS:IMAGE>
 ```
 
@@ -79,7 +80,30 @@ Container subtags have forms such as:
 
 `container` is a virtual backend expanded according to `:backend-order`.
 
-`IMAGE` must not be empty. `$RUN-ARGS` is an extra argument string appended directly to the backend run command.
+`IMAGE` must not be empty. Legacy `$RUN-ARGS` is an all-backend raw argument
+string appended to the selected backend command.
+
+Structured `$@[TARGET: RUN-ARGS]` blocks let an app state backend-specific
+requirements. Supported targets are:
+
+1. `all` or `container`: every selected backend.
+2. `docker`, `podman`, or `apptainer`: one backend.
+3. A `/`-joined set such as `docker/podman`: every named backend in the set.
+
+All matching blocks contribute arguments in source order. For example:
+
+```taf
+<container:ghcr.io/taffish/my-gpu-tool:1.0.0-r1$@[docker: --gpus all][podman: --device nvidia.com/gpu=all][apptainer: --nv]>
+my-gpu-tool --help
+```
+
+An app-level cross-backend requirement can use `all`, while a related
+Docker/Podman-only requirement can use a combination target:
+
+```taf
+<container:ghcr.io/taffish/my-tool:1.0.0-r1$@[all: --network host][docker/podman: --security-opt=label=disable]>
+my-tool --help
+```
 
 If tag content starts with a single quote, for example:
 
@@ -108,6 +132,33 @@ Runtime callers may force the backend for generic `<container:...>` tags by sett
 3. no forced backend.
 
 This force rule does not override explicit backend tags such as `<docker:...>`, `<podman:...>`, or `<apptainer:...>`.
+
+## Runtime Argument Layers
+
+Container runtime arguments are merged in this order:
+
+1. TAFFISH backend defaults.
+2. Project or caller context configuration, such as `:docker-run-args`.
+3. Legacy or structured arguments declared in the `.taf` container tag.
+4. Local backend environment variables.
+
+The local variables are:
+
+| Backend | Environment variable |
+| --- | --- |
+| Docker | `TAFFISH_DOCKER_RUN_ARGS` |
+| Podman | `TAFFISH_PODMAN_RUN_ARGS` |
+| Apptainer | `TAFFISH_APPTAINER_RUN_ARGS` |
+
+Tag arguments describe app requirements that should travel with the executable
+package, such as backend-specific GPU exposure. Environment variables describe
+machine, site, scheduler-wrapper, scratch-mount, proxy, or one-run policy that
+should not change published app source. Local environment arguments are
+appended last; they extend rather than erase earlier layers.
+
+TAFFISH remains an execution layer, not a scheduler. CPU, memory, queue, and
+wall-time requests belong in the surrounding HPC job script or workflow
+system unless they are ordinary arguments of the wrapped tool itself.
 
 ## Docker/Podman Runtime Contract
 

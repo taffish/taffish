@@ -15,12 +15,14 @@
 - [中文架构文档](zh-CN/README.md)
 - [English architecture docs](README.en.md)
 
-## 当前重点
+## 当前覆盖
 
-第一阶段先记录 GitHub 组织架构、自动化流水线、app 发布生命周期和 taffish-hub 架构，因为它们是 `taf new`、`taf publish`、`taffish-index`、GitHub Actions、GHCR、Gitee mirror 和用户安装路径共同依赖的顶层设计。
+当前文档已经覆盖 GitHub 组织架构、自动化流水线、app 发布生命周期和 taffish-hub
+架构。这些是 `taf new`、`taf publish`、`taffish-index`、GitHub Actions、GHCR、
+Gitee mirror、公开文档和用户安装路径共同依赖的顶层设计。
 
-后续可以继续补：
+仍需继续补充的重要专题：
 
 1. 中国镜像同步架构。
-2. 官网和文档站点架构。
-3. 维护者故障恢复手册。
+2. 官网和文档站点的部署与恢复架构。
+3. 维护者事故处理与恢复 runbook。

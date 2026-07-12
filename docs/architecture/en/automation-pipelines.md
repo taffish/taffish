@@ -14,7 +14,13 @@ From the current TAFFISH implementation and the sibling `taffish-hub` workspace,
 | index generation workflow | implemented in `taffish-index` | `.github/workflows/build-index.yml` supports manual and daily scheduled scans of the `taffish` organization. |
 | maintainer upstream checks | implemented as a local `taffish-hub` tool | `hubctl check --all` writes `update/updates.md` and only reports upstream version changes. |
 
-The current `taffish-hub` README states that only upstream detection is automated for now; app migration, testing, Docker image builds, publishing, and archive snapshots remain manual maintainer work. In other words, the ecosystem architecture is clear, but migration-time docs must distinguish "designed to be automated" from "already fully automated".
+Automation is deliberately split. `hubctl` automates upstream detection, while
+app migration or curation, biological review, testing decisions, release
+approval, and archive snapshots remain human-reviewed maintainer work. Once a
+maintainer publishes the required source/tag inputs, per-app GitHub Actions can
+build container images and `taffish-index` can regenerate the public index.
+Documentation must distinguish those automated repository jobs from the
+maintainer decisions that trigger and approve them.
 
 ## Overall Data Flow
 

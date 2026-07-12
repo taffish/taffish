@@ -42,7 +42,7 @@ TAFFISH 当前按四个层级治理：
 | --- | --- | --- | --- |
 | 1 | 开发文档 | 已建立 | 解释代码结构、模块职责、公开 API。 |
 | 2 | 规范草案 | 当前重点 | 定义语言、项目、hub、安装、配置和运行时契约。 |
-| 3 | 一致性测试 | 后续建立 | 验证某个实现或 taf-app 是否符合规范。 |
+| 3 | 一致性测试 | 已部分建立 | 已有编译器、项目和 Hub 外部测试；完整书面契约覆盖仍需继续完善。 |
 | 4 | 正式标准 | 暂不启动 | 当出现多个实现或外部治理需求时再考虑。 |
 
 因此，本目录使用“规范草案”而不是“正式标准”作为起步形态。规范可以版本化演进，但不能随意漂移。
@@ -63,14 +63,14 @@ TAFFISH 当前按四个层级治理：
 
 | 主题 | 当前成熟度 | 说明 |
 | --- | --- | --- |
-| TAF 基本语法 | Draft v0.1 稳定 | 行类型、`ARGS`/`RUN`、参数 token 和 block 结构已经成型。 |
-| taf-app 项目格式 | Draft v0.1 稳定 | `taffish.toml`、artifact 名称和 wrapper 结构已有参考实现。 |
-| hub index | Draft v0.1 待生态验证 | 消费端已经有实现，生产端还要通过 taffish-hub 迁移验证。 |
-| install metadata | Draft v0.1 稳定 | 本地安装、list、which、uninstall 依赖这些字段。 |
-| config/home/history | Draft v0.1 稳定 | 已有持久化路径和 schema，后续主要是扩展字段。 |
-| runtime/container | Draft v0.1 半稳定 | 后端选择和基本挂载稳定，高级参数仍可能演进。 |
-| MCP interface | Draft v0.1 核心稳定 | 已有保守 tools/resources/prompts；执行和发布仍不在范围内。 |
-| 一致性测试 | 未建立 | 目前先用 checklist，后续再变成自动测试。 |
+| TAF 基本语法 | Draft v0.2 稳定 | 行类型、`ARGS`/`RUN`、参数 token 和 block 结构已经成型。 |
+| taf-app 项目格式 | Draft v0.2 稳定 | `taffish.toml`、artifact 名称和 wrapper 结构已有参考实现。 |
+| hub index | Draft v0.2 已运行 | 公开 Hub 已同时使用消费端和生产端；trust 与报告字段仍可继续演进。 |
+| install metadata | Draft v0.2 稳定 | 本地安装、list、which、uninstall 依赖这些字段。 |
+| config/home/history | Draft v0.2 稳定 | 已有持久化路径和 schema，后续主要是扩展字段。 |
+| runtime/container | Draft v0.2 半稳定 | 后端选择和基本挂载稳定，高级参数仍可能演进。 |
+| MCP interface | Draft v0.2 核心稳定 | 已有保守 tools/resources/prompts；执行和发布仍不在范围内。 |
+| 一致性测试 | 已部分自动化 | 已有编译器、项目和 Hub 外部测试；书面 checklist 的覆盖范围仍然更广。 |
 
 ## 写作原则
 

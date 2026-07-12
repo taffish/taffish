@@ -6,9 +6,9 @@ This page records the TAF language draft. It is more concrete than [TAF Language
 
 | Scope | Status | Notes |
 | --- | --- | --- |
-| line types, `ARGS`/`RUN`, subtags, parameter tokens | Draft v0.1 stable | implemented by lexer/parser/binder/compiler together. |
-| embedded `han.args` specs | Draft v0.1 stable | TAF relies on `han.args` for concrete argument semantics. |
-| `<shell>` and container tags | Draft v0.1 stable | main execution model for current taf-apps. |
+| line types, `ARGS`/`RUN`, subtags, parameter tokens | Draft v0.2 stable | implemented by lexer/parser/binder/compiler together. |
+| embedded `han.args` specs | Draft v0.2 stable | TAF relies on `han.args` for concrete argument semantics. |
+| `<shell>` and container tags | Draft v0.2 stable | main execution model for current taf-apps. |
 | `<taffish>` inline composition syntax | Experimental | implementation exists, but full language boundary needs Hub/flow cases. |
 | `taf-app` command mode | Experimental | usable now; user-visible semantics may still be refined. |
 

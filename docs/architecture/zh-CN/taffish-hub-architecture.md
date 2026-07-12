@@ -92,7 +92,7 @@ update = "update"
 | `repos/taffish.github.io/` | Web Hub 源码 | 发布为 `taffish/taffish.github.io`。 |
 | `repos/.github/` | GitHub organization profile | 发布为 `taffish/.github`。 |
 | `repos/taffish-docs/` | 公开文档仓库源码 | 发布为 `taffish/taffish-docs`。 |
-| `docs/` | Hub 工作区内文档源 | 迁移期可作为文档源，最终应与 `taffish-docs` 收敛。 |
+| `docs/` | Hub 工作区维护者文档 | 保存本地工厂规则和运维说明；公开指南位于 `taffish-docs`。 |
 | `taffish.com/` | 官方主页工作区 | `public/` 可部署到 `taffish.com`。 |
 | `apps-archive/` | 已发布 app 快照归档 | 不直接发布，维护者记录。 |
 | `update/` | upstream 更新队列 | 不直接发布，维护者记录。 |
@@ -122,7 +122,7 @@ repos/taffish-docs        -> github.com/taffish/taffish-docs
 
 ## repos/apps：app staging 区
 
-`repos/apps/` 用于放置正在迁移、开发或维护的 taf-app 工作树。
+`repos/apps/` 用于放置正在新增、迁移、开发或维护的 taf-app 工作树。
 
 当前可按领域和类别分层，例如：
 
@@ -305,7 +305,7 @@ https://raw.githubusercontent.com/taffish/taffish-index/main/index/index.json
 | --- | --- | --- |
 | `taffish/docs/` | TAFFISH 实现维护者和贡献者 | 源码树开发文档、规范草案、架构记忆。 |
 | `taffish-hub/repos/taffish-docs/` | 公开用户和 app 作者 | 快速开始、语言教程、app 开发指南、公开规范、故障排查。 |
-| `taffish-hub/docs/` | hub 工作区文档源 | 迁移期文档集合，可向 `taffish-docs` 收敛。 |
+| `taffish-hub/docs/` | Hub 工作区维护者文档 | 本地工厂和运维说明，不重复承担公开指南职责。 |
 
 长期看，公开可读的用户和 app 作者文档应以 `taffish-docs` 为准；TAFFISH 主仓库 docs 应把实现、架构和治理记忆保留在源码附近。
 
@@ -396,7 +396,7 @@ flowchart TD
 
 仍然是人工维护者工作的部分：
 
-1. app migration。
+1. app 新增、迁移和精修。
 2. 科学有效性检查。
 3. Dockerfile 修复和镜像调试。
 4. 发布前 review。
@@ -419,17 +419,17 @@ flowchart TD
 
 因此，`taffish-hub` 里的 staging、archive、update queue 和 hubctl 都不应泄漏成用户必须理解的概念。它们服务维护者，而不是用户。
 
-## 迁移期建议
+## 持续维护建议
 
-在 `taffish-hub` 继续迁移时，建议保持这些规则：
+在 `taffish-hub` 持续新增和维护 app 时，建议保持这些规则：
 
 1. 每新增一个 publishable repo，就放到 `repos/<repo-name>/`，并确保它能独立发布。
-2. 每迁移一个 app，就先放到 `repos/apps/<domain>/<kind>/<app>/`，但 `taffish.toml` 的 repository URL 仍指向 `https://github.com/taffish/<app>`。
+2. 每新增或更新一个 app，都先放到 `repos/apps/<domain>/<kind>/<app>/`，但 `taffish.toml` 的 repository URL 仍指向 `https://github.com/taffish/<app>`。
 3. app 发布后，把快照复制到 `apps-archive/<app>/versions/<version>/r<release>/`。
 4. 每次 upstream 检测只生成 queue，不直接修改 app。
 5. `taffish-index` 只索引 canonical GitHub 状态，不索引 staging 工作树作为正式来源。
 6. `taffish.github.io` 只展示 index，不维护自己的 app 列表。
-7. `taffish-docs` 和 `docs/` 的重复内容应逐步收敛，避免长期分叉。
+7. 公开指南保留在 `taffish-docs`，工作区专用维护规则保留在 `docs/`，避免形成两套竞争的事实来源。
 8. `taffish.com` 保持为官网入口，不承担 app registry 职责。
 
 ## 维护检查清单

@@ -8,15 +8,18 @@
 2. [ASDF 系统与模块地图](zh-CN/01-asdf-system-map.md)
 3. [模块文档模板](zh-CN/02-module-doc-template.md)
 4. [开发流程与维护约定](zh-CN/03-development-workflow.md)
-5. [0.8.0 开源准备 Checklist](zh-CN/04-open-source-0.8.0-checklist.md)
-6. [从源码构建](zh-CN/build-from-source.md)
-7. [han 基础库](zh-CN/han/README.md)
-8. [taffish-core](zh-CN/taffish-core/README.md)
-9. [taf-core](zh-CN/taf-core/README.md)
-10. [taffish-cli](zh-CN/taffish-cli/README.md)
-11. [taf-cli](zh-CN/taf-cli/README.md)
-12. [taffish-mcp](zh-CN/taffish-mcp/README.md)
-13. [公开 API](zh-CN/api/README.md)
+5. [从源码构建](zh-CN/build-from-source.md)
+6. [han 基础库](zh-CN/han/README.md)
+7. [taffish-core](zh-CN/taffish-core/README.md)
+8. [taf-core](zh-CN/taf-core/README.md)
+9. [taffish-cli](zh-CN/taffish-cli/README.md)
+10. [taf-cli](zh-CN/taf-cli/README.md)
+11. [taffish-mcp](zh-CN/taffish-mcp/README.md)
+12. [公开 API](zh-CN/api/README.md)
+
+历史 release engineering 上下文：
+
+- [0.8.0 开源准备 Checklist](zh-CN/04-open-source-0.8.0-checklist.md)
 
 相邻文档：[TAFFISH 规范草案](../standards/README.zh-CN.md) 记录语言、项目、hub、安装、配置、运行时等逻辑契约。开发者手册可以引用规范，但不把规范作为代码实现章节的一部分。
 
@@ -36,7 +39,7 @@ TAFFISH 当前可以理解为六层：
 | TAF 语言核心 | `taffish-core` | 把 `.taf` 源码从文本编译成可运行 shell 脚本。 |
 | TAF 命令行入口 | `taffish-cli` | 提供面向 TAF 编译器的 CLI 入口。 |
 | 项目与 hub 工具 | `taf-core` | 支持 `taf` 命令的项目、hub、系统配置、历史和诊断功能。 |
-| taf 命令入口 | `taf-cli` | 提供面向用户工作流的 `taf` CLI 入口。 |
+| taf 命令入口 | `taf-cli` | 提供面向用户和 app 作者的 `taf` CLI 入口。 |
 | AI 协议层 | `taffish-mcp` | 为 MCP 兼容 AI 客户端暴露保守的 tools/resources/prompts，不增加新的业务逻辑。 |
 
 ## 维护规则

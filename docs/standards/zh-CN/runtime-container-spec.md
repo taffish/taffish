@@ -6,11 +6,11 @@
 
 | 范围 | 状态 | 说明 |
 | --- | --- | --- |
-| context 已知字段 | Draft v0.1 稳定 | 编译和内置参数依赖这些字段。 |
-| Docker/Podman/Apptainer 后端选择 | Draft v0.1 稳定 | 当前容器可移植性的核心规则。 |
-| 默认挂载与 HOME/USER 传递 | Draft v0.1 半稳定 | 已可用，但高级 HPC 场景可能需要扩展。 |
-| SIF 缓存与 auto pull | Draft v0.1 半稳定 | 已实现，后续可能加入锁、metadata 和清理策略。 |
-| 高级后端参数 | Experimental | 可通过配置传入，但不建议生态依赖具体细节。 |
+| context 已知字段 | Draft v0.2 稳定 | 编译和内置参数依赖这些字段。 |
+| Docker/Podman/Apptainer 后端选择 | Draft v0.2 稳定 | 当前容器可移植性的核心规则。 |
+| 默认挂载与 HOME/USER 传递 | Draft v0.2 半稳定 | 已可用，但高级 HPC 场景可能需要扩展。 |
+| SIF 缓存与 auto pull | Draft v0.2 半稳定 | 已实现，后续可能加入锁、metadata 和清理策略。 |
+| backend-specific 运行参数 | Draft v0.2 半稳定 | 已实现结构化 tag 参数和本机 runtime 环境变量；后续仍可能增加新 target 或策略层。 |
 
 ## 运行时上下文
 
@@ -66,6 +66,7 @@
 ```taf
 <CONTAINERS:IMAGE>
 <CONTAINERS:IMAGE$RUN-ARGS>
+<CONTAINERS:IMAGE$@[TARGET: RUN-ARGS][TARGET: RUN-ARGS]>
 <'CONTAINERS:IMAGE>
 ```
 
@@ -79,7 +80,29 @@
 
 `container` 是虚拟后端，按 `:backend-order` 展开。
 
-`IMAGE` 不能为空。`$RUN-ARGS` 是直接追加给后端运行命令的额外参数字符串。
+`IMAGE` 不能为空。旧式 `$RUN-ARGS` 是追加给所选 backend 命令的 all-backend
+raw 参数字符串。
+
+结构化 `$@[TARGET: RUN-ARGS]` 块用于声明 app 的 backend-specific 运行需求。
+支持的 target 是：
+
+1. `all` 或 `container`：匹配所有所选 backend。
+2. `docker`、`podman` 或 `apptainer`：匹配单个 backend。
+3. `docker/podman` 这类以 `/` 连接的集合：匹配集合中的每个 backend。
+
+所有匹配块按源码顺序贡献参数。例如：
+
+```taf
+<container:ghcr.io/taffish/my-gpu-tool:1.0.0-r1$@[docker: --gpus all][podman: --device nvidia.com/gpu=all][apptainer: --nv]>
+my-gpu-tool --help
+```
+
+跨 backend 的 app 需求可以使用 `all`，仅与 Docker/Podman 有关的需求可以使用组合 target：
+
+```taf
+<container:ghcr.io/taffish/my-tool:1.0.0-r1$@[all: --network host][docker/podman: --security-opt=label=disable]>
+my-tool --help
+```
 
 如果 tag 内容以单引号开头，例如：
 
@@ -108,6 +131,30 @@
 3. 不强制 backend。
 
 这条强制规则不会覆盖显式 backend tag，例如 `<docker:...>`、`<podman:...>` 或 `<apptainer:...>`。
+
+## 运行参数分层
+
+容器 runtime 参数按以下顺序合并：
+
+1. TAFFISH backend 默认值。
+2. 项目或调用方 context 配置，例如 `:docker-run-args`。
+3. `.taf` container tag 中声明的旧式或结构化参数。
+4. 本机 backend 环境变量。
+
+本机环境变量是：
+
+| Backend | 环境变量 |
+| --- | --- |
+| Docker | `TAFFISH_DOCKER_RUN_ARGS` |
+| Podman | `TAFFISH_PODMAN_RUN_ARGS` |
+| Apptainer | `TAFFISH_APPTAINER_RUN_ARGS` |
+
+Tag 参数描述应随可执行包一起分发的 app 固有需求，例如不同 backend 的 GPU 暴露方式。
+环境变量描述不应改变已发布 app 源码的机器、站点、scheduler wrapper、scratch mount、
+proxy 或单次运行策略。本机环境参数最后追加，用于扩展而不是抹除前面的参数层。
+
+TAFFISH 仍是执行层，不是 scheduler。CPU、内存、queue 和 wall-time 申请应由外层 HPC
+job script 或 workflow system 负责，除非它们本来就是被包装工具的普通参数。
 
 ## Docker/Podman 运行契约
 

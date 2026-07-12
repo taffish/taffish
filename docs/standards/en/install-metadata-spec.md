@@ -6,11 +6,11 @@ This page defines `taffish.install/v1`, the `install.json` written after app ins
 
 | Scope | Status | Notes |
 | --- | --- | --- |
-| `install.json` location | Draft v0.1 stable | `list`, `which`, `uninstall`, `outdated`, `upgrade`, and `prune` depend on this layout. |
-| Core fields | Draft v0.1 stable | Removing or renaming them requires a migration strategy. |
-| Command alias refresh | Draft v0.1 stable | Multi-version installation depends on this rule. |
-| Source commit reproduction | Draft v0.1 semi-stable | When the index provides `source.commit`, install verifies the checked source commit before building. |
-| Package maintenance plan | Draft v0.1 semi-stable | `outdated`, `upgrade`, `install --all`, and `prune` use local metadata plus the local index. |
+| `install.json` location | Draft v0.2 stable | `list`, `which`, `uninstall`, `outdated`, `upgrade`, and `prune` depend on this layout. |
+| Core fields | Draft v0.2 stable | Removing or renaming them requires a migration strategy. |
+| Command alias refresh | Draft v0.2 stable | Multi-version installation depends on this rule. |
+| Source commit reproduction | Draft v0.2 semi-stable | When the index provides `source.commit`, install verifies the checked source commit before building. |
+| Package maintenance plan | Draft v0.2 semi-stable | `outdated`, `upgrade`, `install --all`, and `prune` use local metadata plus the local index. |
 
 ## File Location
 

@@ -2,12 +2,19 @@
 
 [English](README.md) | [中文](README-CN.md)
 
-TAFFISH is a shell-native executable package framework for command-level
-reproducible execution in bioinformatics.
+TAFFISH is a shell-native reproducible execution and delivery layer for
+bioinformatics command-line tools and lightweight workflows.
 
-It turns bioinformatics command-line tool invocations into versioned,
-container-resolved, installable, and composable shell commands that can be used
-directly in ordinary shells or embedded in existing workflow systems.
+> Bring reproducibility back to the shell.
+
+Its executable package model turns command-line tool invocations into
+versioned, container-resolved, installable, and composable shell commands that
+can be used directly in ordinary shells or embedded in existing workflow
+systems.
+
+TAFFISH is not a general-purpose workflow engine. Installed `taf-*` commands
+can be called by users, shell scripts, HPC job scripts, workflow systems,
+Python/R programs, or AI agents.
 
 This repository provides the local command-line implementation, installers,
 source-tree documentation, shell completion files, Vim syntax files, and
@@ -19,10 +26,10 @@ The local command-line tools are:
 - `taf`: manage TAFFISH app projects and local TAFFISH Hub packages.
 - `taffish-mcp`: expose safe TAFFISH tools/resources/prompts to AI clients through MCP over stdio.
 
-The current release payload includes a SHA256 checksum manifest, a GPG-signed
-checksum manifest, and the public release key. For taf-apps, the Hub trust
-model is based on source commits, container digests/platform metadata, and
-smoke metadata recorded in the index.
+For a guided introduction, start with the
+[TAFFISH Quick Start](https://github.com/taffish/taffish-docs/blob/main/en/quick-start.en.md).
+This README remains the source, installation, platform, and release reference
+for the local implementation.
 
 ## Table of Contents
 
@@ -31,13 +38,16 @@ smoke metadata recorded in the index.
 - [Quick Install](#quick-install)
   - [Standard Install](#standard-install)
   - [For Users in China](#for-users-in-china)
+  - [Choose User Or System Scope](#choose-user-or-system-scope)
   - [Verify Installation](#verify-installation)
+  - [First Run](#first-run)
 - [System Requirements](#system-requirements)
   - [macOS Dependencies](#macos-dependencies)
   - [Linux Dependencies](#linux-dependencies)
 - [Install Paths](#install-paths)
 - [Runtime Config and Mirrors](#runtime-config-and-mirrors)
 - [Installer Options](#installer-options)
+- [Upgrade Or Remove TAFFISH](#upgrade-or-remove-taffish)
 - [Local or Offline Install](#local-or-offline-install)
 - [Build From Source](#build-from-source)
 - [Container Backends](#container-backends)
@@ -180,25 +190,85 @@ profile, add `--force-config`:
 curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffish.gitee.sh | sh -s -- --user --force-config
 ```
 
+### Choose User Or System Scope
+
+Installation scope and `taf` operation scope are related, but they are not a
+persistent global mode. Scope-aware `taf` commands default to `--user` on every
+invocation, even when the `taf` binary itself was installed system-wide.
+
+| Scope | Intended use | State and app locations |
+| --- | --- | --- |
+| `--user` / `-u` | One user, no administrator access | `~/.local/share/taffish` |
+| `--system` / `-s` | Shared server or managed workstation | `/opt/taffish` and `/usr/local/bin` |
+
+The scope-aware commands are `update`, `search`, `info`, `install`, `outdated`,
+`upgrade`, `prune`, `uninstall`, `list`, `which`, `doctor`, and `config`.
+Project-local commands such as `new`, `check`, `run`, `build`, and `publish` do
+not become system operations by adding `--system`.
+
+System-scope writes normally require administrator permission. Read-only
+operations such as `search`, `info`, `list`, `which`, `outdated`, and `doctor`
+can normally use `--system` without `sudo` when the system home is readable.
+
 ### Verify Installation
 
-After installation, verify:
+After a user install, verify:
 
 ```sh
 taf --version
 taffish --version
 taffish-mcp --version
-taf doctor
+taf doctor --user
 ```
 
-If the installer says `~/.local/bin` is not in `PATH`, add this to your shell
-profile:
+User installs have two command directories: `~/.local/bin` contains the three
+TAFFISH core commands, while `~/.local/share/taffish/bin` contains commands
+installed later by `taf install`. Add both to your shell profile:
 
 ```sh
-export PATH="$HOME/.local/bin:$PATH"
+export PATH="$HOME/.local/bin:$HOME/.local/share/taffish/bin:$PATH"
 ```
 
 Then open a new shell or run `source ~/.zshrc` / `source ~/.bashrc`.
+
+After a system install, verify the system scope explicitly:
+
+```sh
+taf --version
+taf doctor --system
+```
+
+The default system command directory is `/usr/local/bin`, which is normally
+already in each user's `PATH`.
+
+### First Run
+
+Normal user workflow:
+
+```sh
+taf update --user
+taf search --user fastqc
+taf install --user fastqc
+taf list --user
+taf-fastqc -- --help
+```
+
+Shared-server administrator workflow:
+
+```sh
+sudo taf update --system
+taf search --system fastqc
+sudo taf install --system fastqc
+taf list --system
+taf which --system taf-fastqc
+```
+
+For system app maintenance, use the same scope consistently, for example
+`sudo taf upgrade --system --yes`, `sudo taf prune --system --yes`, and
+`sudo taf uninstall --system APP`. See the
+[System Administration Guide](https://github.com/taffish/taffish-docs/blob/main/en/system-administration.en.md)
+for permissions, shared completion, Vim integration, mixed user/system
+deployments, and Apptainer cache policies.
 
 ## System Requirements
 
@@ -219,13 +289,13 @@ where GitHub raw content is blocked or unstable, installation can still finish,
 but `taf update` may print a warning. You can retry later:
 
 ```sh
-taf update
+taf update --user
 ```
 
 or use a mirror/custom index:
 
 ```sh
-taf update --url <INDEX-URL>
+taf update --url INDEX_URL
 ```
 
 ### macOS Dependencies
@@ -285,19 +355,12 @@ below.
 
 ## Install Paths
 
-User install defaults:
+Default layout:
 
-```text
-bin  = ~/.local/bin
-home = ~/.local/share/taffish
-```
-
-System install defaults:
-
-```text
-bin  = /usr/local/bin
-home = /opt/taffish
-```
+| Scope | Core command bin | Installed app command bin | TAFFISH home |
+| --- | --- | --- | --- |
+| user | `~/.local/bin` | `~/.local/share/taffish/bin` | `~/.local/share/taffish` |
+| system | `/usr/local/bin` | `/usr/local/bin` | `/opt/taffish` |
 
 TAFFISH home stores local apps, indexes, cached images, command launchers,
 completion files, Vim files, logs, and other runtime data.
@@ -306,6 +369,11 @@ For system installs, app wrappers and metadata live under the system home, but
 container image caches are runtime state. Docker and Podman use their own image
 stores. Apptainer uses SIF files under `images/sif`; see the Apptainer section
 if multiple users should share system-level SIF files.
+
+If `TAFFISH_USER_HOME` is customized, its `bin` subdirectory must also be in
+the user's `PATH`. If a system deployment customizes `TAFFISH_SYSTEM_HOME` or
+`TAFFISH_SYSTEM_BIN_DIR`, define those variables consistently for both
+administrators and users.
 
 Relevant environment variables:
 
@@ -341,25 +409,45 @@ user   = ~/.local/share/taffish/config.toml
 system = /opt/taffish/config.toml
 ```
 
-Inspect the effective config:
+Inspect user and system configuration separately:
 
 ```sh
-taf config
-taf config path
+taf config --user
+taf config path --user
+taf config --system
+taf config path --system
 ```
 
 Initialize the default GitHub profile:
 
 ```sh
-taf config init --github
+taf config init --user --github
 ```
 
 Initialize the China mirror profile template:
 
 ```sh
-taf config init --china --force
-taf update
+taf config init --user --china --force
+taf update --user
 ```
+
+For a managed system profile:
+
+```sh
+sudo taf config init --system --github
+sudo taf update --system
+```
+
+For a managed system using the China mirror profile:
+
+```sh
+sudo taf config init --system --china --force
+sudo taf update --system
+```
+
+User scope loads the system config first and then applies an optional user
+config override. System scope reads the system config but not the user config.
+`TAFFISH_CONFIG` remains an explicit final override.
 
 The generated China template is intentionally simple:
 
@@ -384,7 +472,7 @@ Meaning:
   clones app repositories.
 - `taf publish` remains GitHub-only; mirrors are read/install paths, not a
   publishing target.
-- `taf update --url <INDEX-URL>` and `TAFFISH_INDEX_URL` still work as
+- `taf update --url INDEX_URL` and `TAFFISH_INDEX_URL` still work as
   one-off overrides.
 
 If your mirror organization or internal Git service uses different paths, edit
@@ -425,6 +513,33 @@ Manual platform override example:
 curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh \
   | sh -s -- --user --os linux --arch amd64
 ```
+
+## Upgrade Or Remove TAFFISH
+
+`taf upgrade` upgrades installed taf-apps; it does not upgrade the `taf`,
+`taffish`, or `taffish-mcp` binaries. Upgrade the core tools by running the
+installer again with the same scope and the desired version:
+
+```sh
+# User installation
+curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sh -s -- --user --version X.Y.Z
+
+# System installation
+curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sudo sh -s -- --system --version X.Y.Z
+```
+
+TAFFISH currently has no dedicated core uninstaller. Before removing the core
+commands, uninstall any apps you no longer need with the matching scope and
+back up a customized `config.toml`. The core command files are:
+
+```text
+user   = ~/.local/bin/{taf,taffish,taffish-mcp}
+system = /usr/local/bin/{taf,taffish,taffish-mcp}
+```
+
+User state lives under `~/.local/share/taffish`; system state lives under
+`/opt/taffish`. Remove a home only after checking that it contains no app,
+index, config, log, or cached image data that should be retained.
 
 ## Local or Offline Install
 
@@ -694,7 +809,7 @@ Each user gets their own writable `~/.local/share/taffish/images/sif` cache.
 2. Administrator pre-cache:
 
 ```sh
-sudo taf-<app>-v<version>-r<release> -- --help
+sudo taf-APP-vVERSION-rRELEASE -- --help
 ```
 
 This lets root pull the SIF into `/opt/taffish/images/sif` once. Later users
@@ -777,7 +892,8 @@ rewrite/mirror installs auditable without rewriting app source files.
 
 ## Shell Completion
 
-The installer copies completion files into:
+The installer copies completion files but intentionally does not edit shell
+startup files. Files are installed into:
 
 ```text
 $TAFFISH_HOME/share/completions
@@ -812,6 +928,30 @@ cp ~/.local/share/taffish/share/completions/fish/taf.fish ~/.config/fish/complet
 cp ~/.local/share/taffish/share/completions/fish/taffish.fish ~/.config/fish/completions/
 ```
 
+For a system install, the source files are under
+`/opt/taffish/share/completions`. An administrator can either load them from
+the site's global shell configuration or install them into the shell's system
+completion directory. For Bash with `bash-completion`, a common layout is:
+
+```sh
+sudo install -m 0644 /opt/taffish/share/completions/bash/taf /etc/bash_completion.d/taf
+sudo install -m 0644 /opt/taffish/share/completions/bash/taffish /etc/bash_completion.d/taffish
+```
+
+Alternatively, source both Bash files from the global interactive Bash startup
+file:
+
+```sh
+source /opt/taffish/share/completions/bash/taf
+source /opt/taffish/share/completions/bash/taffish
+```
+
+That file is commonly `/etc/bash.bashrc` on Debian-family systems and
+`/etc/bashrc` on Red Hat-family systems. Zsh site-function and Fish vendor
+completion directories are distribution-dependent; see
+[completion/README.md](completion/README.md) for the supported activation
+patterns.
+
 ## Vim Syntax Highlighting
 
 The installer copies Vim files into:
@@ -836,7 +976,22 @@ cp ~/.local/share/taffish/share/vim/syntax/taf.vim ~/.config/nvim/syntax/
 cp ~/.local/share/taffish/share/vim/ftdetect/taf.vim ~/.config/nvim/ftdetect/
 ```
 
+For a system install, either copy the files from `/opt/taffish/share/vim` into
+the site's Vim runtime directory or add this directory to the global Vim
+`runtimepath`:
+
+```vim
+set runtimepath+=/opt/taffish/share/vim
+```
+
+System Vim and Neovim configuration paths vary by operating system. See
+[vim-highlight/README.md](vim-highlight/README.md) for common layouts.
+
 ## Basic Usage
+
+The examples in this section use user scope. Add `--system` when reading or
+maintaining the system installation, and use administrator permission for
+system-scope writes.
 
 Update local index:
 
@@ -951,16 +1106,11 @@ becomes the GitHub Release notes. Replace the default
 
 ## MCP / AI Integration
 
-TAFFISH `0.4.0` introduced `taffish-mcp`, a conservative MCP stdio server for
-AI clients. TAFFISH `0.5.0` added read-only TAF source/file compiler tools, and
-TAFFISH `0.6.0` added AI-readable taf-app inspection, current project
-inspection, and safe app invocation compile. TAFFISH `0.7.0` aligns MCP
-compile tools with the runtime container backend override. TAFFISH `0.8.0`
-surfaces smoke/trust metadata for containerized taf-app inspection without
-running smoke tests or containers. TAFFISH `0.10.0` adds safe package
-maintenance planners for outdated/install-all/upgrade/prune workflows. TAFFISH
-`0.10.1` fixes block-slot argument rendering and expands external TAFFISH
-conformance coverage:
+`taffish-mcp` is a conservative MCP stdio server for AI clients. Its current
+surface includes read-only TAF validation, compilation and summarization;
+taf-app and project inspection; safe app-invocation compilation; smoke/trust
+metadata inspection; and non-executing package-maintenance planners. The
+current tool set includes:
 
 - `taffish_get_version` / `taffish_get_help`
 - `taffish_validate_source` / `taffish_validate_file`
@@ -978,6 +1128,10 @@ conformance coverage:
 - `taffish_inspect_project`
 - `taffish_summarize_project_usage`
 - `taffish_compile_project`
+
+See the public [TAFFISH MCP Guide](https://github.com/taffish/taffish-docs/blob/main/en/taffish-mcp.en.md)
+and [MCP Client Setup](https://github.com/taffish/taffish-docs/blob/main/en/mcp-clients.en.md)
+for the complete interface and client-specific configuration.
 
 The MCP interface also exposes safe project, Hub, config, history, resource,
 and prompt operations. It does not expose `taf run`, `taf publish`, or
@@ -1010,15 +1164,18 @@ unstructured terminal text first.
 
 ## Troubleshooting
 
-### `taf: command not found`
+### `taf` Or An Installed App Command Is Not Found
 
-Your install bin directory is not in `PATH`.
-
-For user install:
+For a user install, core commands and installed app commands use different
+directories. Add both to `PATH`:
 
 ```sh
-export PATH="$HOME/.local/bin:$PATH"
+export PATH="$HOME/.local/bin:$HOME/.local/share/taffish/bin:$PATH"
 ```
+
+For a system install, both core and app commands default to `/usr/local/bin`.
+If custom homes or bin directories are configured, add the corresponding
+command directories instead.
 
 ### `taf update` fails with GitHub connection reset
 
@@ -1026,14 +1183,14 @@ This is usually a network/proxy problem when accessing GitHub raw content.
 Retry later, set a proxy, or use a custom index URL:
 
 ```sh
-taf update --url <INDEX-URL>
+taf update --url INDEX_URL
 ```
 
 For a persistent mirror config:
 
 ```sh
-taf config init --china --force
-taf update
+taf config init --user --china --force
+taf update --user
 ```
 
 ### macOS says `libzstd.1.dylib` is missing
@@ -1067,7 +1224,7 @@ taf doctor --init --user
 For a shared server, the administrator can either pre-cache common SIF files:
 
 ```sh
-sudo taf-<app>-v<version>-r<release> -- --help
+sudo taf-APP-vVERSION-rRELEASE -- --help
 ```
 
 or intentionally allow a shared writable system SIF cache:

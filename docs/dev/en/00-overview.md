@@ -1,6 +1,11 @@
 # Overall Architecture
 
-TAFFISH is a portable application system for bioinformatics tools and workflows. Its core is not "wrapping a few commands"; it defines the TAF description language, compiles that language into stable POSIX shell scripts, and then uses the `taf` command to form a complete workflow around projects, Hub, installation, execution, and diagnostics.
+TAFFISH is a shell-native reproducible execution and delivery layer for
+bioinformatics command-line tools and lightweight workflows. Its local
+reference implementation defines the TAF description language, compiles that
+language into stable POSIX shell scripts, and uses `taf` to manage projects,
+Hub consumption, installation, execution, and diagnostics. It is not a
+general-purpose workflow engine.
 
 ## Command And Protocol Entrypoints
 

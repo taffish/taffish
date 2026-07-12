@@ -1,6 +1,7 @@
 # Specification Positioning And Version Policy
 
-This page defines the role of TAFFISH specification documents. The current documents should be understood as `TAFFISH Specification Draft v0.1`.
+This page defines the role of TAFFISH specification documents. The current
+documents should be understood as `TAFFISH Specification Draft v0.2`.
 
 ## Why A Specification Draft
 
@@ -10,7 +11,8 @@ Therefore, TAFFISH should not currently claim to be an external formal standard.
 
 1. The reference implementation defines current factual behavior.
 2. The specification draft lifts those facts into discussable, maintainable, compatibility-aware contracts.
-3. Future conformance tests verify whether implementations satisfy those contracts.
+3. The current external conformance suite verifies core compiler, project, and
+   Hub workflows; future checks can cover more of the written contracts.
 4. Formal standardization, governance committees, or a TEP process can be considered after the ecosystem matures.
 
 ## Difference From A Formal Standard
@@ -31,8 +33,8 @@ Specification documents use draft versions:
 
 | Version | Meaning |
 | --- | --- |
-| `Draft v0.1` | Aligned with the current TAFFISH 0.3.x reference implementation; corrections and additions are allowed. |
-| `Draft v0.2` | Update after `taffish-hub` migration and more published taf-apps. |
+| `Draft v0.1` | Historical draft aligned with the TAFFISH 0.3.x reference implementation. |
+| `Draft v0.2` | Current draft aligned with the TAFFISH 0.10.x reference implementation and an operational public Hub/index ecosystem. |
 | `v1.0` | Consider after language, project format, Hub index, and install format are validated by real ecosystem usage. |
 
 Schema fields use independent versions such as `taffish.index/v1`, `taffish.install/v1`, and `taffish.config/v1`. Schema versions do not need to match the TAFFISH program version exactly.
@@ -72,7 +74,10 @@ Specification topics can use these labels:
 | Deprecated | Still readable or runnable, but should not be generated. |
 | Reserved | Reserved for future design; should not be depended on now. |
 
-Most TAFFISH 0.3.x documents are `Draft v0.1`. After `taffish-hub` migration, some can move to `Draft v0.2` or `Stable`.
+The current documents use `Draft v0.2`. Stable labels are applied per topic
+when behavior is exercised by the reference implementation, external
+conformance tests, and published taf-apps. Draft v0.2 does not make TAFFISH a
+formal external standard.
 
 ## Reference Implementation
 
@@ -91,9 +96,9 @@ The following remain actively evolving:
 
 1. Inline `taffish` flow reference syntax.
 2. Details of `taf-app` command mode.
-3. Full Hub index production flow.
+3. Evolution of Hub trust reports and index-side validation metadata.
 4. Gitee mirror strategy and multi-source sync.
 5. Container image cache, SIF naming, and advanced backend parameters.
-6. Conformance test suite.
+6. Complete machine-readable coverage of the written conformance checklist.
 
 These areas can record current behavior, but should not be frozen too early.

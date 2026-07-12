@@ -8,15 +8,18 @@ This manual explains how TAFFISH itself is implemented. It is not a tutorial for
 2. [ASDF System And Module Map](en/01-asdf-system-map.md)
 3. [Module Documentation Template](en/02-module-doc-template.md)
 4. [Development Workflow And Maintenance Rules](en/03-development-workflow.md)
-5. [0.8.0 Open-Source Preparation Checklist](en/04-open-source-0.8.0-checklist.md)
-6. [Build From Source](en/build-from-source.md)
-7. [han Base Library](en/han/README.md)
-8. [taffish-core](en/taffish-core/README.md)
-9. [taf-core](en/taf-core/README.md)
-10. [taffish-cli](en/taffish-cli/README.md)
-11. [taf-cli](en/taf-cli/README.md)
-12. [taffish-mcp](en/taffish-mcp/README.md)
-13. [Public API](en/api/README.md)
+5. [Build From Source](en/build-from-source.md)
+6. [han Base Library](en/han/README.md)
+7. [taffish-core](en/taffish-core/README.md)
+8. [taf-core](en/taf-core/README.md)
+9. [taffish-cli](en/taffish-cli/README.md)
+10. [taf-cli](en/taf-cli/README.md)
+11. [taffish-mcp](en/taffish-mcp/README.md)
+12. [Public API](en/api/README.md)
+
+Historical release-engineering context:
+
+- [0.8.0 Open-Source Preparation Checklist](en/04-open-source-0.8.0-checklist.md)
 
 Related docs: [TAFFISH Specification Draft](../standards/README.en.md) records language, project, Hub, install, config, and runtime contracts. The developer manual may reference those specifications, but it does not treat them as source-code implementation chapters.
 

@@ -92,7 +92,7 @@ update = "update"
 | `repos/taffish.github.io/` | Web Hub source | Published as `taffish/taffish.github.io`. |
 | `repos/.github/` | GitHub organization profile | Published as `taffish/.github`. |
 | `repos/taffish-docs/` | Public documentation repository source | Published as `taffish/taffish-docs`. |
-| `docs/` | Hub workspace documentation source | Migration-time docs, eventually converging into `taffish-docs`. |
+| `docs/` | Hub workspace maintainer documentation | Local factory rules and operational notes; public guides live in `taffish-docs`. |
 | `taffish.com/` | Official homepage workspace | `public/` can be deployed to `taffish.com`. |
 | `apps-archive/` | Published app snapshot archive | Not directly published; maintainer record. |
 | `update/` | upstream update queue | Not directly published; maintainer record. |
@@ -122,7 +122,7 @@ This layout lets maintainers manage multiple public repositories in one workspac
 
 ## repos/apps: App Staging Area
 
-`repos/apps/` contains taf-app worktrees being migrated, developed, or maintained.
+`repos/apps/` contains taf-app worktrees being added, migrated, developed, or maintained.
 
 Current organization can be domain/category based:
 
@@ -305,7 +305,7 @@ Difference from implementation docs:
 | --- | --- | --- |
 | `taffish/docs/` | TAFFISH implementation maintainers and contributors | Source-tree developer docs, specification drafts, architecture memory. |
 | `taffish-hub/repos/taffish-docs/` | public users and app authors | Quick start, language tutorial, app development guide, public specs, troubleshooting. |
-| `taffish-hub/docs/` | Hub workspace documentation source | Migration-time docs, converging into `taffish-docs`. |
+| `taffish-hub/docs/` | Hub workspace maintainer docs | Local factory and operational notes, not a duplicate public guide set. |
 
 Long term, public user/app-author docs should be sourced from `taffish-docs`; TAFFISH repository docs should keep implementation, architecture, and governance memory close to the source code.
 
@@ -396,7 +396,7 @@ Current automated or semi-automated capabilities:
 
 Still manual maintainer work:
 
-1. app migration.
+1. app addition, migration, and curation.
 2. scientific validity checks.
 3. Dockerfile fixes and image debugging.
 4. pre-publish review.
@@ -419,17 +419,17 @@ User-side `taf` does not read the `taffish-hub/` workspace. Users care that:
 
 Therefore, staging, archive, update queue, and hubctl should not leak into concepts users must understand. They serve maintainers, not users.
 
-## Migration-Time Suggestions
+## Ongoing Maintenance Suggestions
 
 While `taffish-hub` continues to migrate:
 
 1. Put every new publishable repository under `repos/<repo-name>/` and ensure it can be published independently.
-2. Put each migrated app under `repos/apps/<domain>/<kind>/<app>/`, but keep `taffish.toml` repository URL as `https://github.com/taffish/<app>`.
+2. Put each added or updated app under `repos/apps/<domain>/<kind>/<app>/`, but keep `taffish.toml` repository URL as `https://github.com/taffish/<app>`.
 3. After app publication, copy the snapshot to `apps-archive/<app>/versions/<version>/r<release>/`.
 4. Upstream checks should only create a queue and should not edit apps directly.
 5. `taffish-index` should index canonical GitHub state, not local staging as a formal source.
 6. `taffish.github.io` should display the index and not maintain a separate app list.
-7. Duplicated content between `taffish-docs` and `docs/` should converge over time.
+7. Keep public guides in `taffish-docs`; keep workspace-specific maintainer rules in `docs/` so the two sets do not drift into competing sources of truth.
 8. `taffish.com` should remain the homepage and not become the app registry.
 
 ## Maintenance Checklist

@@ -19,10 +19,11 @@
 这里不是外部公证标准，也不是类似 ANSI Common Lisp 的正式标准。当前阶段更适合称为：
 
 ```text
-TAFFISH Specification Draft v0.1
+TAFFISH Specification Draft v0.2
 ```
 
-也就是 TAFFISH 规范草案。它可以随着参考实现和 taffish-hub 迁移继续演进，但应该有明确版本、兼容性策略和迁移说明。
+也就是 TAFFISH 规范草案。它可以随着参考实现和已经运行的 Hub 生态继续演进，但应该有
+明确版本、兼容性策略和迁移说明。
 
 ## 与开发文档的边界
 
@@ -39,11 +40,11 @@ TAFFISH Specification Draft v0.1
 
 这个分层能让 TAFFISH 以后自然走向多实现、一致性测试和生态治理，而不是被当前源码结构锁死。
 
-## 下一步用途
+## 当前用途
 
-这套规范草案的直接用途是服务 taffish-hub 迁移。迁移时应优先检查：
+这套规范草案用于约束当前实现变化、公开 Hub 精修、index 生成和兼容性审查。应优先检查：
 
 1. 生成的 index 是否符合 `taffish.index/v1`。
-2. 每个 taf-app 项目是否符合 `taffish.toml` 和目录规范。
+2. 每个新增或更新的 taf-app 项目是否符合 `taffish.toml` 和目录规范。
 3. 安装结果是否能生成正确的 `install.json` 和 launcher。
 4. 中国镜像配置是否只通过 source rewrite 改变分发来源，而不改变 canonical GitHub 身份。

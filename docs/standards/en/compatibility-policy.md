@@ -15,7 +15,7 @@ TAFFISH needs to protect:
 
 ## Conformance Results
 
-Manual checks or future automated conformance tests should return:
+Manual checks and automated conformance tests should return:
 
 | Result | Meaning | Handling |
 | --- | --- | --- |
@@ -94,7 +94,8 @@ Current code treats `[container].platforms` as a legacy compatibility field for 
 
 ## Conformance Test Direction
 
-Future conformance tests should cover at least:
+The current external suites cover real compiler, project, and Hub/package
+workflows. Coverage should continue expanding toward:
 
 1. Golden outputs for TAF lexer/parser/binder/compiler.
 2. `taffish.toml` schema validation.
@@ -103,4 +104,5 @@ Future conformance tests should cover at least:
 5. Config merge, index URL resolution, source rewrite.
 6. Container backend selection and key generated-shell fragments.
 
-Conformance tests are not required before this draft exists, but they are necessary before `v1.0`.
+Complete contract-oriented conformance coverage remains necessary before
+considering specification `v1.0`.

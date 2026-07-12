@@ -1,6 +1,8 @@
 # TAFFISH 合规性检查清单
 
-本页用于人工检查一个 `.taf` 文件、taf-app 项目、hub index 或本地安装结果是否符合 TAFFISH Specification Draft v0.1。它不是自动测试，但应该作为未来一致性测试的蓝本。
+本页是用于判断 `.taf` 文件、taf-app 项目、Hub index 或本地安装结果是否符合
+TAFFISH Specification Draft v0.2 的完整人工清单。仓库已经存在编译器、项目和 Hub
+外部一致性测试，但这些测试尚未编码本页的每一项要求。
 
 ## 结果分类
 
@@ -255,11 +257,12 @@ notes:
 
 ## 从 checklist 到自动一致性测试
 
-未来可以把本页拆成自动测试：
+当前外部测试位于 `test/taffish`、`test/taf-project` 和 `test/taf-hub`。未来可以通过
+专用接口把本页更多检查暴露为如下命令：
 
 1. `taf conformance taf <file>`：检查单个 `.taf`。
 2. `taf conformance project <dir>`：检查 taf-app 项目。
 3. `taf conformance index <index.json>`：检查 hub index。
 4. `taf conformance install <home>`：检查本地安装状态。
 
-在自动化实现之前，本页就是人工迁移 taffish-hub 和审核 taf-app 的准绳。
+在完整 checklist 覆盖实现之前，本页仍是实现变更、Hub 精修和 taf-app 审核的人工准绳。

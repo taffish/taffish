@@ -1,6 +1,10 @@
 # Security Policy
 
-TAFFISH is a local workflow/compiler and package-management system for bioinformatics tools. Security reports are welcome, especially issues related to command generation, shell escaping, container execution, installer behavior, Hub index metadata, source verification, and release artifact integrity.
+TAFFISH is a shell-native reproducible execution and delivery layer for
+bioinformatics command-line tools and lightweight workflows. Security reports
+are welcome, especially issues related to command generation, shell escaping,
+container execution, installer behavior, Hub index metadata, source
+verification, and release artifact integrity.
 
 ## Supported Versions
 
@@ -48,6 +52,10 @@ Out of scope unless they expose a TAFFISH-specific bug:
 
 ## Current Release Integrity Model
 
-TAFFISH 0.8.1 publishes manually built binary payloads under `target/` with `SHA256SUMS`, `SHA256SUMS.asc`, and `TAFFISH-RELEASE-KEY.asc` files. This provides signed checksum verification, but it is not yet a reproducible-build or GitHub Actions provenance guarantee.
+Current tagged TAFFISH releases publish manually built binary payloads under
+`target/` with `SHA256SUMS`, `SHA256SUMS.asc`, and
+`TAFFISH-RELEASE-KEY.asc`. This provides signed checksum verification, but it
+is not a reproducible-build or GitHub Actions provenance guarantee.
 
-TAFFISH Hub package trust is expected to rely on index metadata such as source commit, container digest/platforms, and smoke-test results.
+TAFFISH Hub package trust uses index metadata such as source commit, container
+digest/platforms, and smoke-test results where those fields are available.

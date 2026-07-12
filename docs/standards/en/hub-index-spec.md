@@ -6,9 +6,9 @@ This page defines the consumer-side specification for `taffish.index/v1`. The in
 
 | Scope | Status | Notes |
 | --- | --- | --- |
-| `schema_version`, `packages`, `commands` | Draft v0.1 stable | Consumer commands already depend on these fields. |
-| Package entry and version record | Draft v0.1 awaiting ecosystem validation | Field structure is defined, but producer behavior needs validation during taffish-hub migration. |
-| dependencies | Draft v0.1 semi-stable | The installer supports recursive installation and cycle detection, but complex ecosystems need more validation. |
+| `schema_version`, `packages`, `commands` | Draft v0.2 stable | Consumer commands already depend on these fields. |
+| Package entry and version record | Draft v0.2 operational | Both index production and local consumers use these records in the public Hub. |
+| dependencies | Draft v0.2 semi-stable | Recursive installation and cycle detection are implemented; complex multi-version ecosystems still need continued validation. |
 | Multi-source mirrors | Current implementation | Implemented through config source rewrite, not directly through index schema. |
 
 ## File Format

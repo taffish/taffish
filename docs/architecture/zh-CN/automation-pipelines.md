@@ -14,7 +14,10 @@
 | index 生成 workflow | `taffish-index` 已有实现 | `.github/workflows/build-index.yml` 支持手动触发和每日定时扫描 `taffish` 组织。 |
 | maintainer upstream 检测 | `taffish-hub` 已有本地工具 | `hubctl check --all` 生成 `update/updates.md`，只报告 upstream 版本变化。 |
 
-`taffish-hub` 当前 README 的状态说明是：目前只有 upstream detection 自动化；app 迁移、测试、Docker 镜像构建、发布和归档快照仍然是人工维护者工作。换句话说，生态架构已经定型，但迁移期不能把“设计上应当自动化”和“当前已经完全自动化”混为一谈。
+自动化是有意拆分的：`hubctl` 自动发现 upstream 更新，而 app 迁移或精修、生物学审查、
+测试判断、release 批准和归档快照仍由维护者把关。维护者发布所需源码与 tag 后，每个 app
+仓库的 GitHub Actions 可以自动构建容器镜像，`taffish-index` 也可以自动重建公开 index。
+文档必须区分这些仓库自动化任务和触发、批准它们的人类判断。
 
 ## 总体数据流
 

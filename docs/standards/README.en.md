@@ -17,10 +17,11 @@ Current English entry:
 This is not an externally notarized standard and not a formal standard like ANSI Common Lisp. At the current stage the better name is:
 
 ```text
-TAFFISH Specification Draft v0.1
+TAFFISH Specification Draft v0.2
 ```
 
-It can evolve as the reference implementation and `taffish-hub` migration evolve, but it should have explicit versions, compatibility policy, and migration notes.
+It can evolve with the reference implementation and operational Hub ecosystem,
+but it should have explicit versions, compatibility policy, and migration notes.
 
 ## Boundary With Developer Docs
 
@@ -39,9 +40,10 @@ This separation lets TAFFISH later move toward multiple implementations, conform
 
 ## Immediate Use
 
-This specification draft directly supports `taffish-hub` migration. During migration, check first:
+This specification draft governs current implementation changes, public Hub
+curation, index generation, and compatibility review. Check first:
 
 1. Generated index conforms to `taffish.index/v1`.
-2. Each taf-app project conforms to `taffish.toml` and directory specifications.
+2. Each new or updated taf-app project conforms to `taffish.toml` and directory specifications.
 3. Install results generate correct `install.json` and launcher files.
 4. China mirror config changes distribution source only through source rewrite and does not change canonical GitHub identity.

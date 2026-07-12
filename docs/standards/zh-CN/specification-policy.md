@@ -1,6 +1,7 @@
 # 规范定位与版本策略
 
-本页说明 TAFFISH 规范文档的定位。当前文档应被理解为 `TAFFISH Specification Draft v0.1`，中文可称为“TAFFISH 规范草案 v0.1”。
+本页说明 TAFFISH 规范文档的定位。当前文档应被理解为
+`TAFFISH Specification Draft v0.2`，中文可称为“TAFFISH 规范草案 v0.2”。
 
 ## 为什么是规范草案
 
@@ -10,7 +11,7 @@ TAFFISH 现在仍以一个参考实现为中心。语言、项目格式、hub in
 
 1. 参考实现定义当前事实行为。
 2. 规范草案把这些事实行为提升为可讨论、可维护、可兼容演进的契约。
-3. 未来的一致性测试验证实现是否符合这些契约。
+3. 当前外部一致性测试已经覆盖编译器、项目和 Hub 核心工作流；后续测试可以继续覆盖更多书面契约。
 4. 当生态成熟后，再考虑正式标准化、治理委员会或 TEP 流程。
 
 ## 与正式标准的区别
@@ -31,8 +32,8 @@ TAFFISH 现在仍以一个参考实现为中心。语言、项目格式、hub in
 
 | 版本 | 含义 |
 | --- | --- |
-| `Draft v0.1` | 与当前 TAFFISH 0.3.x 参考实现对齐，允许修正和补充。 |
-| `Draft v0.2` | 当 taffish-hub 迁移完成、更多 taf-app 被实际发布后更新。 |
+| `Draft v0.1` | 历史草案，与 TAFFISH 0.3.x 参考实现对齐。 |
+| `Draft v0.2` | 当前草案，与 TAFFISH 0.10.x 参考实现以及已经运行的公开 Hub/index 生态对齐。 |
 | `v1.0` | 当语言、项目格式、hub index 和安装格式经过实际生态验证后再考虑。 |
 
 schema 字段使用独立版本，例如 `taffish.index/v1`、`taffish.install/v1`、`taffish.config/v1`。schema 版本不必与 TAFFISH 程序版本完全一致。
@@ -72,7 +73,9 @@ schema 字段使用独立版本，例如 `taffish.index/v1`、`taffish.install/v
 | Deprecated | 仍可读取或运行，但不建议继续生成。 |
 | Reserved | 为未来设计保留，当前不应依赖。 |
 
-TAFFISH 0.3.x 阶段大多数文档属于 `Draft v0.1`。`taffish-hub` 迁移完成后，可以把其中一部分提升到 `Draft v0.2` 或 `Stable`。
+当前文档统一使用 `Draft v0.2`。当某个主题已经被参考实现、外部一致性测试和已发布
+taf-app 反复使用时，可以单独标记为 Stable。Draft v0.2 并不意味着 TAFFISH 已经成为
+外部正式标准。
 
 ## 参考实现
 
@@ -91,9 +94,9 @@ TAFFISH 0.3.x 阶段大多数文档属于 `Draft v0.1`。`taffish-hub` 迁移完
 
 1. `taffish` 内联流程引用语法。
 2. `taf-app` 命令模式的细节。
-3. hub index 的完整生产流程。
+3. Hub trust report 与 index 侧验证元数据的继续演进。
 4. Gitee 镜像策略与多源同步策略。
 5. 容器镜像缓存、SIF 命名和高级后端参数。
-6. 一致性测试集合。
+6. 对书面合规性检查清单的完整机器可读覆盖。
 
 这些区域可以记录现状，但不应过早冻结成不可变标准。

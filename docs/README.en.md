@@ -2,7 +2,9 @@
 
 This directory records implementation, specification, and ecosystem design knowledge for TAFFISH. It is written for maintainers, contributors, taf-app authors who need deeper contracts, and users who want to understand how the local CLI, Hub index, containers, mirrors, and MCP interface fit together.
 
-Ordinary users can start from the root [README](../README.md). The documents here go deeper than installation and basic command usage.
+Ordinary users can start from the root [README](../README.md) and the public
+[TAFFISH documentation](https://github.com/taffish/taffish-docs). The documents
+here go deeper than installation and basic command usage.
 
 ## Documentation Scope
 
@@ -13,7 +15,10 @@ This directory prioritizes four kinds of content:
 3. System architecture: GitHub/Gitee organizations, Hub, index, release flow, mirror flow, and ecosystem operation.
 4. Development workflow: what to read when changing a module, which invariants to keep, and how to avoid breaking upstream/downstream contracts.
 
-This directory does not try to replace the website or Hub user guide. Paper narratives, tutorials, and application-specific examples can live in dedicated repositories or website documentation when they become stable.
+This directory does not replace the website or public Hub user guides. Public
+tutorials, system-administration guidance, app-author guides, and
+application-specific examples live in `taffish/taffish-docs` or dedicated
+ecosystem repositories. Paper narratives remain outside this source tree.
 
 ## Entries
 
@@ -49,4 +54,9 @@ Recommended order:
 
 ## Status
 
-This is a living documentation set. It should evolve with the source code rather than be written only after the project is complete. TAFFISH's core code now has a fairly clear layering; the current docs include Chinese originals and corresponding English versions for the developer manual, specification draft, and system architecture. Future work can add more detailed topics, testing docs, release runbooks, and public user docs.
+This is a living documentation set. It should evolve with the source code
+rather than be written only after the project is complete. The current set
+contains paired Chinese and English developer, specification, architecture,
+and release documents. Public user documentation already lives in the separate
+`taffish-docs` repository; future additions here should remain source-adjacent,
+such as deeper implementation topics, test contracts, and release runbooks.

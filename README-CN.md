@@ -2,10 +2,17 @@
 
 [English](README.md) | [中文](README-CN.md)
 
-TAFFISH 是一个面向生物信息学命令级可复现执行的 shell-native 可执行包框架。
+TAFFISH 是一个面向生物信息学命令行工具与轻量流程的 shell-native
+可复现执行与交付层。
 
-它将生物信息学命令行工具调用转化为可版本化、可容器解析、可安装、可组合的
-shell 命令，使这些命令既可以在普通 shell 中直接使用，也可以嵌入现有工作流系统。
+> 将可复现性带回 shell。
+
+它通过可执行包模型，将生物信息学命令行工具调用转化为可版本化、可容器解析、
+可安装、可组合的 shell 命令，使这些命令既可以在普通 shell 中直接使用，也可以
+嵌入现有工作流系统。
+
+TAFFISH 不是通用工作流引擎。安装后的 `taf-*` 命令可以由用户、shell 脚本、HPC
+job script、workflow system、Python/R 程序或 AI agent 调用。
 
 当前仓库提供 TAFFISH 核心工具的本地命令行实现、安装器、源码树文档、shell 自动补全文件、
 Vim 语法高亮文件，以及面向支持平台的手动构建二进制 release 载荷。
@@ -16,9 +23,9 @@ Vim 语法高亮文件，以及面向支持平台的手动构建二进制 releas
 - `taf`：管理 TAFFISH app 项目和本地 TAFFISH Hub 包。
 - `taffish-mcp`：通过 stdio MCP 为 AI 客户端暴露安全的 TAFFISH tools/resources/prompts。
 
-当前 release 载荷包含 SHA256 checksum manifest、GPG 签名的 checksum
-manifest 和公开 release key。对于 taf-app，Hub 可信模型基于 index 中记录的
-源码 commit、容器 digest / platform 元数据和 smoke metadata。
+如果希望按步骤了解和使用 TAFFISH，请从
+[TAFFISH 快速开始](https://github.com/taffish/taffish-docs/blob/main/zh/quick-start.cn.md)
+进入。当前 README 继续作为本地实现的源码、安装、平台与 release 参考入口。
 
 ## 目录
 
@@ -27,13 +34,16 @@ manifest 和公开 release key。对于 taf-app，Hub 可信模型基于 index �
 - [快速安装](#快速安装)
   - [标准安装](#标准安装)
   - [中国地区用户](#中国地区用户)
+  - [选择用户级或系统级 Scope](#选择用户级或系统级-scope)
   - [验证安装](#验证安装)
+  - [首次使用](#首次使用)
 - [系统需求](#系统需求)
   - [macOS 依赖](#macos-依赖)
   - [Linux 依赖](#linux-依赖)
 - [安装路径](#安装路径)
 - [运行时配置和镜像源](#运行时配置和镜像源)
 - [安装器选项](#安装器选项)
+- [升级或移除 TAFFISH](#升级或移除-taffish)
 - [本地或离线安装](#本地或离线安装)
 - [从源码构建](#从源码构建)
 - [容器后端](#容器后端)
@@ -160,24 +170,83 @@ curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffis
 curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffish.gitee.sh | sh -s -- --user --force-config
 ```
 
+### 选择用户级或系统级 Scope
+
+安装 scope 和后续 `taf` 操作的 scope 有关，但它们不是一次选择后永久生效的全局模式。
+即使 `taf` 二进制本身是系统级安装，所有支持 scope 的 `taf` 命令每次调用时仍默认使用
+`--user`。
+
+| Scope | 适用场景 | 状态和 app 位置 |
+| --- | --- | --- |
+| `--user` / `-u` | 单个用户，无需管理员权限 | `~/.local/share/taffish` |
+| `--system` / `-s` | 共享服务器或受管工作站 | `/opt/taffish` 和 `/usr/local/bin` |
+
+支持 scope 的命令包括 `update`、`search`、`info`、`install`、`outdated`、
+`upgrade`、`prune`、`uninstall`、`list`、`which`、`doctor` 和 `config`。
+`new`、`check`、`run`、`build`、`publish` 等项目命令不会因为添加
+`--system` 就变成系统操作。
+
+系统级写操作通常需要管理员权限。`search`、`info`、`list`、`which`、
+`outdated`、`doctor` 等只读操作在 system home 可读时，通常只需要
+`--system`，不需要 `sudo`。
+
 ### 验证安装
 
-安装后验证：
+用户级安装后验证：
 
 ```sh
 taf --version
 taffish --version
 taffish-mcp --version
-taf doctor
+taf doctor --user
 ```
 
-如果安装器提示 `~/.local/bin` 不在 `PATH` 中，把下面这一行加入你的 shell 配置文件：
+用户级安装包含两个命令目录：`~/.local/bin` 保存三个 TAFFISH 核心命令，
+`~/.local/share/taffish/bin` 保存以后通过 `taf install` 安装的 app 命令。
+应把两者都加入 shell 配置文件：
 
 ```sh
-export PATH="$HOME/.local/bin:$PATH"
+export PATH="$HOME/.local/bin:$HOME/.local/share/taffish/bin:$PATH"
 ```
 
 然后打开一个新 shell，或者运行 `source ~/.zshrc` / `source ~/.bashrc`。
+
+系统级安装后，应显式检查 system scope：
+
+```sh
+taf --version
+taf doctor --system
+```
+
+系统命令目录默认是 `/usr/local/bin`，通常已经位于所有用户的 `PATH` 中。
+
+### 首次使用
+
+普通用户路径：
+
+```sh
+taf update --user
+taf search --user fastqc
+taf install --user fastqc
+taf list --user
+taf-fastqc -- --help
+```
+
+共享服务器管理员路径：
+
+```sh
+sudo taf update --system
+taf search --system fastqc
+sudo taf install --system fastqc
+taf list --system
+taf which --system taf-fastqc
+```
+
+维护系统 app 时应始终使用相同 scope，例如
+`sudo taf upgrade --system --yes`、`sudo taf prune --system --yes` 和
+`sudo taf uninstall --system APP`。权限、全局补全、Vim 集成、用户/系统混合部署
+和 Apptainer 缓存策略见
+[系统管理员指南](https://github.com/taffish/taffish-docs/blob/main/zh/system-administration.cn.md)。
 
 ## 系统需求
 
@@ -196,13 +265,13 @@ curl or wget
 `taf update` 默认从 GitHub 下载 TAFFISH index。在 GitHub raw 内容被阻断或网络不稳定的环境中，安装本身仍然可以完成，但 `taf update` 可能会输出 warning。可以之后重试：
 
 ```sh
-taf update
+taf update --user
 ```
 
 或者使用镜像/自定义 index：
 
 ```sh
-taf update --url <INDEX-URL>
+taf update --url INDEX_URL
 ```
 
 ### macOS 依赖
@@ -258,25 +327,22 @@ sudo apt-get install -y git gh
 
 ## 安装路径
 
-用户级安装默认路径：
+默认布局：
 
-```text
-bin  = ~/.local/bin
-home = ~/.local/share/taffish
-```
-
-系统级安装默认路径：
-
-```text
-bin  = /usr/local/bin
-home = /opt/taffish
-```
+| Scope | 核心命令目录 | 已安装 app 命令目录 | TAFFISH home |
+| --- | --- | --- | --- |
+| user | `~/.local/bin` | `~/.local/share/taffish/bin` | `~/.local/share/taffish` |
+| system | `/usr/local/bin` | `/usr/local/bin` | `/opt/taffish` |
 
 TAFFISH home 用于保存本地 apps、indexes、缓存镜像、命令启动器、补全文件、Vim 文件、日志和其他运行时数据。
 
 对于系统级安装，app wrapper 和 metadata 位于 system home 下，但容器镜像缓存属于
 运行时状态。Docker 和 Podman 使用自己的 image store；Apptainer 使用 `images/sif`
 下的 SIF 文件。如果多用户需要共享系统级 SIF 文件，请看 Apptainer 部分。
+
+如果自定义了 `TAFFISH_USER_HOME`，还必须把它的 `bin` 子目录加入用户 `PATH`。
+如果系统部署自定义了 `TAFFISH_SYSTEM_HOME` 或 `TAFFISH_SYSTEM_BIN_DIR`，管理员和
+普通用户应使用一致的环境变量设置。
 
 相关环境变量：
 
@@ -311,25 +377,44 @@ curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffis
 系统级 = /opt/taffish/config.toml
 ```
 
-查看当前生效配置：
+分别查看用户级与系统级配置：
 
 ```sh
-taf config
-taf config path
+taf config --user
+taf config path --user
+taf config --system
+taf config path --system
 ```
 
 初始化默认 GitHub profile：
 
 ```sh
-taf config init --github
+taf config init --user --github
 ```
 
 初始化中国镜像 profile 模板：
 
 ```sh
-taf config init --china --force
-taf update
+taf config init --user --china --force
+taf update --user
 ```
+
+受管系统可以这样初始化：
+
+```sh
+sudo taf config init --system --github
+sudo taf update --system
+```
+
+受管系统使用中国镜像 profile 时：
+
+```sh
+sudo taf config init --system --china --force
+sudo taf update --system
+```
+
+user scope 会先加载 system config，再应用可选的 user config 覆盖；system scope
+读取 system config，但不读取 user config。`TAFFISH_CONFIG` 仍然是最后的显式覆盖。
 
 生成的中国镜像模板有意保持简单：
 
@@ -352,7 +437,7 @@ enabled = true
 - `[index].url` 控制 `taf update` 从哪里下载静态 index。
 - `[[source.rewrite]]` 会在 `taf install` clone app 仓库时重写 index 里的 canonical source URL。
 - `taf publish` 仍然只支持 GitHub；镜像源是读取和安装路径，不是发布目标。
-- `taf update --url <INDEX-URL>` 和 `TAFFISH_INDEX_URL` 仍可作为一次性覆盖。
+- `taf update --url INDEX_URL` 和 `TAFFISH_INDEX_URL` 仍可作为一次性覆盖。
 
 如果你的镜像组织名或内网 Git 服务路径不同，直接编辑 `config.toml` 即可。镜像侧需要提供兼容的仓库、tag 和相同的 TAFFISH index schema。
 
@@ -390,6 +475,30 @@ enabled = true
 curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffish.gitee.sh \
   | sh -s -- --user --os linux --arch amd64
 ```
+
+## 升级或移除 TAFFISH
+
+`taf upgrade` 只升级已经安装的 taf-app，不会升级 `taf`、`taffish` 或
+`taffish-mcp` 二进制。升级核心工具时，应使用相同 scope 重新运行安装器，并指定目标版本：
+
+```sh
+# 用户级安装
+curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sh -s -- --user --version X.Y.Z
+
+# 系统级安装
+curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sudo sh -s -- --system --version X.Y.Z
+```
+
+TAFFISH 当前没有专用的核心卸载器。移除核心命令前，应先使用匹配的 scope 卸载不再需要的
+app，并备份自定义的 `config.toml`。核心命令文件位于：
+
+```text
+user   = ~/.local/bin/{taf,taffish,taffish-mcp}
+system = /usr/local/bin/{taf,taffish,taffish-mcp}
+```
+
+用户状态位于 `~/.local/share/taffish`，系统状态位于 `/opt/taffish`。只有确认其中没有
+需要保留的 app、index、配置、日志或镜像缓存后，才应移除对应 home。
 
 ## 本地或离线安装
 
@@ -645,7 +754,7 @@ taf doctor --init --user
 2. 管理员预缓存：
 
 ```sh
-sudo taf-<app>-v<version>-r<release> -- --help
+sudo taf-APP-vVERSION-rRELEASE -- --help
 ```
 
 这会让 root 先把 SIF 拉取到 `/opt/taffish/images/sif`。之后普通用户只需要读取已有
@@ -722,7 +831,7 @@ rewrite / mirror 安装可以保持可审计，同时不需要改写 app 源码�
 
 ## Shell 自动补全
 
-安装器会把补全文件复制到：
+安装器会复制补全文件，但不会自动修改 shell 启动文件。补全文件位于：
 
 ```text
 $TAFFISH_HOME/share/completions
@@ -757,6 +866,26 @@ cp ~/.local/share/taffish/share/completions/fish/taf.fish ~/.config/fish/complet
 cp ~/.local/share/taffish/share/completions/fish/taffish.fish ~/.config/fish/completions/
 ```
 
+系统级安装的源文件位于 `/opt/taffish/share/completions`。管理员可以从全局 shell
+配置中加载，也可以安装到对应 shell 的系统补全目录。使用 `bash-completion` 时，常见方式是：
+
+```sh
+sudo install -m 0644 /opt/taffish/share/completions/bash/taf /etc/bash_completion.d/taf
+sudo install -m 0644 /opt/taffish/share/completions/bash/taffish /etc/bash_completion.d/taffish
+```
+
+也可以在全局交互式 Bash 启动文件中加入：
+
+```sh
+source /opt/taffish/share/completions/bash/taf
+source /opt/taffish/share/completions/bash/taffish
+```
+
+Debian 系全局启动文件常用 `/etc/bash.bashrc`，Red Hat 系常用 `/etc/bashrc`。
+Zsh site-functions 和 Fish
+vendor completions 的系统目录会随发行版变化，详见
+[completion/README.md](completion/README.md)。
+
 ## Vim 语法高亮
 
 安装器会把 Vim 文件复制到：
@@ -781,7 +910,20 @@ cp ~/.local/share/taffish/share/vim/syntax/taf.vim ~/.config/nvim/syntax/
 cp ~/.local/share/taffish/share/vim/ftdetect/taf.vim ~/.config/nvim/ftdetect/
 ```
 
+系统级安装时，可以把 `/opt/taffish/share/vim` 中的文件复制到站点 Vim runtime，
+或者在全局 Vim 配置中加入：
+
+```vim
+set runtimepath+=/opt/taffish/share/vim
+```
+
+不同操作系统的 Vim/Neovim 系统配置目录不同，常见布局见
+[vim-highlight/README.md](vim-highlight/README.md)。
+
 ## 基础使用
+
+本节示例使用 user scope。读取或维护系统安装时应添加 `--system`，系统级写操作还需要
+管理员权限。
 
 更新本地 index：
 
@@ -891,16 +1033,9 @@ taf publish --release --yes
 
 ## MCP / AI 集成
 
-TAFFISH `0.4.0` 引入了 `taffish-mcp`，这是一个保守的 stdio MCP server，
-面向 AI 客户端暴露 TAFFISH 能力。TAFFISH `0.5.0` 增加了只读的 TAF
-源码/文件编译器工具，TAFFISH `0.6.0` 继续增加了面向 AI 的 taf-app inspection、
-当前项目 inspection 和安全的 app invocation compile。TAFFISH `0.7.0` 让 MCP
-compile 工具与运行时容器 backend override 保持一致。TAFFISH `0.8.0`
-会在容器化 taf-app inspection 中暴露 smoke/trust 元数据，但不会运行 smoke
-test 或启动容器。TAFFISH `0.10.0` 增加了用于
-outdated/install-all/upgrade/prune 工作流的安全 package 维护计划工具。
-TAFFISH `0.10.1` 修复 block-slot 参数渲染问题，并扩展外部 TAFFISH
-conformance 覆盖：
+`taffish-mcp` 是面向 AI 客户端的保守 stdio MCP server。当前能力包括只读的 TAF
+校验、编译和摘要，taf-app 与项目 inspection，安全的 app invocation compile，
+smoke/trust 元数据检查，以及不执行真实变更的 package 维护规划。当前 tools 包括：
 
 - `taffish_get_version` / `taffish_get_help`
 - `taffish_validate_source` / `taffish_validate_file`
@@ -918,6 +1053,10 @@ conformance 覆盖：
 - `taffish_inspect_project`
 - `taffish_summarize_project_usage`
 - `taffish_compile_project`
+
+完整接口和不同客户端配置见公开的
+[TAFFISH MCP 指南](https://github.com/taffish/taffish-docs/blob/main/zh/taffish-mcp.cn.md)
+与 [MCP 客户端接入指南](https://github.com/taffish/taffish-docs/blob/main/zh/mcp-clients.cn.md)。
 
 MCP 接口还提供相对安全的 project、Hub、config、history、resource 和 prompt
 操作，不暴露 `taf run`、`taf publish` 或镜像构建动作。app invocation compile
@@ -947,29 +1086,30 @@ MCP 客户端配置示例：
 
 ## 故障排查
 
-### `taf: command not found`
+### 找不到 `taf` 或已安装的 app 命令
 
-安装 bin 目录不在 `PATH` 中。
-
-用户级安装：
+用户级安装的核心命令和 app 命令位于不同目录，应把两者都加入 `PATH`：
 
 ```sh
-export PATH="$HOME/.local/bin:$PATH"
+export PATH="$HOME/.local/bin:$HOME/.local/share/taffish/bin:$PATH"
 ```
+
+系统级安装的核心命令和 app 命令默认都位于 `/usr/local/bin`。如果使用了自定义 home
+或 bin 目录，应改为添加对应的命令目录。
 
 ### `taf update` 出现 GitHub connection reset
 
 这通常是访问 GitHub raw 内容时的网络/代理问题。可以之后重试，设置代理，或者使用自定义 index URL：
 
 ```sh
-taf update --url <INDEX-URL>
+taf update --url INDEX_URL
 ```
 
 如果需要持久使用镜像源配置：
 
 ```sh
-taf config init --china --force
-taf update
+taf config init --user --china --force
+taf update --user
 ```
 
 ### macOS 提示缺少 `libzstd.1.dylib`
@@ -1002,7 +1142,7 @@ taf doctor --init --user
 共享服务器上，管理员可以预缓存常用 SIF：
 
 ```sh
-sudo taf-<app>-v<version>-r<release> -- --help
+sudo taf-APP-vVERSION-rRELEASE -- --help
 ```
 
 也可以明确允许一个共享可写的系统级 SIF 缓存：
