@@ -52,6 +52,7 @@ Vim 语法高亮文件，以及面向支持平台的手动构建二进制 releas
   - [Apptainer](#apptainer)
 - [TAF App Smoke 元数据](#taf-app-smoke-元数据)
 - [GitHub 和发布依赖](#github-和发布依赖)
+- [环境诊断](#环境诊断)
 - [Shell 自动补全](#shell-自动补全)
 - [Vim 语法高亮](#vim-语法高亮)
 - [基础使用](#基础使用)
@@ -828,6 +829,26 @@ TAFFISH 不会在内部处理 GitHub 登录。请在 TAFFISH 外部配置 SSH ke
 如果本地 index 提供了 `source.commit`，`taf install` 会在构建 command wrapper 前
 校验安装源码确实解析到该 Git commit，并且源码工作区是干净的。这样 source
 rewrite / mirror 安装可以保持可审计，同时不需要改写 app 源码文件。
+
+## 环境诊断
+
+`taf doctor` 是诊断 TAFFISH 安装的只读优先入口：
+
+```sh
+taf doctor --user
+taf doctor --system
+taf doctor --user --shell bash --verbose
+taf doctor --user --shell zsh --json
+```
+
+它检查 TAFFISH home、config、本地 index、command path、shell completion、
+Vim/Neovim 文件、Apptainer SIF cache，以及有时间上限的 Docker、Podman、
+Apptainer readiness probe。默认输出保持简洁；`--verbose` 显示 evidence 和
+remediation，`--json` 输出稳定的 `taffish.doctor/v1` schema。可以用
+`--shell auto|bash|zsh|fish` 获取指定 shell 的 completion 建议。
+
+doctor 不修改 shell/editor 配置或权限，不启动服务，不拉取镜像，也不运行容器。
+只有显式 `--init` 才创建 TAFFISH 自己的目录；system scope 初始化仍要求 root。
 
 ## Shell 自动补全
 

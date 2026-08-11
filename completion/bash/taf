@@ -91,6 +91,10 @@ _taf_complete()
             COMPREPLY=( $(compgen -d -- "$cur") )
             return 0
             ;;
+        --shell)
+            [[ "$cmd" == "doctor" ]] && COMPREPLY=( $(compgen -W "auto bash zsh fish" -- "$cur") )
+            return 0
+            ;;
         --id)
             [[ "$cmd" == "history" ]] && return 0
             ;;
@@ -146,7 +150,7 @@ _taf_complete()
             opts="-u --user -s --system -j --json -h --help"
             ;;
         doctor)
-            opts="-i --init -u --user -s --system -h --help"
+            opts="-i --init -u --user -s --system -j --json --verbose --shell -h --help"
             ;;
         config)
             opts="show path init -u --user -s --system --github --china -f --force -h --help"

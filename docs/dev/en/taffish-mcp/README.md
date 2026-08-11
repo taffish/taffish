@@ -26,6 +26,13 @@ Compile tools may return generated shell code, but they do not execute it. App i
 Smoke and trust metadata are exposed as data for inspection. MCP does not run
 smoke commands, pull images, or start containers to verify them.
 
+`taffish_check_environment` is the read-only projection of
+`taf.core:system-doctor`. It returns the additive diagnostic schema for homes,
+config, index, PATH, completion, Vim/Neovim, the Apptainer SIF cache, and
+bounded backend probes. Its input schema intentionally contains no init, fix,
+force, or repair operation. It does not edit configuration, change
+permissions, start services, pull images, or run containers.
+
 Package maintenance tools are planner-oriented. `taffish_check_outdated`,
 `taffish_plan_install_all`, `taffish_plan_upgrade`, and `taffish_plan_prune`
 call the same `taf-core` maintenance APIs as the CLI, but always use dry-run
@@ -75,6 +82,8 @@ Tool names use a stable `taffish_` prefix. The names should remain short enough 
 5. `taffish_check_outdated`, `taffish_plan_install_all`,
    `taffish_plan_upgrade`, and `taffish_plan_prune` are package-maintenance
    planners; MCP should use them before suggesting mutating CLI commands.
+6. `taffish_check_environment` reuses the core doctor result and only exposes
+   read-only structured diagnostics; it must never acquire init/repair inputs.
 
 Errors should use structured output when practical:
 

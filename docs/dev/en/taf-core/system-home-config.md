@@ -54,7 +54,8 @@ share/vim/ftdetect
 logs
 ```
 
-`doctor --init` creates these directories.
+`doctor --init` creates these directories. Plain `taf doctor` remains
+read-only and reports missing or non-writable paths without changing them.
 
 ## Scope
 
@@ -91,6 +92,11 @@ Effective config starts from defaults and then merges:
 3. explicit config specified by `TAFFISH_CONFIG`.
 
 Later config overrides earlier config. `config-files` records the actual loaded file list.
+
+`taf doctor` parses this effective configuration as a diagnostic. A malformed
+config is reported as an error with remediation, but doctor never rewrites it.
+Doctor also checks whether the active home's `index/current.json` snapshot is
+present and readable; it does not download an index.
 
 ## Index URL Resolution Priority
 
@@ -137,4 +143,3 @@ When changing home/config, check:
 3. Whether Gitee/GitHub mirror rules are correct.
 4. Whether new config fields require schema upgrade.
 5. Whether environment variable priority matches user expectations.
-

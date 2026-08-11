@@ -26,6 +26,12 @@ MCP server 暴露的是偏只读和偏编译的能力。它有意不暴露：
 Smoke 和 trust 元数据只作为数据暴露给 AI 检查。MCP 不会运行 smoke command，
 也不会拉取镜像或启动容器来验证它们。
 
+`taffish_check_environment` 是 `taf.core:system-doctor` 的只读投影，返回 home、
+config、index、PATH、completion、Vim/Neovim、Apptainer SIF cache 和有时间上限
+backend probe 的 additive diagnostic schema。它的 input schema 明确不包含
+init、fix、force 或 repair 操作，也不会修改配置或权限、启动服务、拉取镜像或
+运行容器。
+
 Package 维护工具以 planner 为核心。`taffish_check_outdated`、
 `taffish_plan_install_all`、`taffish_plan_upgrade` 和 `taffish_plan_prune`
 调用的仍然是 CLI 使用的 `taf-core` 维护 API，但在 MCP 中始终保持 dry-run
@@ -74,6 +80,8 @@ Tool 名字统一使用稳定的 `taffish_` 前缀。名字应该足够短，方
 5. `taffish_check_outdated`、`taffish_plan_install_all`、
    `taffish_plan_upgrade` 和 `taffish_plan_prune` 是 package 维护 planner；
    MCP 应先用它们生成计划，再建议用户执行有副作用的 CLI 命令。
+6. `taffish_check_environment` 复用 core doctor result，只暴露只读结构化诊断，
+   不能获得 init/repair 输入。
 
 错误结果应尽量使用结构化输出：
 

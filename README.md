@@ -56,6 +56,7 @@ for the local implementation.
   - [Apptainer](#apptainer)
 - [TAF App Smoke Metadata](#taf-app-smoke-metadata)
 - [GitHub and Publishing Dependencies](#github-and-publishing-dependencies)
+- [Environment Diagnostics](#environment-diagnostics)
 - [Shell Completion](#shell-completion)
 - [Vim Syntax Highlighting](#vim-syntax-highlighting)
 - [Basic Usage](#basic-usage)
@@ -889,6 +890,29 @@ When the local index provides `source.commit`, `taf install` verifies that the
 installed source resolves to that exact Git commit and that the checked source
 worktree is clean before building the command wrapper. This keeps source
 rewrite/mirror installs auditable without rewriting app source files.
+
+## Environment Diagnostics
+
+`taf doctor` is the read-only-first entry point for diagnosing a TAFFISH
+installation:
+
+```sh
+taf doctor --user
+taf doctor --system
+taf doctor --user --shell bash --verbose
+taf doctor --user --shell zsh --json
+```
+
+It checks TAFFISH homes, config, the local index, command paths, shell
+completion, Vim/Neovim files, the Apptainer SIF cache, and bounded readiness
+probes for Docker, Podman, and Apptainer. Default output is concise;
+`--verbose` includes evidence and remediation, while `--json` emits the stable
+`taffish.doctor/v1` schema. Use `--shell auto|bash|zsh|fish` for shell-specific
+completion guidance.
+
+Doctor does not edit shell/editor configuration, change permissions, start
+services, pull images, or run containers. Only explicit `--init` creates
+TAFFISH-owned directories. System-scope initialization still requires root.
 
 ## Shell Completion
 

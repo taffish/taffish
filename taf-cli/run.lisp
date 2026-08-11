@@ -1951,19 +1951,18 @@ Options:
 (defun %get-taf-doctor-help-string ()
   "Usage:
   taf doctor [-h | --help]
-  taf doctor [-u | --user | -s | --system]
+  taf doctor [-u | --user | -s | --system] [--shell SHELL]
   taf doctor [-i | --init] [-u | --user | -s | --system]
+  taf doctor [-j | --json | --verbose] [--shell SHELL]
 
 Check or initialize the local TAFFISH environment.
 
 Details:
   - resolves TAFFISH_USER_HOME, TAFFISH_SYSTEM_HOME and TAFFISH_SYSTEM_BIN_DIR
-  - checks required directories for the selected scope
-  - checks TAFFISH_SYSTEM_BIN_DIR for system command launchers
-  - checks required apps/index/images/bin/cache/share/logs directories
-  - checks common executables: git, gh, docker, podman, apptainer,
-    mksquashfs, squashfuse, fuse2fs, gocryptfs, taffish
-  - checks whether the selected TAFFISH bin directory is in PATH
+  - checks home/config/index, PATH, completion, Vim, SIF cache and backends
+  - uses bounded probes for docker, podman and apptainer without running apps
+  - reports mksquashfs, squashfuse, fuse2fs and gocryptfs availability
+  - does not edit shell/Vim config, permissions, services or container state
   - --init creates missing directories for the selected scope
   - --system --init requires root permission
 
@@ -1971,6 +1970,9 @@ Options:
   -i, --init                Create missing TAFFISH home directories
   -u, --user                Check or initialize user home [default]
   -s, --system              Check or initialize system home
+  -j, --json                Print stable JSON diagnostics
+  --verbose                 Print evidence and remediation for every check
+  --shell SHELL             Inspect auto|bash|zsh|fish [default: auto]
   -h, --help                Show this help")
 
 (defun %parse-taf-doctor-args (raw-args)
@@ -1978,16 +1980,22 @@ Options:
         (scope :user)
         (scope-seen-p nil)
         (user-seen-p nil)
-        (system-seen-p nil))
+        (system-seen-p nil)
+        (json-p nil)
+        (verbose-p nil)
+        (shell :auto))
     (labels ((parse (args)
                (cond
                  ((null args)
                   (when (and user-seen-p system-seen-p)
                     (error "[doctor] --user and --system can't be used together."))
-                  (values :doctor init-p scope scope-seen-p))
+                  (when (and json-p verbose-p)
+                    (error "[doctor] --json and --verbose can't be used together."))
+                  (values :doctor init-p scope scope-seen-p
+                          json-p verbose-p shell))
                  ((and (null (cdr args))
                        (member (car args) '("-h" "--help") :test #'string-equal))
-                  (values :help nil nil nil))
+                  (values :help nil nil nil nil nil nil))
                  ((%taf-option-p (car args) "-i" "--init")
                   (setf init-p t)
                   (parse (cdr args)))
@@ -2001,6 +2009,22 @@ Options:
                         scope-seen-p t
                         system-seen-p t)
                   (parse (cdr args)))
+                 ((%taf-option-p (car args) "-j" "--json")
+                  (setf json-p t)
+                  (parse (cdr args)))
+                 ((string-equal (car args) "--verbose")
+                  (setf verbose-p t)
+                  (parse (cdr args)))
+                 ((string-equal (car args) "--shell")
+                  (unless (cdr args)
+                    (error "[doctor] --shell requires auto, bash, zsh, or fish."))
+                  (let ((value (second args)))
+                    (unless (member value '("auto" "bash" "zsh" "fish")
+                                    :test #'string-equal)
+                      (error "[doctor] invalid --shell value: ~S. Expected auto, bash, zsh, or fish."
+                             value))
+                    (setf shell (intern (string-upcase value) :keyword)))
+                  (parse (cddr args)))
                  (t
                   (error "[doctor] unknown option: ~S~%~A"
                          (car args)
@@ -2008,7 +2032,7 @@ Options:
       (parse raw-args))))
 
 (defun run-taf-doctor (raw-args)
-  (multiple-value-bind (mode init-p scope scope-seen-p)
+  (multiple-value-bind (mode init-p scope scope-seen-p json-p verbose-p shell)
       (%parse-taf-doctor-args raw-args)
     (case mode
       (:help
@@ -2019,7 +2043,10 @@ Options:
                   (taf.core::%root-user-p))
          (error "[doctor] running `taf doctor --init` as root is ambiguous. Use --system explicitly, or --user with TAFFISH_USER_HOME."))
        (taf.core:system-doctor :init-p init-p
-                               :scope scope))
+                               :scope scope
+                               :shell shell
+                               :detail-p verbose-p
+                               :json-p json-p))
       (t
        (error "[doctor] unknown doctor mode: ~S" mode)))))
 

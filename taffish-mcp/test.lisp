@@ -19,6 +19,14 @@
     (loop for i from 0 below (length tools)
           collect (han.json:get-json (aref tools i) "name"))))
 
+(defun %mcp-test-tool (name)
+  (let* ((result (tools-list))
+         (tools (han.json:get-json result "tools")))
+    (loop for i from 0 below (length tools)
+          for tool = (aref tools i)
+          when (string= name (han.json:get-json tool "name"))
+            return tool)))
+
 (defun %mcp-test-structured (tool-result)
   (han.json:get-json tool-result "structuredContent"))
 
@@ -314,6 +322,42 @@ Initial MCP project test release.
      (loop with features = (han.json:get-json structured "features")
            for i from 0 below (length features)
            thereis (string= "hub_upgrade_plan" (aref features i))))))
+
+(han.test:deftest test-taffish-mcp-check-environment-projects-diagnostics ()
+  (let ((root (%mcp-test-temp-root)))
+    (unwind-protect
+         (let* ((user-home (han.path:join-path root "user/"))
+                (system-home (han.path:join-path root "system/"))
+                (result
+                  (call-tool
+                   "taffish_check_environment"
+                   (%json-object
+                    (cons "scope" "user")
+                    (cons "userHome" (han.path:->namestring user-home))
+                    (cons "systemHome" (han.path:->namestring system-home)))))
+                (structured (%mcp-test-structured result))
+                (diagnostics (han.json:get-json structured "diagnostics")))
+           (han.test:check-equal nil (han.json:get-json result "isError"))
+           (han.test:check-true (vectorp diagnostics))
+           (han.test:check-true (> (length diagnostics) 0))
+           (han.test:check-true
+            (stringp (han.json:get-json structured "diagnostic_status")))
+           (han.test:check-false
+            (han.json:get-json structured "init_p")))
+      (han.path:delete-directory-tree root :if-does-not-exist :ignore))))
+
+(han.test:deftest test-taffish-mcp-check-environment-schema-is-read-only ()
+  (let* ((tool (%mcp-test-tool "taffish_check_environment"))
+         (schema (han.json:get-json tool "inputSchema"))
+         (properties (han.json:get-json schema "properties")))
+    (han.test:check-true tool)
+    (han.test:check-true
+     (search "read-only" (han.json:get-json tool "description")))
+    (dolist (forbidden '("init" "initP" "fix" "force" "repair"))
+      (multiple-value-bind (value present-p)
+          (han.json:get-json properties forbidden)
+        (declare (ignore value))
+        (han.test:check-false present-p)))))
 
 (han.test:deftest test-taffish-mcp-get-help ()
   (let* ((result (call-tool

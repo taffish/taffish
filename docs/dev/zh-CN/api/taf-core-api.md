@@ -336,9 +336,25 @@ profile：
 
 稳定性：稳定。
 
-作用：检查目录、可执行程序、PATH 状态。
+作用：返回兼容的目录、executable、PATH 检查，并增加 config、index、command
+path、shell completion、Vim/Neovim、Apptainer SIF 策略和有时间上限的
+container backend readiness 结构化诊断。
 
-副作用：`init-p t` 时创建缺失目录。system scope init 需要 root。
+新增可选参数：
+
+```lisp
+:shell :auto|:bash|:zsh|:fish
+:detail-p boolean
+:json-p boolean
+```
+
+result 保留 `:status`、`:directories`、`:executables` 和 `:paths`，并新增
+`:diagnostic-status` 与 `:diagnostics`。`:verbose` 控制渲染；JSON schema 为
+`taffish.doctor/v1`。
+
+副作用：默认无副作用。只有 `init-p t` 时创建 TAFFISH 自己的缺失目录，system
+scope init 需要 root。它不修改 shell/editor 配置或权限，不启动服务，不拉取镜像，
+也不运行容器。
 
 ### `taf.core:system-history`
 

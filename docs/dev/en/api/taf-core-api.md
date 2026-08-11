@@ -338,9 +338,26 @@ Profiles:
 
 Stability: stable.
 
-Role: check directories, executables, and PATH status.
+Role: return legacy directory/executable/PATH checks plus structured diagnostics
+for config, index, command paths, shell completion, Vim/Neovim, Apptainer SIF
+policy, and bounded container-backend readiness.
 
-Side effects: creates missing directories when `init-p t`. System-scope init requires root.
+Additive controls:
+
+```lisp
+:shell :auto|:bash|:zsh|:fish
+:detail-p boolean
+:json-p boolean
+```
+
+The result preserves `:status`, `:directories`, `:executables`, and `:paths`,
+and adds `:diagnostic-status` and `:diagnostics`. Rendering is controlled by
+`:verbose`; JSON uses schema `taffish.doctor/v1`.
+
+Side effects: none by default. It creates missing TAFFISH-owned directories
+only when `init-p t`. System-scope init requires root. It never edits shell or
+editor configuration, changes permissions, starts services, pulls images, or
+runs containers.
 
 ### `taf.core:system-history`
 

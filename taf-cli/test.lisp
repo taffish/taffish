@@ -1020,6 +1020,10 @@
     (check-equal (%taf-cli-string-contains-p help-string "--init") t)
     (check-equal (%taf-cli-string-contains-p help-string "--user") t)
     (check-equal (%taf-cli-string-contains-p help-string "--system") t)
+    (check-equal (%taf-cli-string-contains-p help-string "-j, --json") t)
+    (check-equal (%taf-cli-string-contains-p help-string "--verbose") t)
+    (check-equal (%taf-cli-string-contains-p help-string "--shell") t)
+    (check-equal (%taf-cli-string-contains-p help-string "auto|bash|zsh|fish") t)
     (check-equal (%taf-cli-string-contains-p help-string "PATH") t)
     (check-equal (%taf-cli-string-contains-p help-string "TAFFISH_USER_HOME") t)
     (check-equal (%taf-cli-string-contains-p help-string "mksquashfs") t)
@@ -1057,6 +1061,33 @@
     (lambda ()
       (taf.cli::%parse-taf-doctor-args '("--user" "--system"))))
    t))
+
+(deftest test-taf-cli-parse-taf-doctor-args-output-and-shell ()
+  (multiple-value-bind
+        (mode init-p scope scope-seen-p json-p verbose-p shell)
+      (taf.cli::%parse-taf-doctor-args
+       '("--json" "--shell" "zsh" "--system"))
+    (check-equal mode :doctor)
+    (check-equal init-p nil)
+    (check-equal scope :system)
+    (check-equal scope-seen-p t)
+    (check-equal json-p t)
+    (check-equal verbose-p nil)
+    (check-equal shell :zsh)))
+
+(deftest test-taf-cli-parse-taf-doctor-args-invalid-output-error ()
+  (check-true
+   (%taf-cli-signal-error-p
+    (lambda ()
+      (taf.cli::%parse-taf-doctor-args '("--json" "--verbose")))))
+  (check-true
+   (%taf-cli-signal-error-p
+    (lambda ()
+      (taf.cli::%parse-taf-doctor-args '("--shell" "powershell")))))
+  (check-true
+   (%taf-cli-signal-error-p
+    (lambda ()
+      (taf.cli::%parse-taf-doctor-args '("--shell"))))))
 
 (deftest test-taf-cli-config-help-string-basic ()
   (let ((help-string (taf.cli::%get-taf-config-help-string)))

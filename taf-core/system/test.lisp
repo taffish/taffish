@@ -293,6 +293,367 @@ enabled = true
       (check-equal (getf result :status) :needs-init)
       (check-equal (probe-file system-home) nil))))
 
+(defun %taf-system-doctor-diagnostic (result id)
+  (find id
+        (getf result :diagnostics)
+        :key (lambda (item) (getf item :id))
+        :test #'eql))
+
+(defun %taf-system-doctor-missing-backend-probe (spec)
+  (list :name (first spec)
+        :status :missing
+        :path nil
+        :exit-code nil
+        :detail ""))
+
+(defmacro with-taf-system-doctor-stubs (&body body)
+  `(let ((taf.core::*taffish-doctor-backend-probe-function*
+           #'%taf-system-doctor-missing-backend-probe))
+     ,@body))
+
+(defun %taf-system-doctor-share-files (home)
+  (dolist (relative '("share/completions/bash/taf"
+                      "share/completions/bash/taffish"
+                      "share/completions/zsh/_taf"
+                      "share/completions/zsh/_taffish"
+                      "share/completions/fish/taf.fish"
+                      "share/completions/fish/taffish.fish"
+                      "share/vim/syntax/taf.vim"
+                      "share/vim/ftdetect/taf.vim"))
+    (%taf-system-write-string (han.path:join-path home relative) "test\n")))
+
+(defun %taf-system-chmod (mode path)
+  (let ((chmod (han.os:find-executable "chmod")))
+    (unless chmod
+      (error "chmod is required for this test."))
+    (multiple-value-bind (out err code)
+        (han.os:run-program
+         (list chmod mode (han.path:->namestring path))
+         :output :string
+         :error-output :string
+         :ignore-error-status t)
+      (declare (ignore out))
+      (unless (and (integerp code) (= code 0))
+        (error "chmod ~A failed: ~A" mode err)))))
+
+(deftest test-taf-system-doctor-adds-unified-diagnostic-schema ()
+  (with-taf-system-temp-dir (user-home)
+    (let* ((system-home (%taf-system-temp-dir-named "taf-system-unused"))
+           (result (taf.core:system-doctor
+                    :scope :user
+                    :user-home user-home
+                    :system-home system-home
+                    :verbose nil))
+           (diagnostics (getf result :diagnostics)))
+      (check-true (consp diagnostics))
+      (check-true (member (getf result :diagnostic-status)
+                          '(:ok :warning :error :unknown)
+                          :test #'eql))
+      (dolist (item diagnostics)
+        (dolist (key '(:id :status :scope :summary :evidence
+                       :remediation :docs-url))
+          (check-true (taf.core::%plist-has-key-p item key)))
+        (check-true (member (getf item :status)
+                            '(:ok :warning :error :unknown :not-applicable)
+                            :test #'eql)))
+      ;; The legacy result contract remains available to existing callers.
+      (check-true (taf.core::%plist-has-key-p result :status))
+      (check-true (taf.core::%plist-has-key-p result :directories))
+      (check-true (taf.core::%plist-has-key-p result :executables))
+      (check-true (taf.core::%plist-has-key-p result :paths)))))
+
+(deftest test-taf-system-doctor-covers-required-diagnostic-groups ()
+  (with-taf-system-temp-dir (user-home)
+    (let* ((system-home (%taf-system-temp-dir-named "taf-system-unused"))
+           (result (taf.core:system-doctor
+                    :scope :user
+                    :user-home user-home
+                    :system-home system-home
+                    :verbose nil)))
+      (dolist (id '(:home :config :index :command-path :shell-completion
+                    :vim-runtime :apptainer-sif-cache :container-backends))
+        (check-true (%taf-system-doctor-diagnostic result id))))))
+
+(deftest test-taf-system-doctor-default-remains-read-only ()
+  (with-taf-system-temp-dir (user-home)
+    (let ((system-home (%taf-system-temp-dir-named "taf-system-unused")))
+      (check-equal (probe-file user-home) nil)
+      (taf.core:system-doctor :scope :user
+                              :user-home user-home
+                              :system-home system-home
+                              :verbose nil)
+      (check-equal (probe-file user-home) nil)
+      (check-equal (probe-file system-home) nil))))
+
+(deftest test-taf-system-doctor-config-and-index-diagnostics ()
+  (with-taf-system-temp-dir (root)
+    (let* ((user-home (han.path:join-path root "user/"))
+           (system-home (han.path:join-path root "system/"))
+           (index-file (han.path:join-path user-home "index/current.json")))
+      (%taf-system-write-string index-file "{}\n")
+      (with-taf-system-doctor-stubs
+        (let ((result (taf.core:system-doctor
+                       :scope :user
+                       :user-home user-home
+                       :system-home system-home
+                       :verbose nil)))
+          (check-equal
+           (getf (%taf-system-doctor-diagnostic result :config) :status)
+           :ok)
+          (check-equal
+           (getf (%taf-system-doctor-diagnostic result :index) :status)
+           :ok)))
+      (%taf-system-write-string
+       (han.path:join-path user-home "config.toml")
+       "this is not valid TOML\n")
+      (with-taf-system-doctor-stubs
+        (let ((result (taf.core:system-doctor
+                       :scope :user
+                       :user-home user-home
+                       :system-home system-home
+                       :verbose nil)))
+          (check-equal
+           (getf (%taf-system-doctor-diagnostic result :config) :status)
+           :error))))))
+
+(deftest test-taf-system-doctor-command-path-status ()
+  (let ((ok (taf.core::%doctor-command-path-diagnostic
+             :user
+             (list (list :path "/tmp/bin/" :status :ok))
+             (list (list :name "taf" :path "/tmp/bin/taf")
+                   (list :name "taffish" :path "/tmp/bin/taffish"))))
+        (warning (taf.core::%doctor-command-path-diagnostic
+                  :user
+                  (list (list :path "/tmp/bin/" :status :not-in-path))
+                  (list (list :name "taf" :path nil)
+                        (list :name "taffish" :path nil)))))
+    (check-equal (getf ok :status) :ok)
+    (check-equal (getf warning :status) :warning)
+    (check-true (search "export PATH=" (getf warning :remediation)))))
+
+(deftest test-taf-system-doctor-completion-missing-unknown-and-active ()
+  (with-taf-system-temp-dir (root)
+    (let* ((home (han.path:join-path root "taffish/"))
+           (os-home (han.path:join-path root "os-home/"))
+           (taf.core::*taffish-doctor-os-home-override* os-home))
+      (check-equal
+       (getf (taf.core::%doctor-completion-diagnostic :user home :bash)
+             :status)
+       :warning)
+      (%taf-system-doctor-share-files home)
+      (dolist (shell '(:bash :zsh :fish))
+        (check-equal
+         (getf (taf.core::%doctor-completion-diagnostic :user home shell)
+               :status)
+         :unknown))
+      (%taf-system-write-string
+       (han.path:join-path os-home ".bashrc")
+       (format nil "source ~Ashare/completions/bash/taf~%source ~Ashare/completions/bash/taffish~%"
+               (han.path:->namestring home)
+               (han.path:->namestring home)))
+      (check-equal
+       (getf (taf.core::%doctor-completion-diagnostic :user home :bash)
+             :status)
+       :ok)
+      (%taf-system-write-string
+       (han.path:join-path os-home ".zshrc")
+       (format nil "fpath=(~Ashare/completions/zsh $fpath)~%autoload -Uz compinit && compinit~%"
+               (han.path:->namestring home)))
+      (check-equal
+       (getf (taf.core::%doctor-completion-diagnostic :user home :zsh)
+             :status)
+       :ok)
+      (%taf-system-write-string
+       (han.path:join-path os-home ".config/fish/completions/taf.fish")
+       "test\n")
+      (%taf-system-write-string
+       (han.path:join-path os-home ".config/fish/completions/taffish.fish")
+       "test\n")
+      (check-equal
+       (getf (taf.core::%doctor-completion-diagnostic :user home :fish)
+             :status)
+       :ok))))
+
+(deftest test-taf-system-doctor-vim-missing-active-and-not-applicable ()
+  (with-taf-system-temp-dir (root)
+    (let* ((home (han.path:join-path root "taffish/"))
+           (os-home (han.path:join-path root "os-home/"))
+           (taf.core::*taffish-doctor-os-home-override* os-home)
+           (editors (list (list :name "vim" :path "/usr/bin/vim")
+                          (list :name "nvim" :path nil)))
+           (no-editors (list (list :name "vim" :path nil)
+                             (list :name "nvim" :path nil))))
+      (check-equal
+       (getf (taf.core::%doctor-vim-diagnostic :user home editors) :status)
+       :warning)
+      (%taf-system-doctor-share-files home)
+      (%taf-system-write-string
+       (han.path:join-path os-home ".vim/syntax/taf.vim") "test\n")
+      (%taf-system-write-string
+       (han.path:join-path os-home ".vim/ftdetect/taf.vim") "test\n")
+      (check-equal
+       (getf (taf.core::%doctor-vim-diagnostic :user home editors) :status)
+       :ok)
+      (check-equal
+       (getf (taf.core::%doctor-vim-diagnostic :user home no-editors) :status)
+       :not-applicable))))
+
+(deftest test-taf-system-doctor-sif-user-and-shared-policies ()
+  (with-taf-system-temp-dir (root)
+    (let* ((user-home (han.path:join-path root "user/"))
+           (system-home (han.path:join-path root "system/"))
+           (user-sif (%taf-system-dir user-home "images/sif/"))
+           (system-sif (%taf-system-dir system-home "images/sif/")))
+      (check-equal
+       (getf (taf.core::%doctor-sif-diagnostic
+              :user user-home system-home)
+             :status)
+       :error)
+      (ensure-directories-exist user-sif)
+      (%taf-system-chmod "0700" user-sif)
+      (check-equal
+       (getf (taf.core::%doctor-sif-diagnostic
+              :system user-home system-home)
+             :status)
+       :warning)
+      (ensure-directories-exist system-sif)
+      (check-equal
+       (getf (taf.core::%doctor-sif-diagnostic
+              :user user-home system-home)
+             :status)
+       :ok)
+      (unwind-protect
+           (progn
+             (%taf-system-chmod "1777" system-sif)
+             (let ((item (taf.core::%doctor-sif-diagnostic
+                          :system user-home system-home)))
+               (check-equal (getf item :status) :ok)
+               (check-true (search "sticky" (getf item :summary))))
+             (%taf-system-chmod "0777" system-sif)
+             (check-equal
+              (getf (taf.core::%doctor-sif-diagnostic
+                     :system user-home system-home)
+                    :status)
+              :error)
+             (%taf-system-chmod "0555" system-sif)
+             (let ((item (taf.core::%doctor-sif-diagnostic
+                          :system user-home system-home)))
+               (check-equal (getf item :status) :ok)
+               (check-true (search "read-only" (getf item :summary))))
+             (%taf-system-chmod "0555" user-sif)
+             (check-equal
+              (getf (taf.core::%doctor-sif-diagnostic
+                     :system user-home system-home)
+                    :status)
+              :error))
+        (%taf-system-chmod "0700" user-sif)
+        (%taf-system-chmod "0700" system-sif)))))
+
+(deftest test-taf-system-doctor-container-statuses ()
+  (flet ((probe-with-status (status)
+           (lambda (spec)
+             (list :name (first spec)
+                   :status status
+                   :path (unless (eql status :missing) "/tmp/backend")
+                   :exit-code (case status (:ok 0) (:timeout 124) (t 1))
+                   :detail "fixture"))))
+    (dolist (case '((:missing :warning)
+                    (:ok :ok)
+                    (:timeout :unknown)
+                    (:unavailable :warning)))
+      (let ((taf.core::*taffish-doctor-backend-probe-function*
+              (probe-with-status (first case))))
+        (check-equal
+         (getf (taf.core::%doctor-container-diagnostic :user) :status)
+         (second case))))))
+
+(deftest test-taf-system-doctor-bounded-probe-exit-and-timeout ()
+  (let ((sh (or (han.os:find-executable "sh")
+                (han.os:find-executable "bash")))
+        (sleep (han.os:find-executable "sleep")))
+    (check-true sh)
+    (check-true sleep)
+    (multiple-value-bind (out err code)
+        (taf.core::%doctor-bounded-shell-command
+         (list sh "-c" "exit 7") 1)
+      (declare (ignore out err))
+      (check-equal code 7))
+    (multiple-value-bind (out err code)
+        (taf.core::%doctor-bounded-shell-command (list sleep "5") 1)
+      (declare (ignore out err))
+      (check-equal code 124))))
+
+(deftest test-taf-system-doctor-text-verbose-and-json-rendering ()
+  (with-taf-system-temp-dir (root)
+    (let ((user-home (han.path:join-path root "user/"))
+          (system-home (han.path:join-path root "system/")))
+      (with-taf-system-doctor-stubs
+        (let ((summary
+                (with-output-to-string (out)
+                  (let ((*standard-output* out))
+                    (taf.core:system-doctor
+                     :scope :user
+                     :user-home user-home
+                     :system-home system-home))))
+              (detail
+                (with-output-to-string (out)
+                  (let ((*standard-output* out))
+                    (taf.core:system-doctor
+                     :scope :user
+                     :user-home user-home
+                     :system-home system-home
+                     :detail-p t))))
+              (json
+                (with-output-to-string (out)
+                  (let ((*standard-output* out))
+                    (taf.core:system-doctor
+                     :scope :user
+                     :user-home user-home
+                     :system-home system-home
+                     :json-p t)))))
+          (check-false (search "evidence    :" summary))
+          (check-true (search "evidence    :" detail))
+          (let ((parsed (han.json:parse-json json)))
+            (check-equal (han.json:get-json parsed "schema_version")
+                         "taffish.doctor/v1")
+            (check-true
+             (vectorp (han.json:get-json parsed "diagnostics")))
+            (let* ((diagnostics (han.json:get-json parsed "diagnostics"))
+                   (first-item (aref diagnostics 0))
+                   (config
+                     (loop for item across diagnostics
+                           when (string= (han.json:get-json item "id") "config")
+                             return item))
+                   (evidence (han.json:get-json config "evidence")))
+              (check-true
+               (stringp (han.json:get-json first-item "summary")))
+              (check-true
+               (stringp (han.json:get-json first-item "docs_url")))
+              (check-true config)
+              (check-true
+               (vectorp (han.json:get-json evidence "loaded_files")))
+              (check-true
+               (stringp (han.json:get-json evidence "index_url"))))))))))
+
+(deftest test-taf-system-doctor-init-does-not-edit-user-config-files ()
+  (with-taf-system-temp-dir (root)
+    (let* ((user-home (han.path:join-path root "taffish/"))
+           (system-home (han.path:join-path root "system/"))
+           (os-home (han.path:join-path root "os-home/"))
+           (bashrc (han.path:join-path os-home ".bashrc"))
+           (vimrc (han.path:join-path os-home ".vimrc"))
+           (taf.core::*taffish-doctor-os-home-override* os-home))
+      (%taf-system-write-string bashrc "# unchanged bashrc\n")
+      (%taf-system-write-string vimrc "\" unchanged vimrc\n")
+      (with-taf-system-doctor-stubs
+        (taf.core:system-doctor :scope :user
+                                :init-p t
+                                :user-home user-home
+                                :system-home system-home
+                                :verbose nil))
+      (check-equal (han.os:load-string bashrc) "# unchanged bashrc\n")
+      (check-equal (han.os:load-string vimrc) "\" unchanged vimrc\n"))))
+
 (deftest test-taf-system-history-path-no-side-effect ()
   (with-taf-system-temp-dir (user-home)
     (let ((result (taf.core:system-history

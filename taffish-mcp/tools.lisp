@@ -119,7 +119,7 @@
                   :required '("path")))
           (%tool "taffish_check_environment"
                  "Check TAFFISH Environment"
-                 "Check local TAFFISH directories, PATH, and related executables. Does not initialize or modify the system."
+                 "Return structured, read-only diagnostics for TAFFISH homes, config, index, PATH, completion, Vim/Neovim, Apptainer SIF cache, and container backend readiness. Does not initialize, repair, or modify the system."
                  (%tool-schema))
           (%tool "taffish_get_config"
                  "Get TAFFISH Config"

@@ -54,7 +54,8 @@ share/vim/ftdetect
 logs
 ```
 
-`doctor --init` 会创建这些目录。
+`doctor --init` 会创建这些目录。普通 `taf doctor` 保持只读，只报告缺失或
+不可写路径，不会修改它们。
 
 ## scope
 
@@ -91,6 +92,10 @@ taffish.config/v1
 3. `TAFFISH_CONFIG` 指定的显式 config。
 
 后面的配置覆盖前面的配置。`config-files` 会记录实际加载的文件列表。
+
+`taf doctor` 会把 effective config 解析纳入诊断。格式错误的 config 会以 error
+和 remediation 报告，但 doctor 不会重写配置。doctor 也会检查 active home 下的
+`index/current.json` 是否存在且可读，但不会下载 index。
 
 ## index URL 解析优先级
 
