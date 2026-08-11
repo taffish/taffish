@@ -95,7 +95,14 @@ echo '<tool>[name: version] Hello, World!'
 2. image 默认派生为 `ghcr.io/taffish/<name>:<version>-r<release>`。
 3. 默认生成 GitHub Actions 工作流，除非传入 `--no-actions`。
 
-Actions 工作流会读取 `taffish.toml`，构建 amd64 和可选 arm64 镜像，并发布 manifest。
+Actions 工作流会读取并校验 `taffish.toml`，然后在 GitHub-hosted 原生 runner 上构建每个
+声明平台。生成模板把 `linux/amd64` 映射到 `ubuntu-24.04`，把 `linux/arm64`
+映射到 `ubuntu-24.04-arm`；未知平台会直接失败，而不是回退到 QEMU。
+
+`[container].build_platforms` 是完整的发布契约。只有绑定同一源码 commit 的全部声明平台
+镜像都可用时，workflow 才创建最终 manifest，并在发布后校验平台集合。手动
+`workflow_dispatch` 支持 `source_ref` 和 `platforms` 子集，可以只重试失败架构而不重复
+构建成功架构。生成器升级不会自动改写现有 app 仓库。
 
 容器化项目还会生成默认 smoke 模板：
 

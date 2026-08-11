@@ -70,8 +70,236 @@ TAF
   )
 }
 
+_taf_project_case_new_docker_workflow_contract() {
+  dir=$TAFFISH_TEST_TMP_ROOT/taf-project-native-actions
+  mkdir -p "$dir"
+  (
+    cd "$dir" || exit 1
+    "$TAF_BIN" new native-actions --tool --docker >/dev/null || exit 1
+    workflow=native-actions/.github/workflows/build-image.yml
+    if [ ! -f "$workflow" ]; then
+      printf 'taf new did not generate workflow: %s\n' "$workflow" >&2
+      exit 1
+    fi
+
+    for required in \
+      "actions/checkout@v6" \
+      "docker/setup-buildx-action@v4" \
+      "docker/login-action@v4" \
+      "docker/build-push-action@v7" \
+      "ubuntu-24.04-arm" \
+      "source_ref:" \
+      "platforms:" \
+      'ref: ${{ env.SOURCE_REF }}' \
+      "fromJSON(needs.prepare.outputs.matrix)" \
+      "source_commit=" \
+      'ref: ${{ needs.prepare.outputs.source_commit }}' \
+      "docker buildx imagetools inspect" \
+      "final manifest is missing declared platforms"
+    do
+      assert_contains "$(cat "$workflow")" "$required" \
+        "generated native Actions workflow: $required" || exit 1
+    done
+
+    for forbidden in \
+      "docker/setup-qemu-action" \
+      "continue-on-error: true" \
+      "publishing amd64-only manifest" \
+      "signac"
+    do
+      if grep -F "$forbidden" "$workflow" >/dev/null 2>&1; then
+        printf 'generated workflow contains forbidden legacy behavior: %s\n' "$forbidden" >&2
+        exit 1
+      fi
+    done
+
+    "$TAF_BIN" new native-no-actions --tool --docker --no-actions >/dev/null || exit 1
+    if [ -e native-no-actions/.github/workflows/build-image.yml ]; then
+      printf 'taf new --no-actions unexpectedly generated build-image.yml\n' >&2
+      exit 1
+    fi
+
+    command -v python3 >/dev/null 2>&1 || {
+      printf 'python3 is required to validate generated workflow scripts\n' >&2
+      exit 1
+    }
+
+    extract_python_block() {
+      wanted=$1
+      output_file=$2
+      awk -v wanted="$wanted" '
+        /^          import json$/ { seen += 1 }
+        seen == wanted && !capture { capture = 1 }
+        capture && /^          PY$/ { exit }
+        capture { sub(/^          /, ""); print }
+      ' "$workflow" > "$output_file"
+    }
+
+    extract_python_block 1 native-actions/.workflow-prepare.py
+    extract_python_block 3 native-actions/.workflow-verify-manifest.py
+    python3 -m py_compile native-actions/.workflow-prepare.py || exit 1
+    python3 -m py_compile native-actions/.workflow-verify-manifest.py || exit 1
+
+    cd native-actions || exit 1
+    cp taffish.toml .workflow-taffish.toml.original || exit 1
+    source_commit=0123456789abcdef0123456789abcdef01234567
+
+    set_build_platforms() {
+      value=$1
+      awk -v value="$value" '
+        /^build_platforms = / {
+          print "build_platforms = \"" value "\""
+          found = 1
+          next
+        }
+        { print }
+        END { if (!found) exit 2 }
+      ' taffish.toml > .workflow-taffish.toml.next || return 1
+      mv .workflow-taffish.toml.next taffish.toml
+    }
+
+    restore_toml() {
+      cp .workflow-taffish.toml.original taffish.toml
+    }
+
+    run_prepare() {
+      source_ref=$1
+      requested_platforms=$2
+      env SOURCE_REF="$source_ref" \
+          SOURCE_COMMIT="$source_commit" \
+          REQUESTED_PLATFORMS="$requested_platforms" \
+          python3 .workflow-prepare.py
+    }
+
+    expect_prepare_failure() {
+      expected_message=$1
+      source_ref=$2
+      requested_platforms=$3
+      set +e
+      failure_output=$(run_prepare "$source_ref" "$requested_platforms" 2>&1)
+      failure_status=$?
+      set -e
+      if [ "$failure_status" -eq 0 ]; then
+        printf 'workflow prepare unexpectedly succeeded: %s\n' "$expected_message" >&2
+        return 1
+      fi
+      assert_contains "$failure_output" "$expected_message" \
+        "workflow prepare failure" || return 1
+    }
+
+    prepare_output=$(run_prepare refs/tags/v0.1.0-r1 "") || exit 1
+    assert_contains "$prepare_output" '"runner":"ubuntu-24.04"' \
+      "default amd64 native runner" || exit 1
+    assert_contains "$prepare_output" '"runner":"ubuntu-24.04-arm"' \
+      "default arm64 native runner" || exit 1
+    assert_contains "$prepare_output" "taffish-amd64-$source_commit" \
+      "default amd64 commit image" || exit 1
+    assert_contains "$prepare_output" "taffish-arm64-$source_commit" \
+      "default arm64 commit image" || exit 1
+
+    set_build_platforms linux/amd64 || exit 1
+    prepare_output=$(run_prepare refs/tags/v0.1.0-r1 "") || exit 1
+    assert_contains "$prepare_output" '"runner":"ubuntu-24.04"' \
+      "amd64-only native runner" || exit 1
+    assert_not_contains "$prepare_output" 'ubuntu-24.04-arm' \
+      "amd64-only excludes arm64 runner" || exit 1
+    assert_not_contains "$prepare_output" 'taffish-arm64-' \
+      "amd64-only excludes arm64 image" || exit 1
+
+    restore_toml || exit 1
+    prepare_output=$(run_prepare refs/tags/v0.1.0-r1 linux/arm64) || exit 1
+    prepare_matrix=$(printf '%s\n' "$prepare_output" | sed -n 's/^matrix=//p')
+    platform_images=$(printf '%s\n' "$prepare_output" | sed -n 's/^platform_images=//p')
+    assert_contains "$prepare_matrix" '"runner":"ubuntu-24.04-arm"' \
+      "arm64 recovery matrix" || exit 1
+    assert_not_contains "$prepare_matrix" '"runner":"ubuntu-24.04"' \
+      "arm64 recovery skips amd64 build" || exit 1
+    assert_contains "$platform_images" "taffish-amd64-$source_commit" \
+      "arm64 recovery keeps amd64 manifest prerequisite" || exit 1
+    assert_contains "$platform_images" "taffish-arm64-$source_commit" \
+      "arm64 recovery keeps arm64 manifest prerequisite" || exit 1
+
+    run_prepare main "" >/dev/null || {
+      printf 'manual branch source_ref was incorrectly treated as a release tag\n' >&2
+      exit 1
+    }
+
+    set_build_platforms linux/amd64,linux/amd64 || exit 1
+    expect_prepare_failure "build platforms must be non-empty and unique" \
+      refs/tags/v0.1.0-r1 "" || exit 1
+    set_build_platforms "" || exit 1
+    expect_prepare_failure "build platforms must be non-empty and unique" \
+      refs/tags/v0.1.0-r1 "" || exit 1
+    set_build_platforms linux/s390x || exit 1
+    expect_prepare_failure "unsupported native build platforms: linux/s390x" \
+      refs/tags/v0.1.0-r1 "" || exit 1
+
+    restore_toml || exit 1
+    expect_prepare_failure "requested platforms are not declared: linux/s390x" \
+      refs/tags/v0.1.0-r1 linux/s390x || exit 1
+    expect_prepare_failure "source tag v0.2.0-r1 does not match v0.1.0-r1" \
+      refs/tags/v0.2.0-r1 "" || exit 1
+
+    awk '
+      /^image = / {
+        print "image = \"ghcr.io/taffish/native-actions:0.1.0-r2\""
+        next
+      }
+      { print }
+    ' taffish.toml > .workflow-taffish.toml.next || exit 1
+    mv .workflow-taffish.toml.next taffish.toml || exit 1
+    expect_prepare_failure "container image tag must be 0.1.0-r1" \
+      refs/tags/v0.1.0-r1 "" || exit 1
+    restore_toml || exit 1
+
+    manifest_dir=$PWD/.workflow-manifest
+    mkdir -p "$manifest_dir"
+    cat > "$manifest_dir/taffish-final-manifest.json" <<'JSON'
+{"schemaVersion":2,"manifests":[{"platform":{"os":"linux","architecture":"amd64"}},{"platform":{"os":"linux","architecture":"arm64"}},{"platform":{"os":"unknown","architecture":"unknown"}}]}
+JSON
+    RUNNER_TEMP="$manifest_dir" \
+      DECLARED_PLATFORMS='["linux/amd64","linux/arm64"]' \
+      python3 .workflow-verify-manifest.py >/dev/null || exit 1
+
+    cat > "$manifest_dir/taffish-final-manifest.json" <<'JSON'
+{"schemaVersion":2,"manifests":[{"platform":{"os":"linux","architecture":"amd64"}}]}
+JSON
+    set +e
+    manifest_output=$(RUNNER_TEMP="$manifest_dir" \
+      DECLARED_PLATFORMS='["linux/amd64","linux/arm64"]' \
+      python3 .workflow-verify-manifest.py 2>&1)
+    manifest_status=$?
+    set -e
+    [ "$manifest_status" -ne 0 ] || {
+      printf 'manifest verification accepted a missing declared platform\n' >&2
+      exit 1
+    }
+    assert_contains "$manifest_output" \
+      "final manifest is missing declared platforms: linux/arm64" \
+      "missing manifest platform" || exit 1
+
+    cat > "$manifest_dir/taffish-final-manifest.json" <<'JSON'
+{"schemaVersion":2,"manifests":[{"platform":{"os":"linux","architecture":"amd64"}},{"platform":{"os":"linux","architecture":"arm64"}},{"platform":{"os":"linux","architecture":"s390x"}}]}
+JSON
+    set +e
+    manifest_output=$(RUNNER_TEMP="$manifest_dir" \
+      DECLARED_PLATFORMS='["linux/amd64","linux/arm64"]' \
+      python3 .workflow-verify-manifest.py 2>&1)
+    manifest_status=$?
+    set -e
+    [ "$manifest_status" -ne 0 ] || {
+      printf 'manifest verification accepted an unexpected platform\n' >&2
+      exit 1
+    }
+    assert_contains "$manifest_output" \
+      "final manifest has unexpected platforms: linux/s390x" \
+      "unexpected manifest platform" || exit 1
+  )
+}
+
 run_taf_project_conformance() {
   run_case "taf-project/new-check-compile-from-nested" _taf_project_case_new_check_compile_from_nested
   run_case "taf-project/build-wrapper-run-compile-help" _taf_project_case_build_wrapper_run_compile_help
   run_case "taf-project/build-uses-frozen-snapshot" _taf_project_case_build_uses_frozen_snapshot
+  run_case "taf-project/new-docker-native-actions" _taf_project_case_new_docker_workflow_contract
 }

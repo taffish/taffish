@@ -262,6 +262,37 @@ Initial MCP project test release.
     (han.test:check-false (member "taffish_run_project" names :test #'string=))
     (han.test:check-false (member "taffish_publish_project" names :test #'string=))))
 
+(han.test:deftest test-taffish-mcp-create-docker-project-uses-native-workflow ()
+  (let ((root (%mcp-test-temp-root)))
+    (unwind-protect
+         (progn
+           (ensure-directories-exist root)
+           (uiop:with-current-directory (root)
+             (let* ((arguments (%json-object
+                                (cons "name" "mcp-native-actions")
+                                (cons "kind" "tool")
+                                (cons "docker" t)))
+                    (result (call-tool "taffish_create_project" arguments))
+                    (structured (%mcp-test-structured result))
+                    (workflow
+                      (han.os:load-string
+                       (han.path:join-path
+                        root "mcp-native-actions" ".github" "workflows"
+                        "build-image.yml"))))
+               (han.test:check-equal nil (han.json:get-json result "isError"))
+               (han.test:check-equal
+                "mcp-native-actions"
+                (han.json:get-json structured "name"))
+               (han.test:check-true
+                (han.path:directory-exists-p
+                 (han.json:get-json structured "project_dir")))
+               (han.test:check-true (search "ubuntu-24.04-arm" workflow))
+               (han.test:check-true
+                (search "fromJSON(needs.prepare.outputs.matrix)" workflow))
+               (han.test:check-false (search "docker/setup-qemu-action" workflow))
+               (han.test:check-false (search "continue-on-error: true" workflow)))))
+      (han.path:delete-directory-tree root :if-does-not-exist :ignore))))
+
 (han.test:deftest test-taffish-mcp-get-version ()
   (let* ((result (call-tool "taffish_get_version" (han.json:make-json-object)))
          (structured (%mcp-test-structured result)))

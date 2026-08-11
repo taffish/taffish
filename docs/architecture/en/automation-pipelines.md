@@ -57,14 +57,35 @@ taffish/<app>/
 The current `taf new --docker` generates this workflow. It:
 
 1. Runs on tag push `v*` or manual `workflow_dispatch`.
-2. Checks out the app repository.
-3. Reads `taffish.toml` with Python `tomllib`.
-4. Reads `[container].image`, `[container].dockerfile`, `[container].build_platforms`, and optional `[smoke]`.
-5. Logs in to GHCR.
-6. Builds and pushes architecture-specific images with Docker Buildx.
-7. Publishes the final manifest with `docker buildx imagetools create`.
+2. Checks out the triggering ref, or an explicit `source_ref` for a manual recovery.
+3. Reads and validates package version/release plus `[container].image`,
+   `[container].dockerfile`, and `[container].build_platforms` with Python
+   `tomllib`.
+4. Requires the source tag and image tag to match the declared
+   `<version>-r<release>` identity.
+5. Builds declared platforms independently on native GitHub-hosted runners:
+   `linux/amd64` on `ubuntu-24.04` and `linux/arm64` on
+   `ubuntu-24.04-arm`.
+6. Uses a separate Buildx cache scope and a source-commit-specific temporary
+   image for each architecture.
+7. Publishes the final manifest only after every declared platform image for
+   that source commit is available.
+8. Verifies that the final manifest contains exactly the declared platforms,
+   ignoring BuildKit attestation entries reported as `unknown/unknown`.
 
-The current template always builds `linux/amd64`; if `build_platforms` contains `linux/arm64`, it attempts arm64 as well. arm64 build failure is allowed, in which case an amd64-only manifest is published.
+`build_platforms` is a publication contract, not a best-effort preference. A
+failed declared architecture fails the workflow; the template does not fall
+back to QEMU and does not publish an incomplete manifest. Manual
+`workflow_dispatch` accepts `source_ref` and a `platforms` subset so a failed
+architecture can be rebuilt without rebuilding successful architectures. The
+manifest step still requires all declared architecture images from the same
+source commit, so recovery cannot silently reuse stale outputs.
+
+The default generated template supports native `linux/amd64` and
+`linux/arm64`. Declaring arm64 does not prove that an upstream tool or its
+dependencies support arm64; app maintainers must validate that separately.
+GitHub-hosted runner availability and billing can differ for public and private
+repositories, according to current GitHub policy.
 
 The image workflow may run repository-local smoke checks, but the canonical
 accept/reject decision for the public package index belongs to the index
@@ -91,6 +112,10 @@ The app workflow should not:
 3. Synchronize Gitee.
 4. Overwrite published tags.
 5. Use `latest` as a formal app reference.
+
+Changing TAFFISH does not rewrite workflows already committed to existing app
+repositories. Migrating an existing app to a newer generated workflow is a
+separate, reviewed maintenance change.
 
 If TAFFISH later adds "trigger index rebuild after app publish", the trigger should run after the image workflow succeeds, not immediately after tag push. Otherwise the index may record a containerized app before its GHCR image has been built or made public.
 

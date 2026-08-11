@@ -54,14 +54,27 @@ taffish/<app>/
 TAFFISH 当前的 `taf new --docker` 会生成这个 workflow。它的基本行为是：
 
 1. 在 push tag `v*` 或手动 `workflow_dispatch` 时运行。
-2. checkout app 仓库。
-3. 用 Python `tomllib` 读取 `taffish.toml`。
-4. 读取 `[container].image`、`[container].dockerfile`、`[container].build_platforms` 和可选 `[smoke]`。
-5. 登录 GHCR。
-6. 用 Docker Buildx 构建并推送架构镜像。
-7. 用 `docker buildx imagetools create` 发布最终 manifest。
+2. checkout 触发 workflow 的 ref；手动恢复时也可以显式传入 `source_ref`。
+3. 用 Python `tomllib` 读取并校验 package version/release，以及
+   `[container].image`、`[container].dockerfile` 和
+   `[container].build_platforms`。
+4. 要求源码 tag、镜像 tag 和声明的 `<version>-r<release>` 身份一致。
+5. 在 GitHub-hosted 原生 runner 上独立构建声明平台：`linux/amd64` 使用
+   `ubuntu-24.04`，`linux/arm64` 使用 `ubuntu-24.04-arm`。
+6. 每个架构使用独立 Buildx cache scope，以及绑定源码 commit 的临时镜像。
+7. 只有同一源码 commit 的全部声明平台镜像都可用时，才发布最终 manifest。
+8. 发布后校验最终 manifest 精确包含声明平台；BuildKit attestation 产生的
+   `unknown/unknown` entry 不计为运行平台。
 
-当前模板默认总是构建 `linux/amd64`；如果 `build_platforms` 包含 `linux/arm64`，会尝试构建 arm64。arm64 构建允许失败，失败时发布 amd64-only manifest。
+`build_platforms` 是发布契约，不是 best-effort 偏好。任一声明架构失败都会使 workflow
+失败；模板不会回退到 QEMU，也不会发布不完整 manifest。手动 `workflow_dispatch`
+支持 `source_ref` 和 `platforms` 子集，因此可以只重建失败架构，而不重复构建已成功架构。
+manifest 阶段仍要求同一源码 commit 的所有声明架构镜像存在，因此恢复过程不会静默复用
+陈旧产物。
+
+默认生成模板只支持原生 `linux/amd64` 和 `linux/arm64`。声明 arm64 并不证明上游软件
+或其依赖天然支持 arm64；app 维护者仍需单独验证。GitHub-hosted runner 的可用性和计费
+也可能按 GitHub 当前政策在 public/private 仓库间不同。
 
 app image workflow 可以运行仓库内的 smoke 检查，但公开 package index 的最终接纳/拒绝应属于
 index builder，因为它能检查最终已发布镜像的 digest/platform 集合。
@@ -87,6 +100,9 @@ app workflow 不应做这些事：
 3. 不同步 Gitee。
 4. 不覆盖已发布 tag。
 5. 不把 `latest` 当成正式 app 引用。
+
+TAFFISH 升级不会自动改写已经提交到现有 app 仓库的 workflow。已有 app 迁移到新版生成
+workflow，必须作为独立、经过审查的维护变更处理。
 
 如果未来增加“app 发布完成后立即触发 index rebuild”，应把触发点放在镜像 workflow 成功之后，而不是 tag push 之后立即触发。否则 index 可能先记录了一个容器化 app，而 GHCR 镜像还没有构建成功或还不是 public。
 

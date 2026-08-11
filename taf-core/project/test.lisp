@@ -224,12 +224,17 @@
       (check-equal (%taf-project-string-contains-p dockerfile "build-essential") t)
       (check-equal (%taf-project-string-contains-p dockerfile "rm -rf /var/lib/apt/lists/*") t)
       (check-equal (%taf-project-string-contains-p dockerfile "ENV TAFFISH_NAME=demo_docker") t)
-      (check-equal (%taf-project-string-contains-p workflow "docker/build-push-action@v6") t)
-      (check-equal (%taf-project-string-contains-p workflow "docker/setup-qemu-action@v3") t)
+      (check-equal (%taf-project-string-contains-p workflow "actions/checkout@v6") t)
+      (check-equal (%taf-project-string-contains-p workflow "docker/setup-buildx-action@v4") t)
+      (check-equal (%taf-project-string-contains-p workflow "docker/login-action@v4") t)
+      (check-equal (%taf-project-string-contains-p workflow "docker/build-push-action@v7") t)
       (check-equal (%taf-project-string-contains-p workflow "taffish.toml") t)
       (check-equal (%taf-project-string-contains-p workflow "ghcr.io") t)
-      (check-equal (%taf-project-string-contains-p workflow "Build and push amd64 image") t)
-      (check-equal (%taf-project-string-contains-p workflow "continue-on-error: true") t)
+      (check-equal (%taf-project-string-contains-p workflow "ubuntu-24.04-arm") t)
+      (check-equal (%taf-project-string-contains-p workflow "source_ref:") t)
+      (check-equal (%taf-project-string-contains-p workflow "platforms:") t)
+      (check-equal (%taf-project-string-contains-p workflow "fromJSON(needs.prepare.outputs.matrix)") t)
+      (check-equal (%taf-project-string-contains-p workflow "scope=build-${{ matrix.arch }}") t)
       (check-equal (%taf-project-string-contains-p workflow "docker buildx imagetools create") t)
       (check-equal (%taf-project-string-contains-p
                     workflow
@@ -239,7 +244,57 @@
                     workflow
                     "GHCR packages are private by default")
                    t)
-      (check-equal (%taf-project-string-contains-p workflow "${{ steps.taffish.outputs.image }}") t))))
+      (check-equal (%taf-project-string-contains-p workflow "${{ needs.prepare.outputs.image }}") t)
+      (check-equal (%taf-project-string-contains-p workflow "docker/setup-qemu-action") nil)
+      (check-equal (%taf-project-string-contains-p workflow "continue-on-error: true") nil)
+      (check-equal (%taf-project-string-contains-p
+                    workflow
+                    "publishing amd64-only manifest")
+                   nil))))
+
+(deftest test-taf-project-new-workflow-native-matrix-contract ()
+  (let ((workflow (taf.core::%make-github-actions-build-image-workflow-string)))
+    (dolist (required '("workflow_dispatch:"
+                        "source_ref:"
+                        "platforms:"
+                        "SOURCE_REF: ${{ inputs.source_ref || github.ref }}"
+                        "REQUESTED_PLATFORMS: ${{ inputs.platforms || '' }}"
+                        "ref: ${{ env.SOURCE_REF }}"
+                        "jobs:"
+                        "prepare:"
+                        "build:"
+                        "manifest:"
+                        "linux/amd64\": \"ubuntu-24.04"
+                        "linux/arm64\": \"ubuntu-24.04-arm"
+                        "{label} must be non-empty and unique"
+                        "requested platforms are not declared"
+                        "source tag"
+                        "does not match"
+                        "container image tag must be"
+                        "source_commit="
+                        "taffish-{arch}-{source_commit}"
+                        "matrix={json.dumps(matrix"
+                        "runs-on: ${{ matrix.runner }}"
+                        "ref: ${{ needs.prepare.outputs.source_commit }}"
+                        "platforms: ${{ matrix.platform }}"
+                        "tags: ${{ matrix.image }}"
+                        "cache-from: type=gha,scope=build-${{ matrix.arch }}"
+                        "cache-to: type=gha,mode=max,scope=build-${{ matrix.arch }}"
+                        "org.opencontainers.image.revision=${{ needs.prepare.outputs.source_commit }}"
+                        "group: build-container-image-${{ needs.prepare.outputs.image }}"
+                        "queue: max"
+                        "docker buildx imagetools inspect"
+                        "final manifest is missing declared platforms"
+                        "final manifest has unexpected platforms"
+                        "architecture == \"unknown\""))
+      (check-true (%taf-project-string-contains-p workflow required)))
+    (dolist (forbidden '("docker/setup-qemu-action"
+                         "continue-on-error: true"
+                         "publishing amd64-only manifest"
+                         "Build and push amd64 image"
+                         "Build and push arm64 image"
+                         "signac"))
+      (check-false (%taf-project-string-contains-p workflow forbidden)))))
 
 (deftest test-taf-project-new-docker-no-actions ()
   (with-taf-project-temp-dir (dir)

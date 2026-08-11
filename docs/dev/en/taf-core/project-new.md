@@ -96,7 +96,18 @@ If `--docker` is enabled:
 2. Default image is derived as `ghcr.io/taffish/<name>:<version>-r<release>`.
 3. Generate GitHub Actions workflow by default, unless `--no-actions` is passed.
 
-The Actions workflow reads `taffish.toml`, builds amd64 and optional arm64 images, and publishes a manifest.
+The Actions workflow reads and validates `taffish.toml`, then builds every
+declared platform on a native GitHub-hosted runner. The generated template maps
+`linux/amd64` to `ubuntu-24.04` and `linux/arm64` to
+`ubuntu-24.04-arm`; unknown platforms fail instead of falling back to QEMU.
+
+`[container].build_platforms` is treated as the complete publication contract.
+The final manifest is created only when all declared, source-commit-specific
+platform images are available, and its platform set is verified after
+publication. Manual `workflow_dispatch` supports `source_ref` and a `platforms`
+subset for retrying one failed architecture without rebuilding successful
+architectures. Existing app repositories are not rewritten when this generator
+changes.
 
 Containerized projects also get a default smoke template:
 

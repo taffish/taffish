@@ -229,8 +229,12 @@ pmid = "23060610"
 | --- | --- | --- |
 | `image` | string | 容器镜像名；tag 必须等于 `<version>-r<release>`。 |
 | `dockerfile` | string | 相对项目根目录；文件必须存在；不能逃出项目根。 |
-| `build_platforms` | string | 逗号分隔的平台列表，例如 `linux/amd64,linux/arm64`。 |
+| `build_platforms` | string | 完整的发布平台声明集合，例如 `linux/amd64,linux/arm64`；生成的镜像 workflow 要求每个声明平台都存在。 |
 | `platforms` | string | legacy 字段；等价于 `build_platforms`。 |
+
+当前 `taf new --docker` 生成的 workflow 原生支持 `linux/amd64` 和
+`linux/arm64`。空平台、重复平台和不支持的平台都会失败；workflow 不会发布声明集合的
+best-effort 子集。
 
 如果设置了 `image`，主 TAF 文件中必须存在静态 container tag，并且 tag 中的 image 必须与 `[container].image` 一致。
 
