@@ -348,3 +348,8 @@ v<version>-r<release>
 5. 当前 `latest` 发布必须高于远端最新 tag；pre 发布可以放宽该限制。
 
 TAFFISH 不负责 GitHub 登录。用户应自行配置 SSH key、credential helper 或 `gh auth login`。
+
+对于身份一致的半完成状态，发布是幂等的。中断后重新运行同一条非 dry-run 命令，会重新
+检查 repository policy、commit、branch、local/remote tag 与可选 GitHub Release，
+并只执行缺失阶段。不可变身份冲突会被拒绝，不 force、不覆盖。本地 publish journal
+记录意图与进度，但不能覆盖 Git/GitHub 事实。

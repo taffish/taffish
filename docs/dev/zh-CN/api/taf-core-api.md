@@ -143,6 +143,7 @@
                           :prompt-p nil
                           :create-repo-p nil
                           :repo-visibility :public
+                          :lock-repo-p t
                           :release-p nil
                           :remote-tags remote-tags
                           :commit-message message
@@ -160,8 +161,14 @@
 3. git add/commit/tag/push。
 4. 可选 gh repo create。
 5. 可选 gh release create。
+6. 在 TAFFISH user home 下写入 publish journal。
 
 安全说明：TAFFISH 不接管 GitHub 登录。认证必须由用户在外部完成。
+
+发布内部使用 inspect/ensure 状态机。中断后使用相同参数再次调用会继续匹配的半完成
+发布；commit、tag、repository、policy 或 Release 身份冲突时会停止且不覆盖。返回值
+保留旧字段，并增加 `:outcome`、`:phases`、`:resumed-p`、`:complete-p`、
+`:journal-file` 和 `:warnings`。
 
 ## Hub API
 

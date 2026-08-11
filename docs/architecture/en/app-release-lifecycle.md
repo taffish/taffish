@@ -203,7 +203,7 @@ The dry run should confirm:
 
 1. Target repository is correct.
 2. Target tag is `v<version>-r<release>`.
-3. Remote does not already have the same tag.
+3. Existing local/remote objects either match the intended release or are reported as conflicts.
 4. The latest-release policy allows the current version.
 5. GitHub Release will be created if requested.
 6. Planned git/gh commands are expected.
@@ -224,21 +224,25 @@ Publish:
 taf publish --release --yes --build
 ```
 
-The publish flow:
+The publish flow is an ordered inspect/ensure state machine:
 
 1. Runs `taf check`.
 2. Checks `LICENSE`, rejecting empty or placeholder license files.
 3. Reads `[repository].url`.
-4. Checks remote tags.
+4. Checks repository, policy, commit, branch, local tag, remote tag, and Release state.
 5. Checks latest/pre policy.
 6. Reads `release.md` for commit message and GitHub Release notes.
 7. Builds command wrapper when requested.
-8. Runs `git add -A`.
-9. Removes `release.md` from the git index when release notes are used.
-10. Commits current project changes.
-11. Creates tag `v<version>-r<release>`.
-12. Pushes branch and tag.
-13. Creates GitHub Release.
+8. Reuses every existing object whose immutable identity matches.
+9. Runs `git add -A` and removes `release.md` from the git index when needed.
+10. Creates a commit only when project changes remain.
+11. Ensures tag `v<version>-r<release>`, branch push, remote tag, and optional Release.
+12. Records intent and progress in the local publish journal.
+
+If any phase is interrupted, restore connectivity and run the same command
+again. TAFFISH re-inspects Git/GitHub and continues only the missing phases.
+Matching completed publications become successful no-ops; conflicting commit,
+tag, repository-policy, or Release identities stop without force or overwrite.
 
 `taf publish` does not handle GitHub login. Maintainers should configure SSH keys, a git credential helper, or GitHub CLI auth beforehand.
 
@@ -437,8 +441,9 @@ Do not overwrite published tags. Publish a new `release` for fixes.
 | --- | --- |
 | `taf check` fails | Fix local project and recheck; do not publish. |
 | dry-run shows wrong repo/tag | Fix `taffish.toml` or publish args before creating tags. |
-| `taf publish` fails before push | Fix local git state and rerun. |
-| tag pushed but GitHub Release failed | Do not change tag; add GitHub Release manually or publish a new release. |
+| `taf publish` is interrupted | Restore connectivity and rerun the exact same command; matching phases are skipped automatically. |
+| publish reports a conflict | Inspect the reported local/remote identities; do not force or overwrite the existing immutable object. |
+| tag pushed but GitHub Release is missing | Rerun the same `taf publish --release --yes ...` command to reconcile and create only the missing Release. |
 | GHCR build fails | Fix Dockerfile/metadata, increment `release`, and publish again. |
 | GHCR package is not public | Change package visibility; app source does not need to change. |
 | index missing app | Check index workflow warnings, fix metadata, publish a new release. |

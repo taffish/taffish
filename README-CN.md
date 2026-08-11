@@ -1052,6 +1052,11 @@ taf publish --release --yes
 时，`release.md` 第一行会成为 publish message，整个文件会成为 GitHub Release notes。
 发布前需要替换默认的 `# TODO: release summary` 第一行。
 
+发布过程支持自动续跑：如果一次匹配的发布在创建 repository、push branch/tag 或创建
+GitHub Release 后中断，恢复网络后重新运行同一条 `taf publish --yes ...` 命令即可。
+TAFFISH 会重新检查 Git/GitHub、跳过已经匹配的阶段；遇到不可变对象冲突时会停止，
+不会覆盖。
+
 ## MCP / AI 集成
 
 `taffish-mcp` 是面向 AI 客户端的保守 stdio MCP server。当前能力包括只读的 TAF

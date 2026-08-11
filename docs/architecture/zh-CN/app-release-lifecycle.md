@@ -201,7 +201,7 @@ dry-run 应检查：
 
 1. 目标 repository 是否正确。
 2. 目标 tag 是否为 `v<version>-r<release>`。
-3. 远端是否已存在同名 tag。
+3. 已存在的本地/远端对象是否与发布意图一致；冲突是否被明确报告。
 4. latest 发布策略是否允许当前版本。
 5. 是否会创建 GitHub Release。
 6. 计划执行的 git/gh 命令是否符合预期。
@@ -222,21 +222,24 @@ taf publish --release --yes --build --create-repo --public
 taf publish --release --yes --build
 ```
 
-发布过程会：
+发布过程是有序的 inspect/ensure 状态机：
 
 1. 运行 `taf check`。
 2. 检查 `LICENSE`，拒绝空许可证或模板占位许可证。
 3. 读取 `[repository].url`。
-4. 检查远端 tag。
+4. 检查 repository、policy、commit、branch、local tag、remote tag 与 Release 状态。
 5. 检查 latest/pre 策略。
 6. 从 `release.md` 准备 commit message 和 GitHub Release notes。
 7. 必要时构建 command wrapper。
-8. `git add -A`。
-9. 如使用 release notes，则把 `release.md` 从 git index 中移除。
-10. commit 当前项目变更。
-11. 创建 tag `v<version>-r<release>`。
-12. push branch 和 tag。
-13. 创建 GitHub Release。
+8. 复用所有不可变身份一致的已有对象。
+9. 必要时执行 `git add -A`，并把 `release.md` 从 git index 中移除。
+10. 只有项目仍有变更时才创建 commit。
+11. 确保 tag `v<version>-r<release>`、branch push、remote tag 和可选 Release 完成。
+12. 在本地 publish journal 中记录发布意图和进度。
+
+任一阶段中断后，恢复网络并重新运行完全相同的命令。TAFFISH 会重新检查 Git/GitHub，
+只继续缺失阶段。已经匹配的完整发布会成为成功 no-op；commit、tag、repository policy
+或 Release 身份冲突时会停止，不 force、不覆盖。
 
 `taf publish` 不负责 GitHub 登录。维护者应提前配置 SSH key、git credential helper 或 GitHub CLI auth。
 
@@ -433,8 +436,9 @@ hubctl/target/hubctl check --finish
 | --- | --- |
 | `taf check` 失败 | 修复本地项目后重新检查，不发布。 |
 | dry-run 发现仓库或 tag 错误 | 修正 `taffish.toml` 或发布参数，不创建 tag。 |
-| `taf publish` push 前失败 | 修复本地 git 状态后重新运行。 |
-| tag 已推送但 GitHub Release 失败 | 不改 tag；可手动补 GitHub Release，或用新 release 修复。 |
+| `taf publish` 中断 | 恢复网络后重新运行完全相同的命令；匹配阶段会自动跳过。 |
+| publish 报告 conflict | 检查错误中的本地/远端身份，不 force、不覆盖已有不可变对象。 |
+| tag 已推送但 GitHub Release 缺失 | 重跑同一条 `taf publish --release --yes ...`，只补齐缺失 Release。 |
 | GHCR 构建失败 | 修复 Dockerfile 或元数据，增加 `release` 后重新发布。 |
 | GHCR package 不是 public | 调整 package visibility，不需要改 app source。 |
 | index 未收录 | 查 index workflow warnings，修复 app 元数据后发布新 release。 |

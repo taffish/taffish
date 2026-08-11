@@ -268,7 +268,9 @@ Initial MCP project test release.
     (han.test:check-false (member "taffish_config_get" names :test #'string=))
     (han.test:check-false (member "taffish_which" names :test #'string=))
     (han.test:check-false (member "taffish_run_project" names :test #'string=))
-    (han.test:check-false (member "taffish_publish_project" names :test #'string=))))
+    (han.test:check-false (member "taffish_publish_project" names :test #'string=))
+    (han.test:check-false (member "taffish_resume_publish" names :test #'string=))
+    (han.test:check-false (member "taffish_publish_status" names :test #'string=))))
 
 (han.test:deftest test-taffish-mcp-create-docker-project-uses-native-workflow ()
   (let ((root (%mcp-test-temp-root)))

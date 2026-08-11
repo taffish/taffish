@@ -229,6 +229,8 @@
     (check-equal (%taf-cli-string-contains-p help-string "release.md") t)
     (check-equal (%taf-cli-string-contains-p help-string "GitHub release") t)
     (check-equal (%taf-cli-string-contains-p help-string "v<version>-r<release>") t)
+    (check-equal (%taf-cli-string-contains-p help-string "resumes matching") t)
+    (check-equal (%taf-cli-string-contains-p help-string "conflicting commits") t)
     (check-equal (%taf-cli-string-contains-p help-string "fail fast") t)))
 
 (deftest test-taf-cli-parse-taf-publish-args-default ()

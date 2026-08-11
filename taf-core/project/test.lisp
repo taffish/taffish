@@ -68,6 +68,144 @@
          (setf (symbol-function 'taf.core::%get-available-backends)
                ,old-function)))))
 
+(defun %taf-project-error-string (thunk)
+  (handler-case
+      (progn
+        (funcall thunk)
+        nil)
+    (error (condition)
+      (princ-to-string condition))))
+
+(defun %taf-project-publish-fake-state ()
+  (list :repository-p nil
+        :policy-p nil
+        :commit nil
+        :branch nil
+        :local-tag nil
+        :remote-tag nil
+        :release-intent nil
+        :operations nil
+        :outage-operation nil))
+
+(defun %taf-project-publish-fake-result (state evidence &rest fields)
+  (append (list :state state :evidence evidence) fields))
+
+(defun %taf-project-publish-fake-adapter (state &key interrupt-after)
+  (setf (getf state :outage-operation) nil)
+  (labels ((record (operation)
+             (push operation (getf state :operations)))
+           (target (context)
+             (getf context :target-commit))
+           (matching-commit-result (context key label)
+             (let ((actual (getf state key))
+                   (expected (target context)))
+               (cond
+                 ((null actual)
+                  (%taf-project-publish-fake-result :missing
+                                                    (format nil "~A missing" label)))
+                 ((or (null expected) (string= actual expected))
+                  (%taf-project-publish-fake-result :matching label
+                                                    :commit actual))
+                 (t
+                  (%taf-project-publish-fake-result
+                   :conflicting
+                   (format nil "~A points to ~A, expected ~A"
+                           label actual expected)
+                   :actual actual
+                   :expected expected)))))
+           (interrupt (mutation inspection)
+             (when (eql interrupt-after mutation)
+               (setf (getf state :outage-operation) inspection)
+               (error "injected publish interruption after ~A" mutation)))
+           (outage-p (operation)
+             (eql operation (getf state :outage-operation))))
+    (lambda (operation context)
+      (record operation)
+      (if (outage-p operation)
+          (%taf-project-publish-fake-result
+           :unavailable "injected remote inspection outage")
+          (case operation
+        (:inspect-repository
+         (if (getf state :repository-p)
+             (%taf-project-publish-fake-result :matching "repository exists")
+             (%taf-project-publish-fake-result :missing "repository missing")))
+        (:create-repository
+         (setf (getf state :repository-p) t)
+         (interrupt operation :inspect-repository)
+         nil)
+        (:inspect-policy
+         (if (not (getf context :policy-required-p))
+             (%taf-project-publish-fake-result
+              :not-applicable "repository policy not requested")
+             (if (getf state :policy-p)
+                 (%taf-project-publish-fake-result :matching "policy matches")
+                 (%taf-project-publish-fake-result :missing "policy missing"))))
+        (:create-policy
+         (setf (getf state :policy-p) t)
+         (interrupt operation :inspect-policy)
+         nil)
+        (:inspect-commit
+         (matching-commit-result context :commit "commit"))
+        (:create-commit
+         (setf (getf state :commit) "commit-a")
+         (interrupt operation :inspect-commit)
+         nil)
+        (:inspect-branch
+         (matching-commit-result context :branch "remote branch"))
+        (:create-branch
+         (setf (getf state :branch) (target context))
+         (interrupt operation :inspect-branch)
+         nil)
+        (:inspect-local-tag
+         (matching-commit-result context :local-tag "local tag"))
+        (:create-local-tag
+         (setf (getf state :local-tag) (target context))
+         (interrupt operation :inspect-local-tag)
+         nil)
+        (:inspect-remote-tag
+         (matching-commit-result context :remote-tag "remote tag"))
+        (:create-remote-tag
+         (setf (getf state :remote-tag) (target context))
+         (interrupt operation :inspect-remote-tag)
+         nil)
+        (:inspect-release
+         (cond
+           ((not (getf context :release-requested-p))
+            (%taf-project-publish-fake-result
+             :not-applicable "GitHub Release not requested"))
+           ((null (getf state :release-intent))
+            (%taf-project-publish-fake-result :missing "GitHub Release missing"))
+           ((equal (getf state :release-intent)
+                   (list (getf context :release-title)
+                         (getf context :release-notes-sha256)))
+            (%taf-project-publish-fake-result :matching "GitHub Release matches"))
+           (t
+            (%taf-project-publish-fake-result
+             :conflicting "GitHub Release intent differs"))))
+        (:create-release
+         (setf (getf state :release-intent)
+               (list (getf context :release-title)
+                     (getf context :release-notes-sha256)))
+         (interrupt operation :inspect-release)
+         nil)
+            (otherwise
+             (error "unknown fake publish operation: ~S" operation)))))))
+
+(defmacro with-taf-project-publish-fake
+    ((project-name state journal-home &key interrupt-after) &body body)
+  `(let* ((,state (%taf-project-publish-fake-state))
+          (,journal-home (%taf-project-dir "publish-journal-home"))
+          (taf.core::*publish-operation-adapter*
+            (%taf-project-publish-fake-adapter
+             ,state :interrupt-after ,interrupt-after))
+          (taf.core::*publish-journal-user-home* ,journal-home))
+     (taf.core:project-new ,project-name
+                           '("--version" "1.2.3" "--release" "2"))
+     (%taf-project-write-string
+      (%taf-project-path ,project-name "release.md")
+      "# publish recovery test\n\nDeterministic release notes.\n")
+     ,@body))
+
 (defun %taf-project-temp-dir ()
   (let ((name (format nil "taf-project-test-~A/" (gensym "DIR"))))
     (merge-pathnames name (uiop:temporary-directory))))
@@ -1469,3 +1607,362 @@ This release mentions a todo-like upstream word, but it is not the default templ
     (check-true (stringp env-program))
     (check-equal (han.path:->namestring (uiop:file-exists-p env-program))
                  env-program)))
+
+(deftest test-taf-project-publish-sha256-portable-known-vectors ()
+  (check-equal
+   (taf.core::%publish-sha256 "")
+   "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+  (check-equal
+   (taf.core::%publish-sha256 "abc")
+   "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
+  (check-equal
+   (taf.core::%publish-sha256 "中文")
+   "72726d8818f693066ceb69afa364218b692e62ea92b385782363780f47529c21")
+  (check-equal
+   (taf.core::%publish-sha256 "A😀Z")
+   "0cfdf4f787538630ab2f98a43b709fb744c6380b0cf350ef895d270a04eecd83"))
+
+(deftest test-taf-project-publish-finds-remote-ref-pairs-portably ()
+  (let* ((branch-commit "1111111111111111111111111111111111111111")
+         (tag-object "2222222222222222222222222222222222222222")
+         (tag-commit "3333333333333333333333333333333333333333")
+         (refs (list
+                (cons branch-commit "refs/heads/main")
+                (cons tag-object "refs/tags/v1.2.3-r2")
+                (cons tag-commit "refs/tags/v1.2.3-r2^{}"))))
+    (check-equal
+     (taf.core::%publish-find-ref "refs/heads/main" refs)
+     (cons branch-commit "refs/heads/main"))
+    (check-equal
+     (taf.core::%publish-remote-tag-commit-from-refs refs "v1.2.3-r2")
+     tag-commit)
+    (check-equal
+     (taf.core::%publish-remote-tag-commit-from-refs refs "v9.9.9-r9")
+     nil)))
+
+(deftest test-taf-project-publish-state-machine-first-run-and-safe-noop ()
+  (with-taf-project-temp-dir (dir)
+    (with-taf-project-publish-fake
+        ("publish-state-machine" state journal-home)
+      (let* ((project-dir (%taf-project-dir "publish-state-machine"))
+             (first (taf.core:project-publish
+                     :start-dir project-dir
+                     :dry-run nil
+                     :create-repo-p t
+                     :release-p t
+                     :verbose nil))
+             (journal (taf.core::%publish-journal-file
+                       "https://github.com/taffish/publish-state-machine"
+                       "v1.2.3-r2")))
+        (check-equal (getf first :published-p) t)
+        (check-equal (getf first :outcome) :created)
+        (check-equal (getf first :complete-p) t)
+        (check-equal
+         (mapcar (lambda (phase) (getf phase :id)) (getf first :phases))
+         '(:project-validated
+           :repository-ready
+           :repository-policy-ready
+           :commit-ready
+           :branch-pushed
+           :local-tag-ready
+           :remote-tag-ready
+           :github-release-ready
+           :publish-complete))
+        (check-true (han.path:file-exists-p journal))
+        (setf (getf state :operations) nil)
+        (let* ((taf.core::*publish-operation-adapter*
+                 (%taf-project-publish-fake-adapter state))
+               (second (taf.core:project-publish
+                        :start-dir project-dir
+                        :dry-run nil
+                        :create-repo-p t
+                        :release-p t
+                        :verbose nil)))
+          (check-equal (getf second :outcome) :skipped)
+          (check-equal (getf second :complete-p) t)
+          (dolist (mutation '(:create-repository
+                              :create-policy
+                              :create-commit
+                              :create-branch
+                              :create-local-tag
+                              :create-remote-tag
+                              :create-release))
+            (check-false (member mutation (getf state :operations)))))))))
+
+(deftest test-taf-project-publish-resumes-after-every-side-effect-boundary ()
+  (with-taf-project-temp-dir (dir)
+    (loop for mutation in '(:create-repository
+                            :create-policy
+                            :create-commit
+                            :create-branch
+                            :create-local-tag
+                            :create-remote-tag
+                            :create-release)
+          for expected-last-confirmed in '(:project-validated
+                                            :repository-ready
+                                            :repository-policy-ready
+                                            :commit-ready
+                                            :branch-pushed
+                                            :local-tag-ready
+                                            :remote-tag-ready)
+          for index from 1
+          for project-name = (format nil "publish-resume-~D" index)
+          do
+             (with-taf-project-publish-fake
+                 (project-name state journal-home :interrupt-after mutation)
+               (let* ((project-dir (%taf-project-dir project-name))
+                      (first-error
+                        (%taf-project-error-string
+                         (lambda ()
+                           (taf.core:project-publish
+                            :start-dir project-dir
+                            :dry-run nil
+                            :create-repo-p t
+                            :release-p t
+                            :verbose nil)))))
+                 (check-true first-error)
+                 (check-true
+                  (%taf-project-string-contains-p
+                   first-error (string expected-last-confirmed)))
+                 (let* ((journal-file
+                          (taf.core::%publish-journal-file
+                           (format nil "https://github.com/taffish/~A"
+                                   project-name)
+                           "v1.2.3-r2"))
+                        (journal (han.json:read-json-file journal-file)))
+                   (check-equal
+                    (han.json:get-json journal "last_confirmed_stage")
+                    (string-downcase (string expected-last-confirmed))))
+                 (let* ((taf.core::*publish-operation-adapter*
+                          (%taf-project-publish-fake-adapter state))
+                        (result (taf.core:project-publish
+                                 :start-dir project-dir
+                                 :dry-run nil
+                                 :create-repo-p t
+                                 :release-p t
+                                 :verbose nil)))
+                   (check-equal (getf result :outcome) :resumed)
+                   (check-equal (getf result :complete-p) t)
+                   (check-equal (getf state :remote-tag) "commit-a")
+                   (check-true (getf state :release-intent))))))))
+
+(deftest test-taf-project-publish-branch-reconcile-conflicts-with-remote-ref ()
+  (let* ((context (list :dry-run t
+                        :target-commit "commit-a"
+                        :last-confirmed-stage :commit-ready
+                        :phases nil
+                        :mutation-count 0
+                        :resume-evidence-p nil))
+         (taf.core::*publish-operation-adapter*
+           (lambda (operation ignored-context)
+             (declare (ignore ignored-context))
+             (case operation
+               (:create-branch
+                (error "non-fast-forward"))
+               (:inspect-branch
+                (list :state :missing
+                      :evidence "remote branch main is at commit-b, target is commit-a"
+                      :actual "commit-b"
+                      :commit "commit-a"
+                      :branch "main"))
+               (otherwise
+                (error "unexpected operation: ~S" operation))))))
+    (let ((message
+            (%taf-project-error-string
+             (lambda ()
+               (taf.core::%publish-reconcile-mutation
+                context :branch-pushed :inspect-branch :create-branch)))))
+      (check-true (%taf-project-string-contains-p
+                   message "[publish:conflict]"))
+      (check-equal (getf (first (getf context :phases)) :status)
+                   :conflict)
+      (check-equal (getf context :last-confirmed-stage) :commit-ready))))
+
+(deftest test-taf-project-publish-unavailable-inspection-gives-resume-guidance ()
+  (with-taf-project-temp-dir (dir)
+    (taf.core:project-new "publish-unavailable" nil)
+    (let ((taf.core::*publish-journal-user-home*
+            (%taf-project-dir "publish-unavailable-journal"))
+          (taf.core::*publish-operation-adapter*
+            (lambda (operation context)
+              (declare (ignore context))
+              (case operation
+                (:inspect-repository
+                 (list :state :unavailable
+                       :evidence "GitHub repository inspection is unavailable"))
+                (otherwise
+                 (error "unexpected publish operation: ~S" operation))))))
+      (let ((message
+              (%taf-project-error-string
+               (lambda ()
+                 (taf.core:project-publish
+                  :start-dir (%taf-project-dir "publish-unavailable")
+                  :dry-run nil
+                  :create-repo-p t
+                  :verbose nil)))))
+        (check-true
+         (%taf-project-string-contains-p
+          message "rerun the same taf publish command"))
+        (check-true
+         (%taf-project-string-contains-p
+          message "PROJECT-VALIDATED"))))))
+
+(deftest test-taf-project-publish-conflicting-tag-hard-fails ()
+  (with-taf-project-temp-dir (dir)
+    (with-taf-project-publish-fake
+        ("publish-identity" state journal-home)
+      (setf (getf state :repository-p) t
+            (getf state :commit) "commit-a"
+            (getf state :branch) "commit-a"
+            (getf state :local-tag) "commit-a"
+            (getf state :remote-tag) "commit-b")
+      (let ((message
+              (%taf-project-error-string
+               (lambda ()
+                 (taf.core:project-publish
+                  :start-dir (%taf-project-dir "publish-identity")
+                  :dry-run nil
+                  :release-p t
+                  :verbose nil)))))
+        (check-true (%taf-project-string-contains-p
+                     message "[publish:conflict]"))
+        (check-false (member :create-release (getf state :operations)))))))
+
+(deftest test-taf-project-publish-corrupt-or-missing-journal-defers-to-facts ()
+  (with-taf-project-temp-dir (dir)
+    (with-taf-project-publish-fake
+        ("publish-journal" state journal-home)
+      (let* ((project-dir (%taf-project-dir "publish-journal"))
+             (repository "https://github.com/taffish/publish-journal")
+             (tag "v1.2.3-r2")
+             (journal (taf.core::%publish-journal-file repository tag)))
+        (taf.core:project-publish
+         :start-dir project-dir
+         :dry-run nil
+         :create-repo-p t
+         :release-p t
+         :verbose nil)
+        (%taf-project-write-string journal "{")
+        (let ((taf.core::*publish-operation-adapter*
+                (%taf-project-publish-fake-adapter state)))
+          (check-equal
+           (getf (taf.core:project-publish
+                  :start-dir project-dir
+                  :dry-run nil
+                  :create-repo-p t
+                  :release-p t
+                  :verbose nil)
+                 :outcome)
+           :skipped))
+        (delete-file journal)
+        (let ((taf.core::*publish-operation-adapter*
+                (%taf-project-publish-fake-adapter state)))
+          (check-equal
+           (getf (taf.core:project-publish
+                  :start-dir project-dir
+                  :dry-run nil
+                  :create-repo-p t
+                  :release-p t
+                  :verbose nil)
+                 :outcome)
+           :skipped))))))
+
+(deftest test-taf-project-publish-dry-run-has-no-journal-or-mutations ()
+  (with-taf-project-temp-dir (dir)
+    (with-taf-project-publish-fake
+        ("publish-dry-state" state journal-home)
+      (let* ((repository "https://github.com/taffish/publish-dry-state")
+             (tag "v1.2.3-r2")
+             (journal (taf.core::%publish-journal-file repository tag))
+             (result (taf.core:project-publish
+                      :start-dir (%taf-project-dir "publish-dry-state")
+                      :dry-run t
+                      :create-repo-p t
+                      :release-p t
+                      :verbose nil)))
+        (check-equal (getf result :published-p) nil)
+        (check-false (han.path:file-exists-p journal))
+        (dolist (mutation '(:create-repository
+                            :create-policy
+                            :create-commit
+                            :create-branch
+                            :create-local-tag
+                            :create-remote-tag
+                            :create-release))
+          (check-false (member mutation (getf state :operations))))))))
+
+(deftest test-taf-project-publish-release-intent-change-conflicts ()
+  (with-taf-project-temp-dir (dir)
+    (with-taf-project-publish-fake
+        ("publish-intent" state journal-home)
+      (let ((project-dir (%taf-project-dir "publish-intent")))
+        (taf.core:project-publish
+         :start-dir project-dir
+         :dry-run nil
+         :create-repo-p t
+         :release-p t
+         :verbose nil)
+        (%taf-project-write-string
+         (%taf-project-path "publish-intent" "release.md")
+         "# changed release intent\n\nDifferent immutable notes.\n")
+        (setf (getf state :operations) nil)
+        (let* ((taf.core::*publish-operation-adapter*
+                 (%taf-project-publish-fake-adapter state))
+               (message
+                 (%taf-project-error-string
+                  (lambda ()
+                    (taf.core:project-publish
+                     :start-dir project-dir
+                     :dry-run nil
+                     :create-repo-p t
+                     :release-p t
+                     :verbose nil)))))
+          (check-true (%taf-project-string-contains-p message "intent"))
+          (dolist (mutation '(:create-repository
+                              :create-policy
+                              :create-commit
+                              :create-branch
+                              :create-local-tag
+                              :create-remote-tag
+                              :create-release))
+            (check-false (member mutation (getf state :operations)))))))))
+
+(deftest test-taf-project-publish-history-distinguishes-outcomes ()
+  (with-taf-project-temp-dir (dir)
+    (with-taf-project-publish-fake
+        ("publish-history" state journal-home)
+      (let* ((project-dir (%taf-project-dir "publish-history"))
+             (history-file (han.path:join-path
+                            journal-home "logs" "history.jsonl")))
+        (taf.core:project-publish
+         :start-dir project-dir
+         :dry-run nil
+         :create-repo-p t
+         :release-p t
+         :verbose nil)
+        (let ((taf.core::*publish-operation-adapter*
+                (%taf-project-publish-fake-adapter state)))
+          (taf.core:project-publish
+           :start-dir project-dir
+           :dry-run nil
+           :create-repo-p t
+           :release-p t
+           :verbose nil))
+        (setf (getf state :remote-tag) "conflicting-commit")
+        (let ((taf.core::*publish-operation-adapter*
+                (%taf-project-publish-fake-adapter state)))
+          (%taf-project-error-string
+           (lambda ()
+             (taf.core:project-publish
+              :start-dir project-dir
+              :dry-run nil
+              :create-repo-p t
+              :release-p t
+              :verbose nil))))
+        (let ((history (han.os:load-string history-file)))
+          (check-true (%taf-project-string-contains-p
+                       history "\"status\":\"created\""))
+          (check-true (%taf-project-string-contains-p
+                       history "\"status\":\"skipped\""))
+          (check-true (%taf-project-string-contains-p
+                       history "\"status\":\"conflict\"")))))))

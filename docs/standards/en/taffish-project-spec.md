@@ -356,3 +356,10 @@ Before release:
 5. A normal `latest` release must be greater than the latest remote tag; pre-releases may relax this rule.
 
 TAFFISH does not handle GitHub login. Users configure SSH keys, credential helpers, or `gh auth login` themselves.
+
+Publication is idempotent across matching partial state. After an interruption,
+running the same non-dry-run command re-inspects repository policy, commit,
+branch, local/remote tag, and optional GitHub Release state, then performs only
+missing phases. Conflicting immutable identities are rejected without force or
+overwrite. A local publish journal records intent and progress but never
+overrides Git/GitHub facts.

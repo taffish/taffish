@@ -1128,6 +1128,12 @@ the first line of `release.md` becomes the publish message, and the whole file
 becomes the GitHub Release notes. Replace the default
 `# TODO: release summary` first line before publishing.
 
+Publication is resumable: if a matching publish is interrupted after creating
+a repository, pushing a branch/tag, or creating a GitHub Release, restore
+connectivity and run the same `taf publish --yes ...` command again. TAFFISH
+re-inspects Git/GitHub, skips matching completed phases, and stops rather than
+overwriting any conflicting immutable object.
+
 ## MCP / AI Integration
 
 `taffish-mcp` is a conservative MCP stdio server for AI clients. Its current

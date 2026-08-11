@@ -463,7 +463,8 @@ Details:
   - can create the GitHub repository when --create-repo is given
   - newly created repositories are locked by default:
     immutable releases are enabled and v* tags are protected from update/delete
-  - rejects already-published tags
+  - resumes matching interrupted publishes and treats completed publishes as no-op
+  - rejects conflicting commits, tags, releases, or changed publish intent
   - commits, tags, pushes and optional release creation only when --yes is given
 
 Options:
@@ -570,30 +571,14 @@ Note:
       (:help
        (format t "~A~%" (%get-taf-publish-help-string)))
       (:publish
-       (let ((result
-               (taf.core:project-publish :dry-run dry-run
-                                         :build-p build-p
-                                         :channel channel
-                                         :prompt-p prompt-p
-                                         :create-repo-p create-repo-p
-                                         :repo-visibility repo-visibility
-                                         :lock-repo-p lock-repo-p
-                                         :release-p release-p)))
-         (when (getf result :published-p)
-           (%record-taf-history-event
-            :event "publish"
-            :status "success"
-            :project (getf result :project)
-            :cwd (han.os:current-directory)
-            :extra (list :tag (getf result :tag)
-                         :channel (getf result :channel)
-                         :repository-url (getf result :repository-url)
-                         :build (not (null (getf result :build)))
-                         :release (not (null (getf result :release)))
-                         :created-repo
-                         (not (null (getf (getf result :execute)
-                                          :created-repo))))))
-         result))
+       (taf.core:project-publish :dry-run dry-run
+                                 :build-p build-p
+                                 :channel channel
+                                 :prompt-p prompt-p
+                                 :create-repo-p create-repo-p
+                                 :repo-visibility repo-visibility
+                                 :lock-repo-p lock-repo-p
+                                 :release-p release-p))
       (t
        (error "[publish] unknown publish mode: ~S" mode)))))
 

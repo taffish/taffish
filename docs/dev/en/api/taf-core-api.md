@@ -143,6 +143,7 @@ Stability: semi-stable.
                           :prompt-p nil
                           :create-repo-p nil
                           :repo-visibility :public
+                          :lock-repo-p t
                           :release-p nil
                           :remote-tags remote-tags
                           :commit-message message
@@ -160,8 +161,15 @@ Non-dry-run side effects:
 3. `git add/commit/tag/push`.
 4. Optional `gh repo create`.
 5. Optional `gh release create`.
+6. Writes a publish journal under the TAFFISH user home.
 
 Safety note: TAFFISH does not take over GitHub login. Authentication must be configured externally by the user.
+
+Publication uses an inspect/ensure state machine. Repeating the same call after
+an interruption resumes matching partial state, while conflicting commit, tag,
+repository, policy, or Release identities fail without overwrite. The result
+keeps the legacy fields and additionally reports `:outcome`, `:phases`,
+`:resumed-p`, `:complete-p`, `:journal-file`, and `:warnings`.
 
 ## Hub API
 
