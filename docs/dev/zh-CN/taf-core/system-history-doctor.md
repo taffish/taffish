@@ -55,6 +55,10 @@ taf doctor [--user | --system] [--init]
 增加 evidence、remediation 和文档链接。`--json` 按
 `taffish.doctor/v1` 输出稳定的英文 key。
 
+人类文本跟随 `taffish.i18n` 解析出的语言，并内置中英文 summary 与 remediation。
+diagnostic plist 和 `--json` payload 刻意保留规范英文 id、status value、evidence 和机器字段；
+本地化不会改变 detector 逻辑。
+
 ## 诊断契约
 
 每个诊断 item 使用以下 additive 结构：
@@ -132,3 +136,4 @@ system cache 对所有用户可写但没有 sticky bit 时属于 error。doctor 
 4. probe 有时间上限、无交互、无自动修复副作用。
 5. CLI help、completion、MCP 投影、测试和中英文文档保持同步。
 6. process/path/permission 变化经过 macOS/SBCL 与 Linux/LispWorks 验证。
+7. 人类翻译与稳定英文 JSON 分别有回归测试。

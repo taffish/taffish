@@ -126,6 +126,10 @@ With `--release`:
 4. The full content becomes GitHub Release notes.
 5. Normalized release notes are hashed into the immutable publish intent.
 
+Normalization converts CRLF/CR to LF and ignores trailing line breaks because
+GitHub may append a final LF to the stored Release body. Interior line breaks,
+ordinary spaces, and all other content remain identity-significant.
+
 `release.md` is removed from the git index before committing.
 
 ## Repository Creation And Policy

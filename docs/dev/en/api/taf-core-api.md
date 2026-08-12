@@ -342,6 +342,18 @@ Profiles:
 :china
 ```
 
+### `taf.core:system-config-language`
+
+Stability: additive in v0.11.0.
+
+Role: inspect configured/displayed language details and available built-in or
+external locale packs, or update the selected scope's top-level `language`
+field.
+
+Side effects: read-only when `:language` is nil; otherwise preserves all
+non-language config text while writing the selected config file. System scope
+requires root. External language IDs must be present in current discovery.
+
 ### `taf.core:system-doctor`
 
 Stability: stable.
@@ -398,6 +410,7 @@ Default `safe t` means write failure returns nil and does not interrupt the main
 | `hub-prune` | Deletes older local install roots and launchers when `yes-p` is true. |
 | `hub-uninstall` | Deletes install directories and launchers. |
 | `system-config-init` | Writes config. |
+| `system-config-language :language <value>` | Narrowly updates the top-level language field; system scope requires root. |
 | `system-doctor :init-p t` | Creates directories. |
 | `system-history :clear-p t` | Deletes history. |
 

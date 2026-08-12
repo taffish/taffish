@@ -15,7 +15,10 @@
       (let ((first (car raw-argv)))
         (cond
           ((%taffish-mcp-help-option-p first)
-           (help *standard-output*)
+           (taffish.i18n:call-with-resolved-language
+            (lambda ()
+              (write-string (%get-taffish-mcp-cli-help-string)
+                            *standard-output*)))
            (han.host:quit 0))
           ((%taffish-mcp-version-option-p first)
            (version *standard-output*)

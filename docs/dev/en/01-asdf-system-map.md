@@ -9,6 +9,13 @@ TAFFISH uses ASDF to describe Common Lisp systems. The current main system is `t
 The current order can be divided into five groups plus the AI-facing MCP layer:
 
 ```text
+taffish-i18n
+  package
+  locale
+  render
+  catalog
+  builtin
+
 taffish-core
   package
   model
@@ -27,6 +34,7 @@ taffish-core
 
 taffish-cli
   package
+  i18n
   run
   main
 
@@ -50,10 +58,12 @@ taf-core
   system/home
   system/config
   system/history
+  system/doctor-i18n
   system/doctor
 
 taf-cli
   package
+  i18n
   run
   main
 
@@ -69,7 +79,11 @@ taffish-mcp
 
 ## Meaning Behind Load Order
 
-`taffish-core` loads first because it defines the complete TAF language compilation capability from source to shell. `taffish-cli` only wraps a command-line entry point around it.
+`taffish-i18n` loads after `han` and before the language/business layers. It
+provides a narrow human-presentation API without depending on `taf-core`.
+`taffish-core` then defines the complete TAF language compilation capability
+from source to shell. `taffish-cli` only wraps a command-line entry point around
+it.
 
 `taf-core` loads after that because it needs to connect the compilation capability of `taffish-core` to the project, Hub, and runtime systems. `taf-cli` is the dispatch entry point for user commands. `taffish-mcp` loads after the CLI/core modules because it exposes a conservative AI-facing protocol layer over existing APIs rather than defining new business logic.
 
@@ -95,6 +109,7 @@ TAFFISH package boundaries mostly align with system boundaries:
 
 | Package | Main directory | Meaning |
 | --- | --- | --- |
+| `taffish.i18n` | `taffish-i18n/` | Shared human-language resolution, catalogs, and safe fallback. |
 | `taffish-core` | `taffish-core/` | Core TAF compiler API. |
 | `taffish-cli` | `taffish-cli/` | `taffish` command implementation. |
 | `taf-core` | `taf-core/` | Core business API behind the `taf` command. |

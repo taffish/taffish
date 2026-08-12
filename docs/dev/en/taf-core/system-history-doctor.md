@@ -58,6 +58,11 @@ Default text is concise and prints only actionable or uncertain diagnostics.
 `--verbose` adds evidence, remediation, and documentation URLs. `--json`
 emits stable English field names under schema `taffish.doctor/v1`.
 
+Human text follows the resolved `taffish.i18n` language and has built-in
+English/Chinese summaries and remediation. The diagnostic plist and `--json`
+payload deliberately retain canonical English ids, status values, evidence,
+and machine fields; localization never changes detector logic.
+
 ## Diagnostic Contract
 
 Every item has the additive structure:
@@ -139,3 +144,4 @@ When changing history or doctor, check:
 4. Probes remain bounded, non-interactive, and free of repair side effects.
 5. CLI help, completion, MCP projection, tests, and both language docs remain synchronized.
 6. Process/path/permission changes receive macOS/SBCL and Linux/LispWorks verification.
+7. Human translations and stable-English JSON receive separate regression tests.

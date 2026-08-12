@@ -79,9 +79,26 @@ Default config:
 | key | Default |
 | --- | --- |
 | `profile` | `github` |
-| `language` | `en` |
+| `language` | `auto` |
 | `index-url` | GitHub raw index URL |
 | `source-rewrite-rules` | nil |
+
+The `language` field is consumed by the shared `taffish.i18n` presentation
+layer. Built-in values are `en` and `zh`; the default `auto` selection follows
+the host locale and falls back to English, while other normalized locale IDs
+can select an optional external pack. Persist `en` or `zh` for deterministic
+human output. `TAFFISH_LANGUAGE` is the highest-priority one-command override.
+
+Optional external packs live under `share/locales/<locale>/` in user or
+system home. They are not required directories and `doctor --init` does not
+create or download them. Built-in English and Chinese remain available when
+the entire external locale tree is absent.
+
+`taf config language` is the read-only discovery/status entry point;
+`taf config language <LANGUAGE>` updates user scope and adding `--system`
+updates system scope with root permission. The narrow writer preserves every
+non-language config line. External IDs are accepted only when the pack is
+currently valid and discoverable.
 
 ## Config File Load Order
 
@@ -143,3 +160,4 @@ When changing home/config, check:
 3. Whether Gitee/GitHub mirror rules are correct.
 4. Whether new config fields require schema upgrade.
 5. Whether environment variable priority matches user expectations.
+6. Whether language changes preserve machine schemas and generated shell.

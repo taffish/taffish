@@ -16,6 +16,10 @@
 help 是公开 CLI 表面的一部分。`taf --help` 应保持简洁，而 `taf help <command>`
 和 `taf <command> --help` 应把用户带到同一份 command-specific help 文本。
 
+`main.lisp` 在 dispatch 前通过 `taffish.i18n` 建立人类语言上下文。`i18n.lisp` 拥有完整的
+内置中英文 help 和常见顶层诊断。两种语言中的 command/option token 必须一致；底层业务
+错误仍可能使用英文回退。
+
 ## 系统位置
 
 ```text
@@ -31,6 +35,7 @@ user
 | 文件 | 作用 |
 | --- | --- |
 | `package.lisp` | 定义 CLI 包。 |
+| `i18n.lisp` | 管理本地化 help 和常见人类 CLI 诊断。 |
 | `run.lisp` | 实现子命令分发和运行。 |
 | `main.lisp` | 提供入口函数。 |
 
@@ -66,6 +71,16 @@ kind filter 和 target 解析一致。它们不能删除共享容器镜像缓存
 命令应输出简短的 `no changes`，而不是逐条列出所有未变化 app。JSON 输出仍然是
 完整机器可读 plan，会保留 current/skipped items，供自动化使用。
 
+## 语言管理
+
+`taf config language` 与 `taf config language --show` 提供相同的只读状态和发现视图。
+提供 `en`、`zh`、`auto` 或已发现外部 locale 时，通过
+`taf.core:system-config-language` 窄更新配置。CLI parser 必须拒绝把语言值与 `--show`、
+profile flag 或 `--force` 混用。这个人类 CLI 表面不会派生 MCP 修改工具。
+
+缺少已保存偏好时，configured language 显示为 `auto`：人类 CLI 输出跟随可识别的主机
+locale，并最终回退到英文。显式 `en` 或 `zh` 保持确定性，不会被主机 locale 变量覆盖。
+
 ## 修改指南
 
 修改 `taf-cli` 时应检查：
@@ -74,5 +89,7 @@ kind filter 和 target 解析一致。它们不能删除共享容器镜像缓存
 2. README 中的命令示例是否需要更新。
 3. 错误码和输出是否仍适合脚本调用。
 4. 是否把业务逻辑错误地写进 CLI 层。
+5. 中英文 help 是否保留相同 command/option 契约。
+6. JSON 和 MCP 投影是否仍是稳定英文机器接口。
 
 长期看，`taf-cli` 的命令设计会直接影响 TAFFISH 的用户体验。它应保持稳定、短句清楚、错误可定位。

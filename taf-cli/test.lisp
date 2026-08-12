@@ -16,6 +16,34 @@
        (stringp substring)
        (not (null (search substring string :test #'char=)))))
 
+(defun %taf-cli-help-option-char-p (char)
+  (or (and (char<= #\a char) (char<= char #\z))
+      (and (char<= #\A char) (char<= char #\Z))
+      (and (char<= #\0 char) (char<= char #\9))
+      (char= char #\-)))
+
+(defun %taf-cli-help-option-tokens (text)
+  (let ((tokens nil)
+        (length (length text)))
+    (loop for index from 0 below length do
+      (when (and (char= (char text index) #\-)
+                 (or (zerop index)
+                     (member (char text (1- index))
+                             '(#\Space #\Tab #\Newline #\[ #\( #\| #\,)
+                             :test #'char=)))
+        (let ((end index))
+          (loop while (and (< end length)
+                           (%taf-cli-help-option-char-p (char text end)))
+                do (incf end))
+          (when (> end (1+ index))
+            (push (subseq text index end) tokens)))))
+    (sort (remove-duplicates tokens :test #'string=) #'string<)))
+
+(defun %taf-cli-condition-string (thunk)
+  (handler-case
+      (progn (funcall thunk) nil)
+    (error (condition) (format nil "~A" condition))))
+
 (deftest test-taf-cli-version-string-basic ()
   (check-equal (stringp taf.cli:*taf-version*) t)
   (check-equal (%taf-cli-string-contains-p taf.cli:*taf-version* "taf") t)
@@ -29,7 +57,21 @@
     (check-equal (%taf-cli-string-contains-p help-string "taf help install") t)
     (check-equal (%taf-cli-string-contains-p help-string "Project commands:") t)
     (check-equal (%taf-cli-string-contains-p help-string "Hub commands:") t)
-    (check-equal (%taf-cli-string-contains-p help-string "System commands:") t)))
+    (check-equal (%taf-cli-string-contains-p help-string "System commands:") t)
+    (check-equal (%taf-cli-string-contains-p help-string
+                                             "search      Search apps in the local index")
+                 t)
+    (check-equal (%taf-cli-string-contains-p help-string
+                                             "index or a local project")
+                 t)
+    (check-false (%taf-cli-string-contains-p help-string
+                                             "outdated [OPTIONS]"))
+    (check-equal (%taf-cli-string-contains-p help-string
+                                             "config language auto")
+                 t)
+    (check-equal (%taf-cli-string-contains-p help-string
+                                             "host locale [default]")
+                 t)))
 
 (deftest test-taf-cli-command-help-string-basic ()
   (check-equal
@@ -55,6 +97,57 @@
     (lambda ()
       (taf.cli::%get-taf-command-help-string "unknown-command")))
    t))
+
+(deftest test-taf-cli-all-help-locales-preserve-option-contract ()
+  (let ((commands '("new" "check" "compile" "build" "run" "publish"
+                    "update" "search" "info" "install" "outdated"
+                    "upgrade" "prune" "uninstall" "list" "which"
+                    "doctor" "config" "history")))
+    (dolist (command (cons nil commands))
+      (let ((english
+              (taffish.i18n:with-language ("en")
+                (if command
+                    (taf.cli::%get-taf-command-help-string command)
+                    (taf.cli::%get-taf-help-string))))
+            (chinese
+              (taffish.i18n:with-language ("zh")
+                (if command
+                    (taf.cli::%get-taf-command-help-string command)
+                    (taf.cli::%get-taf-help-string)))))
+        (check-true (search "Usage:" english :test #'char=))
+        (check-true (search "用法：" chinese :test #'char=))
+        (check-equal (%taf-cli-help-option-tokens chinese)
+                     (%taf-cli-help-option-tokens english))
+        (unless command
+          (check-false (search "[OPTIONS] <APP|COMMAND>" english
+                               :test #'char=))
+          (check-false (search "[OPTIONS] <APP|COMMAND>" chinese
+                               :test #'char=))
+          (check-true (search "  uninstall   Uninstall" english
+                              :test #'char=))
+          (check-true (search "  uninstall   卸载" chinese
+                              :test #'char=)))
+        (when command
+          (check-true (search (format nil "taf ~A" command) english
+                              :test #'char=))
+          (check-true (search (format nil "taf ~A" command) chinese
+                              :test #'char=)))))))
+
+(deftest test-taf-cli-common-error-is-localized-with-stable-option ()
+  (let ((english
+          (taffish.i18n:with-language ("en")
+            (%taf-cli-condition-string
+             (lambda ()
+               (taf.cli::%parse-taf-build-args '("--not-an-option"))))))
+        (chinese
+          (taffish.i18n:with-language ("zh")
+            (%taf-cli-condition-string
+             (lambda ()
+               (taf.cli::%parse-taf-build-args '("--not-an-option")))))))
+    (check-true (search "unknown option" english :test #'char=))
+    (check-true (search "未知选项" chinese :test #'char=))
+    (check-true (search "--not-an-option" english :test #'char=))
+    (check-true (search "--not-an-option" chinese :test #'char=))))
 
 (deftest test-taf-cli-new-help-string-basic ()
   (let ((help-string (taf.cli::%get-taf-new-help-string)))
@@ -86,7 +179,11 @@
     (check-equal (%taf-cli-string-contains-p help-string "Details:") t)
     (check-equal (%taf-cli-string-contains-p help-string "taf check") t)
     (check-equal (%taf-cli-string-contains-p help-string "taffish.toml") t)
-    (check-equal (%taf-cli-string-contains-p help-string "main .taf") t)))
+    (check-equal (%taf-cli-string-contains-p help-string "main .taf") t)
+    (check-equal (%taf-cli-string-contains-p help-string "smoke metadata") t)
+    (check-equal (%taf-cli-string-contains-p help-string
+                                             "dependency/image consistency")
+                 t)))
 
 (deftest test-taf-cli-run-taf-check-extra-args-error ()
   (check-equal
@@ -229,9 +326,29 @@
     (check-equal (%taf-cli-string-contains-p help-string "release.md") t)
     (check-equal (%taf-cli-string-contains-p help-string "GitHub release") t)
     (check-equal (%taf-cli-string-contains-p help-string "v<version>-r<release>") t)
-    (check-equal (%taf-cli-string-contains-p help-string "resumes matching") t)
+    (check-equal (%taf-cli-string-contains-p help-string
+                                             "rerun the same command")
+                 t)
+    (check-equal (%taf-cli-string-contains-p help-string
+                                             "already created by")
+                 t)
+    (check-equal (%taf-cli-string-contains-p help-string
+                                             "successful no-op")
+                 t)
     (check-equal (%taf-cli-string-contains-p help-string "conflicting commits") t)
-    (check-equal (%taf-cli-string-contains-p help-string "fail fast") t)))
+    (check-equal (%taf-cli-string-contains-p help-string "fail fast") t)
+    (let ((chinese
+            (taffish.i18n:with-language ("zh")
+              (taf.cli::%get-taf-publish-help-string))))
+      (check-equal (%taf-cli-string-contains-p chinese
+                                               "重新运行完全相同的命令")
+                   t)
+      (check-equal (%taf-cli-string-contains-p chinese
+                                               "已由 --create-repo 创建")
+                   t)
+      (check-equal (%taf-cli-string-contains-p chinese
+                                               "不会重复执行发布修改")
+                   t))))
 
 (deftest test-taf-cli-parse-taf-publish-args-default ()
   (multiple-value-bind
@@ -1102,7 +1219,14 @@
     (check-equal (%taf-cli-string-contains-p help-string "TAFFISH_CONFIG") t)
     (check-equal (%taf-cli-string-contains-p help-string "taf config path") t)
     (check-equal (%taf-cli-string-contains-p help-string "taf config init") t)
-    (check-equal (%taf-cli-string-contains-p help-string "do not check") t)))
+    (check-equal (%taf-cli-string-contains-p help-string "taf config language") t)
+    (check-equal (%taf-cli-string-contains-p help-string "--show") t)
+    (check-equal (%taf-cli-string-contains-p help-string "en and zh are built in") t)
+    (check-equal (%taf-cli-string-contains-p help-string "do not check") t)
+    (check-equal (%taf-cli-string-contains-p help-string "Examples:") t)
+    (check-equal (%taf-cli-string-contains-p help-string
+                                             "taf config language auto")
+                 t)))
 
 (deftest test-taf-cli-parse-taf-config-args-default ()
   (multiple-value-bind (mode scope)
@@ -1132,6 +1256,24 @@
     (check-equal profile :china)
     (check-equal force-p t)))
 
+(deftest test-taf-cli-parse-taf-config-language-show ()
+  (multiple-value-bind (mode scope profile force-p language)
+      (taf.cli::%parse-taf-config-args '("language" "--show" "--system"))
+    (check-equal mode :language)
+    (check-equal scope :system)
+    (check-equal profile :github)
+    (check-equal force-p nil)
+    (check-equal language nil)))
+
+(deftest test-taf-cli-parse-taf-config-language-value ()
+  (multiple-value-bind (mode scope profile force-p language)
+      (taf.cli::%parse-taf-config-args '("language" "zh" "--user"))
+    (check-equal mode :language)
+    (check-equal scope :user)
+    (check-equal profile :github)
+    (check-equal force-p nil)
+    (check-equal language "zh")))
+
 (deftest test-taf-cli-parse-taf-config-args-help ()
   (multiple-value-bind (mode scope)
       (taf.cli::%parse-taf-config-args '("--help"))
@@ -1153,7 +1295,17 @@
 	   (%taf-cli-signal-error-p
 	    (lambda ()
 	      (taf.cli::%parse-taf-config-args '("init" "--github" "--china"))))
-	   t))
+	   t)
+	  (check-true
+	   (%taf-cli-signal-error-p
+	    (lambda ()
+	      (taf.cli::%parse-taf-config-args
+	       '("language" "--show" "zh")))))
+	  (check-true
+	   (%taf-cli-signal-error-p
+	    (lambda ()
+	      (taf.cli::%parse-taf-config-args
+	       '("language" "zh" "--force"))))))
 
 (deftest test-taf-cli-history-help-string-basic ()
   (let ((help-string (taf.cli::%get-taf-history-help-string)))

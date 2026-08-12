@@ -118,6 +118,9 @@ TAFFISH 不负责 GitHub 登录。默认执行会关闭 Git/GitHub 的交互式�
 4. 完整内容会成为 GitHub Release notes。
 5. 归一化后的 notes 哈希会成为不可变发布意图的一部分。
 
+归一化会把 CRLF/CR 转换为 LF，并忽略末尾换行，因为 GitHub 可能为保存后的 Release
+body 添加一个最终 LF。内部换行、普通空格和其他所有正文仍属于严格身份的一部分。
+
 commit 前会把 `release.md` 从 git index 中移除。
 
 ## Repository 创建与保护策略

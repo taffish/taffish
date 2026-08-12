@@ -10,12 +10,13 @@
 4. [开发流程与维护约定](zh-CN/03-development-workflow.md)
 5. [从源码构建](zh-CN/build-from-source.md)
 6. [han 基础库](zh-CN/han/README.md)
-7. [taffish-core](zh-CN/taffish-core/README.md)
-8. [taf-core](zh-CN/taf-core/README.md)
-9. [taffish-cli](zh-CN/taffish-cli/README.md)
-10. [taf-cli](zh-CN/taf-cli/README.md)
-11. [taffish-mcp](zh-CN/taffish-mcp/README.md)
-12. [公开 API](zh-CN/api/README.md)
+7. [taffish-i18n](zh-CN/taffish-i18n/README.md)
+8. [taffish-core](zh-CN/taffish-core/README.md)
+9. [taf-core](zh-CN/taf-core/README.md)
+10. [taffish-cli](zh-CN/taffish-cli/README.md)
+11. [taf-cli](zh-CN/taf-cli/README.md)
+12. [taffish-mcp](zh-CN/taffish-mcp/README.md)
+13. [公开 API](zh-CN/api/README.md)
 
 历史 release engineering 上下文：
 
@@ -31,11 +32,12 @@
 
 ## 当前代码分层
 
-TAFFISH 当前可以理解为六层：
+TAFFISH 当前可以理解为七层：
 
 | 层级 | 目录或系统 | 主要责任 |
 | --- | --- | --- |
 | 基础库 | `vendor/han` | 平台差异、路径、JSON、参数规格与绑定等通用能力。 |
+| 人类本地化 | `taffish-i18n` | 解析 CLI 人类语言并安全渲染内置/外部 catalog，不改变机器接口。 |
 | TAF 语言核心 | `taffish-core` | 把 `.taf` 源码从文本编译成可运行 shell 脚本。 |
 | TAF 命令行入口 | `taffish-cli` | 提供面向 TAF 编译器的 CLI 入口。 |
 | 项目与 hub 工具 | `taf-core` | 支持 `taf` 命令的项目、hub、系统配置、历史和诊断功能。 |

@@ -339,6 +339,16 @@ profile：
 :china
 ```
 
+### `taf.core:system-config-language`
+
+稳定性：v0.11.0 新增接口。
+
+作用：查看 configured/displayed language 和可用内置/外部语言包，或更新目标 scope 的顶层
+`language` 字段。
+
+副作用：`:language` 为 nil 时只读；否则在保留所有非 language config 文本的同时写入目标
+配置文件。system scope 需要 root。外部语言 ID 必须存在于当前发现结果中。
+
 ### `taf.core:system-doctor`
 
 稳定性：稳定。
@@ -394,6 +404,7 @@ scope init 需要 root。它不修改 shell/editor 配置或权限，不启动�
 | `hub-prune` | `yes-p` 为真时删除旧本地安装目录和 launcher。 |
 | `hub-uninstall` | 删除安装目录和 launcher。 |
 | `system-config-init` | 写 config。 |
+| `system-config-language :language <value>` | 窄更新顶层 language 字段；system scope 需要 root。 |
 | `system-doctor :init-p t` | 创建目录。 |
 | `system-history :clear-p t` | 删除 history。 |
 

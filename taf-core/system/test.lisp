@@ -119,6 +119,7 @@
                     :verbose nil)))
       (check-equal (getf result :scope) :user)
       (check-equal (getf result :home) (han.path:->namestring user-home))
+      (check-equal (getf result :language) "auto")
       (check-equal
        (not (null
              (search "/apps/" (getf result :apps-dir) :test #'char=)))
@@ -236,7 +237,137 @@ enabled = true
        t)
       (check-equal
        (not (null (search "https://gitee.com/taffish-org/" content :test #'char=)))
-       t))))
+       t)
+      (check-true (search "language = \"auto\"" content :test #'char=)))))
+
+(deftest test-taf-system-config-init-github-defaults-to-auto ()
+  (with-taf-system-temp-dir (user-home)
+    (let* ((system-home (%taf-system-temp-dir-named "taf-system-unused"))
+           (result (taf.core:system-config-init
+                    :scope :user
+                    :profile :github
+                    :user-home user-home
+                    :system-home system-home
+                    :verbose nil))
+           (content (han.os:load-string (getf result :file))))
+      (check-equal (getf result :profile) :github)
+      (check-true (search "language = \"auto\"" content :test #'char=)))))
+
+(deftest test-taf-system-config-language-query-is-read-only ()
+  (with-taf-system-temp-dir (root)
+    (let* ((user-home (han.path:join-path root "user/"))
+           (system-home (han.path:join-path root "system/")))
+      (let ((taffish.i18n::*environment-reader*
+              (lambda (name) (declare (ignore name)) nil)))
+        (let ((result (taf.core:system-config-language
+                       :user-home user-home
+                       :system-home system-home
+                       :verbose nil)))
+          (check-equal (getf result :configured-language) "auto")
+          (check-equal (getf result :configured-source) :default)
+          (check-equal (getf result :display-language) "en")
+          (check-equal (getf result :display-source) :default)
+          (check-equal (getf result :updated-p) nil)
+          (check-equal
+           (mapcar (lambda (entry) (getf entry :id))
+                   (getf result :available-languages))
+           '("en" "zh"))
+          (check-equal (probe-file user-home) nil))))))
+
+(deftest test-taf-system-config-language-preserves-config-text ()
+  (with-taf-system-temp-dir (root)
+    (let* ((user-home (han.path:join-path root "user/"))
+           (system-home (han.path:join-path root "system/"))
+           (config-file (han.path:join-path user-home "config.toml"))
+           (original
+             "# custom config
+schema_version = \"taffish.config/v1\"
+profile = \"china\"
+language = \"en\"  # keep language comment
+future_key = \"preserve-me\"
+
+[index]
+url = \"file:///custom-index.json\"
+"))
+      (%taf-system-write-string config-file original)
+      (let ((taffish.i18n::*environment-reader*
+              (lambda (name) (declare (ignore name)) nil)))
+        (let* ((result
+                 (taf.core:system-config-language
+                  :language "zh"
+                  :user-home user-home
+                  :system-home system-home
+                  :verbose nil))
+               (content (han.os:load-string config-file)))
+          (check-equal (getf result :saved-language) "zh")
+          (check-equal (getf result :configured-language) "zh")
+          (check-true (search "language = \"zh\"  # keep language comment"
+                              content :test #'char=))
+          (check-true (search "future_key = \"preserve-me\""
+                              content :test #'char=))
+          (check-true (search "profile = \"china\"" content :test #'char=))
+          (check-true (search "url = \"file:///custom-index.json\""
+                              content :test #'char=))
+          (check-equal
+           content
+           "# custom config
+schema_version = \"taffish.config/v1\"
+profile = \"china\"
+language = \"zh\"  # keep language comment
+future_key = \"preserve-me\"
+
+[index]
+url = \"file:///custom-index.json\""))))))
+
+(deftest test-taf-system-config-language-inserts-and-validates-external ()
+  (with-taf-system-temp-dir (root)
+    (let* ((user-home (han.path:join-path root "user/"))
+           (system-home (han.path:join-path root "system/"))
+           (config-file (han.path:join-path user-home "config.toml")))
+      (%taf-system-write-string
+       config-file
+       "schema_version = \"taffish.config/v1\"
+
+[index]
+url = \"file:///index.json\"
+")
+      (%taf-system-write-string
+       (han.path:join-path user-home "share/locales/ja/messages.json")
+       "{\"hello\":\"こんにちは\"}")
+      (let ((taffish.i18n::*environment-reader*
+              (lambda (name) (declare (ignore name)) nil)))
+        (let ((result
+                (taf.core:system-config-language
+                 :language "ja"
+                 :user-home user-home
+                 :system-home system-home
+                 :verbose nil)))
+          (check-equal (getf result :saved-language) "ja")
+          (check-true
+           (search "language = \"ja\""
+                   (han.os:load-string config-file)
+                   :test #'char=)))
+        (check-true
+         (%taf-system-signal-error-p
+          (lambda ()
+            (taf.core:system-config-language
+             :language "fr"
+             :user-home user-home
+             :system-home system-home
+             :verbose nil))))))))
+
+(deftest test-taf-system-config-language-system-requires-root ()
+  (unless (taf.core::%root-user-p)
+    (with-taf-system-temp-dir (root)
+      (check-true
+       (%taf-system-signal-error-p
+        (lambda ()
+          (taf.core:system-config-language
+           :language "zh"
+           :scope :system
+           :user-home (han.path:join-path root "user/")
+           :system-home (han.path:join-path root "system/")
+           :verbose nil)))))))
 
 (deftest test-taf-system-doctor-init-user-home-creates-dirs ()
   (with-taf-system-temp-dir (user-home)
@@ -634,6 +765,73 @@ enabled = true
                (vectorp (han.json:get-json evidence "loaded_files")))
               (check-true
                (stringp (han.json:get-json evidence "index_url"))))))))))
+
+(deftest test-taf-system-config-human-output-is-localized ()
+  (with-taf-system-temp-dir (root)
+    (let ((user-home (han.path:join-path root "user/"))
+          (system-home (han.path:join-path root "system/")))
+      (let ((english
+              (taffish.i18n:with-language ("en")
+                (with-output-to-string (out)
+                  (let ((*standard-output* out))
+                    (taf.core:system-config
+                     :user-home user-home :system-home system-home)))))
+            (chinese
+              (taffish.i18n:with-language ("zh")
+                (with-output-to-string (out)
+                  (let ((*standard-output* out))
+                    (taf.core:system-config
+                     :user-home user-home :system-home system-home))))))
+        (check-true (search "Effective config:" english :test #'char=))
+        (check-true (search "生效配置：" chinese :test #'char=))
+        (check-true (search "display language" english :test #'char=))
+        (check-true (search "显示语言" chinese :test #'char=))
+        (check-true (search "<default>" english :test #'char=))
+        (check-true (search "<unset>" english :test #'char=))
+        (check-true (search "<默认>" chinese :test #'char=))
+        (check-true (search "<未设置>" chinese :test #'char=))
+        (check-true (search "TAFFISH_CONFIG" english :test #'char=))
+        (check-true (search "TAFFISH_CONFIG" chinese :test #'char=))))))
+
+(deftest test-taf-system-doctor-human-output-localized-json-invariant ()
+  (with-taf-system-temp-dir (root)
+    (let ((user-home (han.path:join-path root "user/"))
+          (system-home (han.path:join-path root "system/")))
+      (with-taf-system-doctor-stubs
+        (flet ((doctor-result ()
+                 (taf.core:system-doctor
+                  :scope :user
+                  :user-home user-home
+                  :system-home system-home
+                  :verbose nil))
+               (doctor-text ()
+                 (with-output-to-string (out)
+                   (let ((*standard-output* out))
+                     (taf.core:system-doctor
+                      :scope :user
+                      :user-home user-home
+                      :system-home system-home
+                      :detail-p t)))))
+          (let ((english-result
+                  (taffish.i18n:with-language ("en") (doctor-result)))
+                (chinese-result
+                  (taffish.i18n:with-language ("zh") (doctor-result)))
+                (english-text
+                  (taffish.i18n:with-language ("en") (doctor-text)))
+                (chinese-text
+                  (taffish.i18n:with-language ("zh") (doctor-text))))
+            (check-equal
+             (han.json:encode-json
+              (taf.core::%doctor-result-json chinese-result))
+             (han.json:encode-json
+              (taf.core::%doctor-result-json english-result)))
+            (check-true (search "Diagnostics:" english-text :test #'char=))
+            (check-true (search "诊断：" chinese-text :test #'char=))
+            (check-true (search "修复建议" chinese-text :test #'char=))
+            (check-true
+             (search "TAFFISH home is not fully initialized."
+                     (getf (first (getf chinese-result :diagnostics)) :summary)
+                     :test #'char=))))))))
 
 (deftest test-taf-system-doctor-init-does-not-edit-user-config-files ()
   (with-taf-system-temp-dir (root)

@@ -46,7 +46,7 @@
         (args (cdr raw-argv)))
     (values cmd args)))
 
-(defun main (&optional (raw-argv (han.host:argv)))
+(defun %main (raw-argv)
   (handler-case
       (progn
         (multiple-value-bind (cmd args)
@@ -77,9 +77,14 @@
             (:config  (run-taf-config args))
             (:history (run-taf-history args))
             (:unknown
-             (error "Unknown taf command: ~S~%~A"
-                    raw-argv (%get-taf-help-string)))))
+             (error "~A~%~A"
+                    (%taf-unknown-command-message raw-argv)
+                    (%get-taf-help-string)))))
         (han.host:quit 0))
     (error (c)
       (format *error-output* "[TAF-ERROR] ~A~%" c)
       (han.host:quit 1))))
+
+(defun main (&optional (raw-argv (han.host:argv)))
+  (taffish.i18n:call-with-resolved-language
+   (lambda () (%main raw-argv))))

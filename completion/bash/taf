@@ -153,7 +153,7 @@ _taf_complete()
             opts="-i --init -u --user -s --system -j --json --verbose --shell -h --help"
             ;;
         config)
-            opts="show path init -u --user -s --system --github --china -f --force -h --help"
+            opts="show path init language en zh auto -u --user -s --system --show --github --china -f --force -h --help"
             ;;
         history)
             opts="-l --last -i --id -j --json -p --path -c --clear -h --help"

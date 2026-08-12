@@ -29,15 +29,15 @@
       (format t "~A" char))
     (format t "~%")))
 
-(defun %get-taffish-help-string ()
-  "USAGE:
+(defun %get-taffish-help-string-english ()
+  "Usage:
   taffish [-h | --help]           Print help info and exit
   taffish [-v | --version]        Print version info and exit
   taffish [ARGS...]               Compile TAFFISH code from STDIN
   taffish <FILE.TAF> [ARGS...]    Compile FILE.TAF to shell
   taffish -- [ARGS...]            Compile TAFFISH code from STDIN
 
-DETAILS:
+Details:
   - If the first argument is an existing file, TAFFISH reads that file.
   - Otherwise TAFFISH reads source code from STDIN and treats arguments
     as .taf program arguments.
@@ -45,7 +45,9 @@ DETAILS:
   - TAFFISH_CONTAINER_BACKEND=apptainer|podman|docker forces generic
     <container:...> tags without overriding explicit backend tags.
   - TAFFISH_DOCKER_RUN_ARGS, TAFFISH_PODMAN_RUN_ARGS, and
-    TAFFISH_APPTAINER_RUN_ARGS append local backend-specific runtime args.")
+    TAFFISH_APPTAINER_RUN_ARGS append local backend-specific runtime args.
+  - Run `taf config language` to inspect languages or
+    `taf config language zh` to select built-in Chinese.")
 
 (defun run-taffish-help ()
   (format t "~A~%" *taffish-version*)
@@ -58,7 +60,7 @@ DETAILS:
 
 (defun run-taffish-cli (input-source core-args core-context)
   "Run TAFFISH CLI
-USAGE:
+Usage:
   taffish [file.taf] [args...]
   taffish --
   taffish -h | --help

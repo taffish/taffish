@@ -20,6 +20,7 @@ The system layer provides the environment foundation required for normal `taf` o
 | `home.lisp` | Define system and user directory conventions. |
 | `config.lisp` | Define config schema, defaults, read and merge logic. |
 | `history.lisp` | Record system history events. |
+| `doctor-i18n.lisp` | Map stable doctor diagnostics to localized human text. |
 | `doctor.lisp` | Diagnose system environment. |
 
 ## Home Directory Conventions
@@ -55,8 +56,9 @@ Common override sources include:
 
 1. `TAFFISH_CONFIG`
 2. `TAFFISH_INDEX_URL`
-3. `[index]` in local config files
-4. `[[source.rewrite]]` in local config files
+3. `TAFFISH_LANGUAGE` for human CLI presentation
+4. `[index]` in local config files
+5. `[[source.rewrite]]` in local config files
 
 ## Modification Guide
 
@@ -67,4 +69,4 @@ Change the system layer carefully because it affects user installation state. Ch
 3. Whether default GitHub/Gitee rules are correct.
 4. Whether doctor can detect new config or dependency issues.
 5. Whether history records events useful for debugging.
-
+6. Whether localized human output remains isolated from stable machine results.

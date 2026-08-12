@@ -15,7 +15,7 @@ schema_version = "taffish.config/v1"
 ```toml
 schema_version = "taffish.config/v1"
 profile = "github"
-language = "en"
+language = "auto"
 
 [index]
 url = "https://raw.githubusercontent.com/taffish/taffish-index/main/index/index.json"
@@ -39,7 +39,31 @@ url = "https://raw.githubusercontent.com/taffish/taffish-index/main/index/index.
 | --- | --- | --- |
 | `schema_version` | string | 必须是 `taffish.config/v1`。 |
 | `profile` | string | 当前内置 `github` 与 `china`。 |
-| `language` | string | 默认 `en`，预留给本地化。 |
+| `language` | string | 面向用户的 CLI 语言选择，默认 `auto`；内置 `en` 与 `zh`，`auto` 跟随主机 locale 并最终回退到 `en`。 |
+
+## 人类语言解析
+
+面向用户的 CLI 使用顶层 `language` 字段，但不会改变 Hub 和 system API 使用的普通
+effective-config 合并。语言选择优先级是：
+
+1. `TAFFISH_LANGUAGE`。
+2. `TAFFISH_CONFIG` 指向的显式 config。
+3. user config。
+4. system config。
+5. 隐含的 `auto` 选择。
+
+选中 `auto` 时会读取 `LC_ALL`、`LC_MESSAGES` 和 `LANG`，其中也包括 config 没有提供
+language 的情况。`en-US`、`zh-CN` 等值会规范化到内置 `en`、`zh`；其他 locale 标识
+可以选择外部语言包。主机 locale 缺失或不可识别，以及可选语言数据无效时都会软失败并
+回退英文；普通 effective-config parser 仍保留下文的严格错误策略。需要确定性人类输出时，
+应显式保存 `en` 或 `zh`。
+
+语言只影响面向用户的表现。机器接口、config key、生成 shell 和 MCP 契约保持稳定。
+详见[本地化契约](localization.md)。
+
+使用 `taf config language` 查看解析结果和已发现语言包；使用
+`taf config language <LANGUAGE>` 更新偏好而不重写其他 config 内容。root 管理的 system
+scope 需要增加 `--system`。
 
 ## `[index]`
 
@@ -85,7 +109,7 @@ enabled = true
 ```toml
 schema_version = "taffish.config/v1"
 profile = "github"
-language = "en"
+language = "auto"
 
 [index]
 url = "https://raw.githubusercontent.com/taffish/taffish-index/main/index/index.json"
@@ -96,7 +120,7 @@ url = "https://raw.githubusercontent.com/taffish/taffish-index/main/index/index.
 ```toml
 schema_version = "taffish.config/v1"
 profile = "china"
-language = "en"
+language = "auto"
 
 [index]
 url = "https://gitee.com/taffish-org/taffish-index/raw/main/index/index.json"

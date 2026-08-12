@@ -38,7 +38,7 @@
       (format t "~A" char))
     (format t "~%")))
 
-(defun %get-taf-help-string ()
+(defun %get-taf-help-string-english ()
   "Usage:
   taf [-h | --help]
   taf [-v | --version]
@@ -47,36 +47,35 @@
   taf <COMMAND> [ARGS...]
 
 Project commands:
-  new <APP-NAME>                  Create a new TAFFISH app project
-  check                           Check current TAFFISH app project
-  compile                         Compile current project and print shell code
-  build [OPTIONS]                 Build current project into taf-command
-  run [OPTIONS] [ARGS...]         Compile and run current project
-  publish [OPTIONS]               Publish current project to GitHub
+  new         Create a new TAFFISH app project
+  check       Check current TAFFISH app project
+  compile     Compile current project and print shell code
+  build       Build a versioned command wrapper or image
+  run         Compile and run current project
+  publish     Publish current project to GitHub
 
 Hub commands:
-  update [OPTIONS]                Update local TAFFISH index
-  search [OPTIONS] <KEYWORD>      Search apps from local index
-  info [OPTIONS] <APP|COMMAND>... Show indexed app/version information
-  install [OPTIONS] <APP|COMMAND>...
-                                  Install apps or commands from local index
-  outdated [OPTIONS] [APP|COMMAND...]
-                                  Show installed apps older than local index
-  upgrade [OPTIONS] [APP|COMMAND...]
-                                  Install newer indexed versions
-  prune [OPTIONS] [APP|COMMAND...]
-                                  Remove older locally installed versions
-  uninstall [OPTIONS] <APP|COMMAND>...
-                                  Uninstall local apps or commands
-  list [OPTIONS]                  List installed or indexed apps
-  which [OPTIONS] <APP|COMMAND>...
-                                  Show local paths and metadata
+  update      Update local TAFFISH index
+  search      Search apps in the local index
+  info        Show indexed app/version information
+  install     Install from the index or a local project
+  outdated    Show installed apps older than local index
+  upgrade     Install newer indexed versions
+  prune       Remove older locally installed versions
+  uninstall   Uninstall local apps or commands
+  list        List installed or indexed apps
+  which       Show local paths and metadata
 
 System commands:
-  doctor [OPTIONS]
-                                  Check or initialize TAFFISH environment
-  config [OPTIONS]                Show TAFFISH config
-  history [OPTIONS]               Show or clear local run history
+  doctor      Check or initialize TAFFISH environment
+  config      Show or manage TAFFISH runtime configuration
+  history     Show or clear local execution history
+
+Language:
+  taf config language             Show current and available languages
+  taf config language auto        Follow the host locale [default]
+  taf config language zh          Save built-in Chinese as the preference
+  TAFFISH_LANGUAGE=en taf --help  Override language for one command
 
 Examples:
   taf help install
@@ -117,8 +116,8 @@ Examples:
       ((string= cmd "config") (%get-taf-config-help-string))
       ((string= cmd "history") (%get-taf-history-help-string))
       (t
-       (error "[help] unknown command: ~S~%Run `taf --help` to list commands."
-              command)))))
+       (error "~A~%Run `taf --help` to list commands."
+              (%taf-help-unknown-command-message command))))))
 
 (defun run-taf-help (&optional raw-args)
   (cond
@@ -129,15 +128,15 @@ Examples:
     ((null (cdr raw-args))
      (format t "~A~%" (%get-taf-command-help-string (car raw-args))))
     (t
-     (error "[help] expected at most one command, got: ~S~%~A"
-            raw-args
+     (error "~A~%~A"
+            (%taf-help-too-many-message raw-args)
             (%get-taf-help-string)))))
 
 ;;;; ------------------------------------------------------------
 ;;;; run: project: new
 ;;;; ------------------------------------------------------------
 
-(defun %get-taf-new-help-string ()
+(defun %get-taf-new-help-string-english ()
   (format nil "Usage:
   taf new [-h | --help]
   taf new <APP-NAME> [OPTIONS]
@@ -185,7 +184,7 @@ Options:
 ;;;; run: project: check
 ;;;; ------------------------------------------------------------
 
-(defun %get-taf-check-help-string ()
+(defun %get-taf-check-help-string-english ()
   "Usage:
   taf check [-h | --help]
   taf check
@@ -194,9 +193,9 @@ Check the current TAFFISH app project.
 
 Details:
   - finds taffish.toml from current directory upward
-  - checks required files
-  - checks basic taffish.toml fields
-  - parses the main .taf file
+  - validates required files and package/repository/command metadata
+  - validates container, build and smoke metadata for containerized projects
+  - parses the main .taf file and checks dependency/image consistency
   - reports project summary
 
 Options:
@@ -217,7 +216,7 @@ Options:
 ;;;; run: project: compile
 ;;;; ------------------------------------------------------------
 
-(defun %get-taf-compile-help-string ()
+(defun %get-taf-compile-help-string-english ()
   "Usage:
   taf compile [-h | --help]
   taf compile [ARGS...]
@@ -264,7 +263,7 @@ Note:
 ;;;; run: project: build
 ;;;; ------------------------------------------------------------
 
-(defun %get-taf-build-help-string ()
+(defun %get-taf-build-help-string-english ()
   "Usage:
   taf build [-h | --help]
   taf build
@@ -317,8 +316,8 @@ The generated command uses that frozen snapshot instead of live src files.")
                   (setf backend (cadr args))
                   (parse (cddr args)))
                  (t
-                  (error "[build] unknown option: ~S~%~A"
-                         (car args)
+                  (error "~A~%~A"
+                         (%taf-unknown-option-message "build" (car args))
                          (%get-taf-build-help-string))))))
       (parse raw-args))))
 
@@ -351,7 +350,7 @@ The generated command uses that frozen snapshot instead of live src files.")
 ;;;; run: project: run
 ;;;; ------------------------------------------------------------
 
-(defun %get-taf-run-help-string ()
+(defun %get-taf-run-help-string-english ()
   "Usage:
   taf run [-h | --help]
   taf run [-b | --backend <docker|podman|apptainer>] [ARGS...]
@@ -442,7 +441,7 @@ Note:
 ;;;; run: project: publish
 ;;;; ------------------------------------------------------------
 
-(defun %get-taf-publish-help-string ()
+(defun %get-taf-publish-help-string-english ()
   "Usage:
   taf publish [-h | --help]
   taf publish [-n | --dry-run] [--latest | --pre] [-b | --build]
@@ -463,7 +462,10 @@ Details:
   - can create the GitHub repository when --create-repo is given
   - newly created repositories are locked by default:
     immutable releases are enabled and v* tags are protected from update/delete
-  - resumes matching interrupted publishes and treats completed publishes as no-op
+  - after an interruption, rerun the same command; matching repository, tag,
+    and release stages are skipped, including a repository already created by
+    --create-repo
+  - a matching completed publish is a successful no-op for publish mutations
   - rejects conflicting commits, tags, releases, or changed publish intent
   - commits, tags, pushes and optional release creation only when --yes is given
 
@@ -557,8 +559,8 @@ Note:
                   (setf prompt-p t)
                   (parse (cdr args)))
                  (t
-                  (error "[publish] unknown option: ~S~%~A"
-                         (car args)
+                  (error "~A~%~A"
+                         (%taf-unknown-option-message "publish" (car args))
                          (%get-taf-publish-help-string))))))
       (parse raw-args))))
 
@@ -586,7 +588,7 @@ Note:
 ;;;; run: hub: update
 ;;;; ------------------------------------------------------------
 
-(defun %get-taf-update-help-string ()
+(defun %get-taf-update-help-string-english ()
   "Usage:
   taf update [-h | --help]
   taf update [-u | --user | -s | --system] [--url <INDEX-URL>] [-y | --yes]
@@ -598,7 +600,7 @@ Details:
   - writes index/current.json for the selected scope
   - writes a timestamped copy under index/snapshots/
   - reads TAFFISH_INDEX_URL when --url is not given
-  - defaults to the official taffish index
+  - defaults to the official TAFFISH index
 
 Options:
   -u, --user                Update user index [default]
@@ -640,8 +642,8 @@ Options:
                   (setf yes-p t)
                   (parse (cdr args)))
                  (t
-                  (error "[update] unknown option: ~S~%~A"
-                         (car args)
+                  (error "~A~%~A"
+                         (%taf-unknown-option-message "update" (car args))
                          (%get-taf-update-help-string))))))
       (parse raw-args))))
 
@@ -662,7 +664,7 @@ Options:
 ;;;; run: hub: search
 ;;;; ------------------------------------------------------------
 
-(defun %get-taf-search-help-string ()
+(defun %get-taf-search-help-string-english ()
   "Usage:
   taf search [-h | --help]
   taf search [-u | --user | -s | --system] [-j | --json]
@@ -746,8 +748,8 @@ Options:
                   (error "[search] -h/--help must be used alone.~%~A"
                          (%get-taf-search-help-string)))
                  ((option-like-p (car args))
-                  (error "[search] unknown option: ~S~%~A"
-                         (car args)
+                  (error "~A~%~A"
+                         (%taf-unknown-option-message "search" (car args))
                          (%get-taf-search-help-string)))
                  (t
                   (push (car args) positionals)
@@ -822,7 +824,7 @@ Options:
      (error "[~A] --kind must be tool, flow, or all, but got: ~S"
             label value))))
 
-(defun %get-taf-info-help-string ()
+(defun %get-taf-info-help-string-english ()
   "Usage:
   taf info [-h | --help]
   taf info [-u | --user | -s | --system] [-j | --json]
@@ -898,8 +900,8 @@ Options:
                   (error "[info] -h/--help must be used alone.~%~A"
                          (%get-taf-info-help-string)))
                  ((option-like-p (car args))
-                  (error "[info] unknown option: ~S~%~A"
-                         (car args)
+                  (error "~A~%~A"
+                         (%taf-unknown-option-message "info" (car args))
                          (%get-taf-info-help-string)))
                  (t
                   (push (car args) positionals)
@@ -929,7 +931,7 @@ Options:
 ;;;; run: hub: install
 ;;;; ------------------------------------------------------------
 
-(defun %get-taf-install-help-string ()
+(defun %get-taf-install-help-string-english ()
   "Usage:
   taf install [-h | --help]
   taf install [OPTIONS] <APP-NAME|TAF-COMMAND>...
@@ -1129,8 +1131,8 @@ Examples:
                   (error "[install] -h/--help must be used alone.~%~A"
                          (%get-taf-install-help-string)))
                  ((option-like-p (car args))
-                  (error "[install] unknown option: ~S~%~A"
-                         (car args)
+                  (error "~A~%~A"
+                         (%taf-unknown-option-message "install" (car args))
                          (%get-taf-install-help-string)))
                  (t
                   (push (car args) positionals)
@@ -1183,7 +1185,7 @@ Examples:
 ;;;; run: hub: list
 ;;;; ------------------------------------------------------------
 
-(defun %get-taf-list-help-string ()
+(defun %get-taf-list-help-string-english ()
   "Usage:
   taf list [-h | --help]
   taf list [-l | --local | -o | --online] [-u | --user | -s | --system]
@@ -1265,8 +1267,9 @@ Options:
                          "--limit"))
                   (parse (cddr args)))
                  (t
-                  (error "[list] unknown option or argument: ~S~%~A"
-                         (car args)
+                  (error "~A~%~A"
+                         (%taf-unknown-option-or-argument-message
+                          "list" (car args))
                          (%get-taf-list-help-string))))))
       (parse raw-args))))
 
@@ -1288,7 +1291,7 @@ Options:
 ;;;; run: hub: outdated
 ;;;; ------------------------------------------------------------
 
-(defun %get-taf-outdated-help-string ()
+(defun %get-taf-outdated-help-string-english ()
   "Usage:
   taf outdated [-h | --help]
   taf outdated [-u | --user | -s | --system] [-a | --all] [-j | --json]
@@ -1384,8 +1387,8 @@ Examples:
                   (error "[outdated] -h/--help must be used alone.~%~A"
                          (%get-taf-outdated-help-string)))
                  ((option-like-p (car args))
-                  (error "[outdated] unknown option: ~S~%~A"
-                         (car args)
+                  (error "~A~%~A"
+                         (%taf-unknown-option-message "outdated" (car args))
                          (%get-taf-outdated-help-string)))
                  (t
                   (push (car args) positionals)
@@ -1410,7 +1413,7 @@ Examples:
 ;;;; run: hub: upgrade
 ;;;; ------------------------------------------------------------
 
-(defun %get-taf-upgrade-help-string ()
+(defun %get-taf-upgrade-help-string-english ()
   "Usage:
   taf upgrade [-h | --help]
   taf upgrade [-u | --user | -s | --system] [-n | --dry-run | -y | --yes]
@@ -1540,8 +1543,8 @@ Examples:
                   (error "[upgrade] -h/--help must be used alone.~%~A"
                          (%get-taf-upgrade-help-string)))
                  ((option-like-p (car args))
-                  (error "[upgrade] unknown option: ~S~%~A"
-                         (car args)
+                  (error "~A~%~A"
+                         (%taf-unknown-option-message "upgrade" (car args))
                          (%get-taf-upgrade-help-string)))
                  (t
                   (push (car args) positionals)
@@ -1572,7 +1575,7 @@ Examples:
 ;;;; run: hub: prune
 ;;;; ------------------------------------------------------------
 
-(defun %get-taf-prune-help-string ()
+(defun %get-taf-prune-help-string-english ()
   "Usage:
   taf prune [-h | --help]
   taf prune [-u | --user | -s | --system] [-n | --dry-run | -y | --yes]
@@ -1682,8 +1685,8 @@ Examples:
                   (error "[prune] -h/--help must be used alone.~%~A"
                          (%get-taf-prune-help-string)))
                  ((option-like-p (car args))
-                  (error "[prune] unknown option: ~S~%~A"
-                         (car args)
+                  (error "~A~%~A"
+                         (%taf-unknown-option-message "prune" (car args))
                          (%get-taf-prune-help-string)))
                  (t
                   (push (car args) positionals)
@@ -1710,7 +1713,7 @@ Examples:
 ;;;; run: hub: uninstall
 ;;;; ------------------------------------------------------------
 
-(defun %get-taf-uninstall-help-string ()
+(defun %get-taf-uninstall-help-string-english ()
   "Usage:
   taf uninstall [-h | --help]
   taf uninstall [-u | --user | -s | --system] [-n | --dry-run]
@@ -1794,8 +1797,8 @@ Options:
                   (error "[uninstall] -h/--help must be used alone.~%~A"
                          (%get-taf-uninstall-help-string)))
                  ((option-like-p (car args))
-                  (error "[uninstall] unknown option: ~S~%~A"
-                         (car args)
+                  (error "~A~%~A"
+                         (%taf-unknown-option-message "uninstall" (car args))
                          (%get-taf-uninstall-help-string)))
                  (t
                   (push (car args) positionals)
@@ -1828,7 +1831,7 @@ Options:
 ;;;; run: hub: which
 ;;;; ------------------------------------------------------------
 
-(defun %get-taf-which-help-string ()
+(defun %get-taf-which-help-string-english ()
   "Usage:
   taf which [-h | --help]
   taf which [-u | --user | -s | --system] [-j | --json]
@@ -1902,8 +1905,8 @@ Options:
                   (error "[which] -h/--help must be used alone.~%~A"
                          (%get-taf-which-help-string)))
                  ((option-like-p (car args))
-                  (error "[which] unknown option: ~S~%~A"
-                         (car args)
+                  (error "~A~%~A"
+                         (%taf-unknown-option-message "which" (car args))
                          (%get-taf-which-help-string)))
                  (t
                   (push (car args) positionals)
@@ -1933,7 +1936,7 @@ Options:
 ;;;; run: doctor
 ;;;; ------------------------------------------------------------
 
-(defun %get-taf-doctor-help-string ()
+(defun %get-taf-doctor-help-string-english ()
   "Usage:
   taf doctor [-h | --help]
   taf doctor [-u | --user | -s | --system] [--shell SHELL]
@@ -2011,8 +2014,8 @@ Options:
                     (setf shell (intern (string-upcase value) :keyword)))
                   (parse (cddr args)))
                  (t
-                  (error "[doctor] unknown option: ~S~%~A"
-                         (car args)
+                  (error "~A~%~A"
+                         (%taf-unknown-option-message "doctor" (car args))
                          (%get-taf-doctor-help-string))))))
       (parse raw-args))))
 
@@ -2039,15 +2042,17 @@ Options:
 ;;;; run: config
 ;;;; ------------------------------------------------------------
 
-(defun %get-taf-config-help-string ()
+(defun %get-taf-config-help-string-english ()
   "Usage:
   taf config [-h | --help]
   taf config [show] [-u | --user | -s | --system]
   taf config path [-u | --user | -s | --system]
   taf config init [-u | --user | -s | --system]
                   [--github | --china] [-f | --force]
+  taf config language [--show] [-u | --user | -s | --system]
+  taf config language <LANGUAGE> [-u | --user | -s | --system]
 
-Show or initialize TAFFISH runtime configuration.
+Show, initialize, or manage TAFFISH runtime configuration.
 
 Details:
   - reads TAFFISH_USER_HOME and TAFFISH_SYSTEM_HOME when set
@@ -2055,6 +2060,10 @@ Details:
   - reads config.toml from the selected TAFFISH home when present
   - reads TAFFISH_CONFIG as an explicit config file override when set
   - config controls index URL and source URL rewrite for installation
+  - language lists built-in and valid external languages, or saves one choice
+  - en and zh are built in; auto is the default and follows the host locale
+  - unrecognized or missing host locale data falls back to English
+  - TAFFISH_LANGUAGE temporarily overrides the saved language
   - prints the active apps/index/images/bin/cache/share/logs paths
   - show/path do not check, create or repair directories
 
@@ -2063,14 +2072,23 @@ Options:
   -s, --system              Show system home as active scope
   --github                  Initialize GitHub/default profile
   --china                   Initialize China mirror profile template
+  --show                    Show language configuration and available languages
   -f, --force               Replace existing config file during init
-  -h, --help                Show this help")
+  -h, --help                Show this help
+
+Examples:
+  taf config language
+  taf config language zh
+  taf config language auto
+  taf config init --china")
 
 (defun %parse-taf-config-args (raw-args)
   (let ((scope :user)
         (mode :config)
         (profile :github)
         (force-p nil)
+        (language nil)
+        (language-show-p nil)
         (mode-seen-p nil)
         (profile-seen-p nil)
         (user-seen-p nil)
@@ -2080,15 +2098,24 @@ Options:
                  ((null args)
                   (when (and user-seen-p system-seen-p)
                     (error "[config] --user and --system can't be used together."))
-                  (values mode scope profile force-p))
+                  (when (and language-show-p (not (eql mode :language)))
+                    (error "[config] --show is only valid with `config language`."))
+                  (when (and language-show-p language)
+                    (error "[config] --show and a language value can't be used together."))
+                  (when (and (eql mode :language)
+                             (or profile-seen-p force-p))
+                    (error "[config] language does not accept profile or --force options."))
+                  (values mode scope profile force-p language))
                  ((member (car args) '("-h" "--help") :test #'string-equal)
                   (values :help nil nil nil))
-                 ((member (car args) '("show" "path" "init") :test #'string-equal)
+                 ((member (car args) '("show" "path" "init" "language")
+                          :test #'string-equal)
                   (when mode-seen-p
                     (error "[config] only one subcommand is allowed."))
                   (setf mode (cond
                                ((string-equal (car args) "show") :config)
                                ((string-equal (car args) "path") :path)
+                               ((string-equal (car args) "language") :language)
                                (t :init))
                         mode-seen-p t)
                   (parse (cdr args)))
@@ -2112,17 +2139,27 @@ Options:
                   (setf profile :china
                         profile-seen-p t)
                   (parse (cdr args)))
+                 ((string= (car args) "--show")
+                  (setf language-show-p t)
+                  (parse (cdr args)))
                  ((%taf-option-p (car args) "-f" "--force")
                   (setf force-p t)
                   (parse (cdr args)))
+                 ((and (eql mode :language)
+                       (not language)
+                       (not language-show-p)
+                       (not (and (> (length (car args)) 0)
+                                 (char= #\- (char (car args) 0)))))
+                  (setf language (car args))
+                  (parse (cdr args)))
                  (t
-                  (error "[config] unknown option: ~S~%~A"
-                         (car args)
+                  (error "~A~%~A"
+                         (%taf-unknown-option-message "config" (car args))
                          (%get-taf-config-help-string))))))
       (parse raw-args))))
 
 (defun run-taf-config (raw-args)
-  (multiple-value-bind (mode scope profile force-p)
+  (multiple-value-bind (mode scope profile force-p language)
       (%parse-taf-config-args raw-args)
     (case mode
       (:help
@@ -2135,6 +2172,8 @@ Options:
        (taf.core:system-config-init :scope scope
                                     :profile profile
                                     :force-p force-p))
+      (:language
+       (taf.core:system-config-language :scope scope :language language))
       (t
        (error "[config] unknown config mode: ~S" mode)))))
 
@@ -2142,7 +2181,7 @@ Options:
 ;;;; run: history
 ;;;; ------------------------------------------------------------
 
-(defun %get-taf-history-help-string ()
+(defun %get-taf-history-help-string-english ()
   "Usage:
   taf history [-h | --help]
   taf history [-l | --last <N>] [-j | --json]
@@ -2150,7 +2189,7 @@ Options:
   taf history [-p | --path]
   taf history [-c | --clear]
 
-Show local TAFFISH execution provenance history.
+Show local TAFFISH execution history and provenance.
 
 Details:
   - reads $TAFFISH_USER_HOME/logs/history.jsonl
@@ -2349,8 +2388,9 @@ Options:
                             clear-seen-p t)
                       (parse (cdr args)))
                      (t
-                      (error "[history] unknown option: ~S~%~A"
-                             (car args)
+                      (error "~A~%~A"
+                             (%taf-unknown-option-message
+                              "history" (car args))
                              (%get-taf-history-help-string))))))
           (parse raw-args)))))
 

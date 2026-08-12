@@ -82,6 +82,7 @@ taffish-mcp
 | `taffish.asd` | Main TAFFISH ASDF system definition; determines load order and module boundaries. |
 | `load-taffish.dev.lisp` | Development load entry point. |
 | `vendor/han/` | Built-in base library for cross-platform and common parsing capabilities. |
+| `taffish-i18n/` | Shared human CLI language selection, catalogs, and safe fallback. |
 | `taffish-core/` | TAF language core. |
 | `taffish-cli/` | `taffish` command entry point. |
 | `taf-core/` | Project, Hub, and system capabilities for `taf`. |

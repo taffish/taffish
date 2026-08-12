@@ -7,6 +7,18 @@
   :serial t
   :components
   (;; -------------------------
+   ;; shared i18n
+   ;; -------------------------
+   (:module "taffish-i18n"
+    :serial t
+    :components
+    ((:file "package")
+     (:file "locale")
+     (:file "render")
+     (:file "catalog")
+     (:file "builtin")))
+
+   ;; -------------------------
    ;; taffish-core
    ;; -------------------------
    (:module "taffish-core"
@@ -41,6 +53,7 @@
     :serial t
     :components
     ((:file "package")
+     (:file "i18n")
      (:file "run")
      (:file "main")))
 
@@ -79,6 +92,7 @@
      ((:file "home")
       (:file "config")
       (:file "history")
+      (:file "doctor-i18n")
       (:file "doctor")))))
 
 
@@ -89,6 +103,7 @@
     :serial t
     :components
     ((:file "package")
+     (:file "i18n")
      (:file "run")
      (:file "main")))
 
@@ -100,6 +115,7 @@
     :components
     ((:file "package")
      (:file "protocol")
+     (:file "i18n")
      (:file "compiler")
      (:file "app")
      (:file "project")

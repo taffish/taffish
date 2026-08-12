@@ -20,6 +20,7 @@
 | `home.lisp` | 定义系统与用户目录约定。 |
 | `config.lisp` | 定义配置 schema、默认值、读取与合并逻辑。 |
 | `history.lisp` | 记录系统历史事件。 |
+| `doctor-i18n.lisp` | 把稳定 doctor 诊断映射为本地化人类文本。 |
 | `doctor.lisp` | 诊断系统环境。 |
 
 ## home 目录约定
@@ -55,8 +56,9 @@ taffish.config/v1
 
 1. `TAFFISH_CONFIG`
 2. `TAFFISH_INDEX_URL`
-3. 本地配置文件中的 `[index]`
-4. 本地配置文件中的 `[[source.rewrite]]`
+3. 用于 CLI 人类表现的 `TAFFISH_LANGUAGE`
+4. 本地配置文件中的 `[index]`
+5. 本地配置文件中的 `[[source.rewrite]]`
 
 ## 修改指南
 
@@ -67,3 +69,4 @@ taffish.config/v1
 3. 默认 GitHub/Gitee 规则是否正确。
 4. doctor 是否能发现新配置或新依赖的问题。
 5. history 是否记录了有助于排查问题的事件。
+6. 本地化人类输出是否仍与稳定机器结果隔离。

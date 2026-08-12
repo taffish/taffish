@@ -15,7 +15,7 @@ The default configuration is equivalent to:
 ```toml
 schema_version = "taffish.config/v1"
 profile = "github"
-language = "en"
+language = "auto"
 
 [index]
 url = "https://raw.githubusercontent.com/taffish/taffish-index/main/index/index.json"
@@ -39,7 +39,34 @@ Arbitrary TOML sections are not currently supported. Unknown sections or keys sh
 | --- | --- | --- |
 | `schema_version` | string | Must be `taffish.config/v1`. |
 | `profile` | string | Currently built-in values are `github` and `china`. |
-| `language` | string | Defaults to `en`; reserved for localization. |
+| `language` | string | Human CLI language selection; defaults to `auto`. Built-ins are `en` and `zh`; `auto` follows the host locale and falls back to `en`. |
+
+## Human Language Resolution
+
+The human CLI uses the top-level `language` field without changing the normal
+effective-config merge used by Hub and system APIs. Its selection priority is:
+
+1. `TAFFISH_LANGUAGE`.
+2. The explicit config named by `TAFFISH_CONFIG`.
+3. User config.
+4. System config.
+5. Implicit `auto` selection.
+
+When the selected value is `auto`, including when no config supplies a
+language, `LC_ALL`, `LC_MESSAGES`, and `LANG` determine the displayed language.
+Values such as `en-US` and `zh-CN` normalize to built-in `en` and `zh`; other
+locale identifiers may select an external locale pack. Missing or unrecognized
+host locale data and invalid optional language data fail softly and fall back
+to English, while the normal effective-config parser retains the strict error
+policy below. Persist `en` or `zh` when deterministic human output is required.
+
+Language affects human presentation only. Machine interfaces, config keys,
+generated shell, and MCP contracts remain stable. See the
+[localization contract](localization.md).
+
+Use `taf config language` to inspect resolution and discovered packs, and
+`taf config language <LANGUAGE>` to update the preference without rewriting
+other config content. Add `--system` for the root-managed system scope.
 
 ## `[index]`
 
@@ -85,7 +112,7 @@ The `github` profile uses the GitHub index:
 ```toml
 schema_version = "taffish.config/v1"
 profile = "github"
-language = "en"
+language = "auto"
 
 [index]
 url = "https://raw.githubusercontent.com/taffish/taffish-index/main/index/index.json"
@@ -96,7 +123,7 @@ The `china` profile uses the Gitee index and rewrites GitHub sources to Gitee:
 ```toml
 schema_version = "taffish.config/v1"
 profile = "china"
-language = "en"
+language = "auto"
 
 [index]
 url = "https://gitee.com/taffish-org/taffish-index/raw/main/index/index.json"
@@ -130,4 +157,3 @@ In config files:
 5. `enabled` must be a boolean.
 
 This prevents incorrect configuration from being silently ignored and making download sources, mirrors, or index sources unreproducible.
-

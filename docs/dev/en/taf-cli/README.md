@@ -17,6 +17,11 @@ Help is part of the public CLI surface. `taf --help` should stay concise,
 while `taf help <command>` and `taf <command> --help` should route users to the
 same command-specific help text.
 
+`main.lisp` establishes the human language through `taffish.i18n` before
+dispatch. `i18n.lisp` owns complete built-in English/Chinese help and common
+top-level diagnostics. Command and option tokens stay identical in both
+languages; lower-level business errors may still use English fallback.
+
 ## System Position
 
 ```text
@@ -32,6 +37,7 @@ user
 | File | Role |
 | --- | --- |
 | `package.lisp` | Define CLI package. |
+| `i18n.lisp` | Own localized help and common human CLI diagnostics. |
 | `run.lisp` | Implement subcommand dispatch and execution. |
 | `main.lisp` | Provide entry function. |
 
@@ -69,6 +75,19 @@ otherwise skipped, the command should print a short `no changes` message
 instead of listing every unchanged app. JSON output remains the full
 machine-readable plan and keeps current/skipped items for automation.
 
+## Language Management
+
+`taf config language` and `taf config language --show` provide the same
+read-only status/discovery view. Supplying `en`, `zh`, `auto`, or a discovered
+external locale performs a narrow config update through
+`taf.core:system-config-language`. CLI parsing must reject language values
+combined with `--show`, profile flags, or `--force`. No MCP mutation command is
+derived from this human CLI surface.
+
+A missing saved preference is reported as configured `auto`: human CLI output
+follows a recognized host locale and falls back to English. Explicit `en` or
+`zh` remains deterministic and is never overridden by host locale variables.
+
 ## Modification Guide
 
 When changing `taf-cli`, check:
@@ -77,5 +96,7 @@ When changing `taf-cli`, check:
 2. Whether command examples in README need updates.
 3. Whether exit codes and output remain script-friendly.
 4. Whether business logic has accidentally moved into the CLI layer.
+5. Whether English/Chinese help preserves the same command and option contract.
+6. Whether JSON and MCP projections remain stable English machine interfaces.
 
 Long-term, `taf-cli` command design directly affects TAFFISH user experience. It should stay stable, concise, and easy to debug.

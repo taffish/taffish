@@ -211,9 +211,11 @@ _taf() {
     config)
       _arguments \
         '(-h --help)'{-h,--help}'[show help]' \
-        '1:config action:(show path init)' \
+        '1:config action:(show path init language)' \
+        '2:language:(en zh auto)' \
         '(- --user --system)'{-u,--user}'[use user scope]' \
         '(- --user --system)'{-s,--system}'[use system scope]' \
+        '--show[show language configuration and available languages]' \
         '(- --github --china)--github[initialize GitHub/default profile]' \
         '(- --github --china)--china[initialize China mirror profile template]' \
         '(-f --force)'{-f,--force}'[replace existing config during init]'

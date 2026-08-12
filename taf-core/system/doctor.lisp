@@ -651,64 +651,90 @@
         (%doctor-container-diagnostic scope)))
 
 (defun %doctor-print-paths (scope user-home system-home)
-  (format t "[TAF] doctor~%")
-  (format t "  scope       : ~A~%" (string-downcase (string scope)))
-  (format t "  user home   : ~A~%" (%directory-namestring user-home))
-  (format t "  system home : ~A~%" (%directory-namestring system-home)))
+  (format t "~A~%" (taffish.i18n:message "doctor.header"))
+  (format t "  ~A       : ~A~%"
+          (taffish.i18n:message "doctor.label.scope")
+          (%doctor-human-scope scope))
+  (format t "  ~A   : ~A~%"
+          (taffish.i18n:message "doctor.label.user-home")
+          (%directory-namestring user-home))
+  (format t "  ~A : ~A~%"
+          (taffish.i18n:message "doctor.label.system-home")
+          (%directory-namestring system-home)))
 
 (defun %doctor-print-dir-results (dir-results)
-  (format t "~%Directories:~%")
+  (format t "~%~A~%" (taffish.i18n:message "doctor.heading.directories"))
   (dolist (item dir-results)
     (format t "  ~A : ~A~%"
             (getf item :name)
-            (%doctor-status-string (getf item :status))))
+            (%doctor-human-status (getf item :status))))
   nil)
 
 (defun %doctor-print-executable-results (executable-results)
-  (format t "~%Executables:~%")
+  (format t "~%~A~%" (taffish.i18n:message "doctor.heading.executables"))
   (dolist (item executable-results)
     (format t "  ~A : ~A~%"
             (getf item :name)
             (or (getf item :path)
-                (format nil "missing (~A)"
-                        (string-downcase
-                         (string (getf item :requirement)))))))
+                (taffish.i18n:message
+                 "doctor.missing-program"
+                 (list
+                  (cons
+                   "requirement"
+                   (taffish.i18n:message
+                    (format nil "doctor.requirement.~A"
+                            (%doctor-status-string
+                             (getf item :requirement))))))))))
   nil)
 
 (defun %doctor-print-path-results (path-results)
-  (format t "~%Shell PATH:~%")
+  (format t "~%~A~%" (taffish.i18n:message "doctor.heading.path"))
   (dolist (item path-results)
     (format t "  ~A : ~A~%"
             (getf item :path)
-            (%doctor-status-string (getf item :status))))
+            (%doctor-human-status (getf item :status))))
   nil)
 
 (defun %doctor-print-summary (status init-p scope)
-  (format t "~%Legacy status: ~A~%" (%doctor-status-string status))
+  (format t "~%~A: ~A~%"
+          (taffish.i18n:message "doctor.heading.legacy-status")
+          (%doctor-human-status status))
   (when (and (not init-p) (eql status :needs-init))
-    (format t "Hint: taf doctor --init --~A~%"
+    (format t "~A: taf doctor --init --~A~%"
+            (taffish.i18n:message "doctor.label.hint")
             (string-downcase (string scope)))))
 
 (defun %doctor-print-path-hints (path-results)
   (let ((missing (find :not-in-path path-results
                        :key (lambda (item) (getf item :status)))))
     (when missing
-      (format t "Hint: add TAFFISH bin to your shell PATH:~%  ~A~%"
+      (format t "~A: ~A~%  ~A~%"
+              (taffish.i18n:message "doctor.label.hint")
+              (taffish.i18n:message "doctor.path-hint")
               (%taffish-bin-path-export-command (getf missing :path))))))
 
 (defun %doctor-print-diagnostic-item (item detail-p)
   (format t "  [~A] ~A: ~A~%"
-          (string-upcase (%doctor-status-string (getf item :status)))
-          (%doctor-status-string (getf item :id))
-          (getf item :summary))
+          (string-upcase (%doctor-human-status (getf item :status)))
+          (%doctor-human-id (getf item :id))
+          (%doctor-human-summary item))
   (when detail-p
-    (format t "    evidence    : ~S~%" (getf item :evidence))
+    (format t "    ~A    : ~S~%"
+            (taffish.i18n:message "doctor.label.evidence")
+            (getf item :evidence))
     (unless (string= (getf item :remediation) "")
-      (format t "    remediation : ~A~%" (getf item :remediation)))
-    (format t "    docs         : ~A~%" (getf item :docs-url))))
+      (format t "    ~A : ~A~%"
+              (taffish.i18n:message "doctor.label.remediation")
+              (%doctor-human-remediation item)))
+    (format t "    ~A         : ~A~%"
+            (taffish.i18n:message "doctor.label.docs")
+            (getf item :docs-url))))
 
 (defun %doctor-print-diagnostics (diagnostics diagnostic-status detail-p)
-  (format t "~%Diagnostics: ~A~%" (%doctor-status-string diagnostic-status))
+  (format t "~%~A~%"
+          (taffish.i18n:message
+           "doctor.heading.diagnostics-status"
+           (list (cons "status" (%doctor-human-status diagnostic-status)))))
   (let ((printed-p nil))
     (dolist (item diagnostics)
       (when (or detail-p
@@ -718,7 +744,7 @@
         (setf printed-p t)
         (%doctor-print-diagnostic-item item detail-p)))
     (unless printed-p
-      (format t "  All applicable diagnostics passed.~%"))))
+      (format t "  ~A~%" (taffish.i18n:message "doctor.all-passed")))))
 
 (defun %doctor-json-key (key)
   (string-downcase

@@ -266,6 +266,8 @@ Initial MCP project test release.
     (han.test:check-true (member "taffish_list_history" names :test #'string=))
     (han.test:check-false (member "taffish_doctor_check" names :test #'string=))
     (han.test:check-false (member "taffish_config_get" names :test #'string=))
+    (han.test:check-false (member "taffish_config_language" names :test #'string=))
+    (han.test:check-false (member "taffish_set_language" names :test #'string=))
     (han.test:check-false (member "taffish_which" names :test #'string=))
     (han.test:check-false (member "taffish_run_project" names :test #'string=))
     (han.test:check-false (member "taffish_publish_project" names :test #'string=))
@@ -324,6 +326,53 @@ Initial MCP project test release.
      (loop with features = (han.json:get-json structured "features")
            for i from 0 below (length features)
            thereis (string= "hub_upgrade_plan" (aref features i))))))
+
+(han.test:deftest test-taffish-mcp-cli-help-locales-preserve-options ()
+  (let ((english
+          (taffish.i18n:with-language ("en")
+            (%get-taffish-mcp-cli-help-string)))
+        (chinese
+          (taffish.i18n:with-language ("zh")
+            (%get-taffish-mcp-cli-help-string))))
+    (han.test:check-true (search "Usage:" english))
+    (han.test:check-true (search "用法：" chinese))
+    (dolist (option '("-h" "--help" "-v" "--version"))
+      (han.test:check-true (search option english))
+      (han.test:check-true (search option chinese)))
+    (dolist (alias '("-h" "--help" "help"))
+      (han.test:check-true (%taffish-mcp-help-option-p alias)))
+    (dolist (alias '("-v" "--version" "version"))
+      (han.test:check-true (%taffish-mcp-version-option-p alias)))))
+
+(han.test:deftest test-taffish-mcp-machine-help-is-language-invariant ()
+  (let ((english
+          (taffish.i18n:with-language ("en") (help nil)))
+        (chinese
+          (taffish.i18n:with-language ("zh") (help nil))))
+    (han.test:check-equal english chinese)
+    (han.test:check-true (search "Purpose:" english))
+    (han.test:check-false (search "用途：" chinese))))
+
+(han.test:deftest test-taffish-mcp-get-config-observes-default-auto ()
+  (let ((root (%mcp-test-temp-root)))
+    (unwind-protect
+         (let ((user-home (han.path:join-path root "user/"))
+               (system-home (han.path:join-path root "system/")))
+           (with-mcp-env ("TAFFISH_CONFIG" nil)
+             (let* ((arguments
+                      (%json-object
+                       (cons "scope" "user")
+                       (cons "userHome" (han.path:->namestring user-home))
+                       (cons "systemHome" (han.path:->namestring system-home))))
+                    (result (call-tool "taffish_get_config" arguments))
+                    (structured (%mcp-test-structured result)))
+               (han.test:check-equal nil (han.json:get-json result "isError"))
+               (han.test:check-equal "taffish.config/v1"
+                                     (han.json:get-json structured
+                                                        "schema_version"))
+               (han.test:check-equal "auto"
+                                     (han.json:get-json structured "language")))))
+      (han.path:delete-directory-tree root :if-does-not-exist :ignore))))
 
 (han.test:deftest test-taffish-mcp-check-environment-projects-diagnostics ()
   (let ((root (%mcp-test-temp-root)))
@@ -969,6 +1018,41 @@ Initial MCP project test release.
      (loop for i from 0 below (length prompts)
            thereis (string= "inspect-taffish-app"
                             (han.json:get-json (aref prompts i) "name"))))))
+
+(han.test:deftest test-taffish-mcp-discovery-is-language-invariant ()
+  (dolist (producer (list #'tools-list #'resources-list #'prompts-list))
+    (let ((english
+            (taffish.i18n:with-language ("en")
+              (han.json:encode-json (funcall producer))))
+          (chinese
+            (taffish.i18n:with-language ("zh")
+              (han.json:encode-json (funcall producer)))))
+      (han.test:check-equal chinese english))))
+
+(han.test:deftest test-taffish-mcp-doctor-result-is-language-invariant ()
+  (let ((root (%mcp-test-temp-root)))
+    (unwind-protect
+         (let* ((user-home (han.path:join-path root "user/"))
+                (system-home (han.path:join-path root "system/"))
+                (arguments
+                  (%json-object
+                   (cons "scope" "user")
+                   (cons "userHome" (han.path:->namestring user-home))
+                   (cons "systemHome" (han.path:->namestring system-home))))
+                (taf.core::*taffish-doctor-backend-probe-function*
+                  (lambda (spec)
+                    (list :name (first spec) :status :missing :path nil
+                          :exit-code nil :detail "")))
+                (english
+                  (taffish.i18n:with-language ("en")
+                    (han.json:encode-json
+                     (call-tool "taffish_check_environment" arguments))))
+                (chinese
+                  (taffish.i18n:with-language ("zh")
+                    (han.json:encode-json
+                     (call-tool "taffish_check_environment" arguments)))))
+           (han.test:check-equal chinese english))
+      (han.path:delete-directory-tree root :if-does-not-exist :ignore))))
 
 (han.test:deftest test-taffish-mcp-prompt-uses-arguments ()
   (let* ((result (get-prompt

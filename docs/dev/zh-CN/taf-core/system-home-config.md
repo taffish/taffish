@@ -79,9 +79,21 @@ taffish.config/v1
 | key | 默认 |
 | --- | --- |
 | `profile` | `github` |
-| `language` | `en` |
+| `language` | `auto` |
 | `index-url` | GitHub raw index URL |
 | `source-rewrite-rules` | nil |
+
+`language` 字段由共享的 `taffish.i18n` 表现层读取。内置值是 `en` 和 `zh`；默认的 `auto`
+选择会跟随主机 locale 并最终回退到英文，其他规范化 locale ID 可以选择可选外部语言包。
+需要确定性人类输出时应显式保存 `en` 或 `zh`。`TAFFISH_LANGUAGE` 是优先级最高的单次
+命令覆盖。
+
+可选外部语言包位于 user/system home 下的 `share/locales/<locale>/`。它们不是必需目录，
+`doctor --init` 不会创建或下载语言包。即使整个外部 locale tree 不存在，内置中英文仍可用。
+
+`taf config language` 是只读发现与状态入口；`taf config language <LANGUAGE>` 更新 user
+scope，增加 `--system` 后在 root 权限下更新 system scope。窄 writer 会保留所有非 language
+配置行。外部 ID 只有在当前语言包有效且可发现时才允许写入。
 
 ## 配置文件加载顺序
 
@@ -142,3 +154,4 @@ system scope init 需要 root。
 3. Gitee/GitHub 镜像规则是否正确。
 4. 新配置字段是否需要 schema 升级。
 5. 环境变量优先级是否符合用户预期。
+6. 语言变化是否保持机器 schema 和生成 shell 不变。

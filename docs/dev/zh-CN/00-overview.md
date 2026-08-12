@@ -79,6 +79,7 @@ taffish-mcp
 | `taffish.asd` | TAFFISH 主 ASDF 系统定义，决定加载顺序和模块边界。 |
 | `load-taffish.dev.lisp` | 开发加载入口。 |
 | `vendor/han/` | 内置基础库，提供跨平台与通用解析能力。 |
+| `taffish-i18n/` | 共享的 CLI 人类语言选择、catalog 和安全回退。 |
 | `taffish-core/` | TAF 语言核心。 |
 | `taffish-cli/` | `taffish` 命令入口。 |
 | `taf-core/` | `taf` 的项目、hub、系统能力。 |

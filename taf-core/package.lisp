@@ -39,6 +39,7 @@
 	   :system-config
 	   :system-config-path
 	   :system-config-init
+	   :system-config-language
 	   :system-doctor
 	   :system-history
 	   :system-record-history-event

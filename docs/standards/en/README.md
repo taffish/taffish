@@ -15,6 +15,7 @@ Module docs explain where code lives and how modules interact; specification doc
 - [TAFFISH Project Specification](taffish-project-spec.md)
 - [TAFFISH Home And System Layout Specification](system-home-spec.md)
 - [TAFFISH Configuration Specification](system-config-spec.md)
+- [TAFFISH Localization Contract](localization.md)
 - [TAFFISH Hub Index Specification](hub-index-spec.md)
 - [TAFFISH Install Metadata Specification](install-metadata-spec.md)
 - [TAFFISH History Specification](history-spec.md)
@@ -91,3 +92,4 @@ When changing the following, update this directory:
 4. Generated shell, wrapper shell, container backends, and runtime environment variables.
 5. GitHub/Gitee source rewrite, index URL, installation paths, and command alias rules.
 6. MCP tool names, safety boundaries, structured result shape, resources, and prompts.
+7. Human-language selection, locale-pack layout, semantic message keys, and machine-interface isolation.

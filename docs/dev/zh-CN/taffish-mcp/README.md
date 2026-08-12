@@ -12,6 +12,16 @@
 
 它不应该变成项目系统、Hub 系统或编译器的第二套实现。如果某条规则属于 TAFFISH 本身，它应该放在 `taffish-core` 或 `taf-core`；MCP 只负责调用它并整理结果。
 
+## 人类 CLI Help 与机器语言边界
+
+`taffish-mcp -h`、`taffish-mcp --help` 和 `taffish-mcp help` 属于人类 CLI 表面，
+与 `taf`、`taffish` 一样遵循 `taf config language` 和 `TAFFISH_LANGUAGE`，并内置
+英文、中文 help。
+
+不带 help 参数启动 `taffish-mcp` 时会直接进入 stdio server，不建立人类语言上下文。
+MCP tool/resource/prompt 名、description、schema、结构化结果和面向 AI 的 help 始终保持
+稳定英文机器接口。
+
 ## 安全边界
 
 MCP server 暴露的是偏只读和偏编译的能力。它有意不暴露：
@@ -60,6 +70,7 @@ MCP compile 工具也会继承 MCP server 进程中的本机 runtime arg 环境�
 | --- | --- |
 | `package.lisp` | 包导出。 |
 | `protocol.lisp` | MCP JSON-RPC framing、response helper、JSON 转换、version/help 文本。 |
+| `i18n.lisp` | 只为人类 CLI 入口提供内置英/中文 help。 |
 | `compiler.lisp` | 基于 `taffish-core` 的 source/file 验证、编译和摘要。 |
 | `app.lisp` | 已安装 taf-app 的解析、检查、用法摘要和安全 app invocation compile。 |
 | `project.lisp` | 当前项目检查、用法摘要、check、compile 和安全 build helper。 |

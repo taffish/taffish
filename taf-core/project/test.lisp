@@ -1622,6 +1622,27 @@ This release mentions a todo-like upstream word, but it is not the default templ
    (taf.core::%publish-sha256 "A😀Z")
    "0cfdf4f787538630ab2f98a43b709fb744c6380b0cf350ef895d270a04eecd83"))
 
+(deftest test-taf-project-publish-normalizes-release-note-transport-newlines ()
+  (let ((canonical (format nil "# Release title~%~%Release body.")))
+    (dolist (equivalent
+             (list canonical
+                   (format nil "~A~%" canonical)
+                   (format nil "~A~%~%" canonical)
+                   (format nil
+                           "# Release title~C~C~C~CRelease body.~C~C"
+                           #\Return #\Newline #\Return #\Newline
+                           #\Return #\Newline)))
+      (check-equal (taf.core::%publish-normalize-notes equivalent)
+                   canonical))
+    (check-false
+     (string= (taf.core::%publish-normalize-notes canonical)
+              (taf.core::%publish-normalize-notes
+               (format nil "# Release title~%~%Release body. "))))
+    (check-false
+     (string= (taf.core::%publish-normalize-notes canonical)
+              (taf.core::%publish-normalize-notes
+               (format nil "# Release title~%~%Changed body."))))))
+
 (deftest test-taf-project-publish-finds-remote-ref-pairs-portably ()
   (let* ((branch-commit "1111111111111111111111111111111111111111")
          (tag-object "2222222222222222222222222222222222222222")

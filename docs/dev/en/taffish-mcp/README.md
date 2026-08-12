@@ -12,6 +12,17 @@
 
 It must not become a second implementation of project, Hub, or compiler behavior. If a rule belongs to TAFFISH itself, it should live in `taffish-core` or `taf-core`; MCP should call it and shape the result.
 
+## Human CLI Help And Machine Language Boundary
+
+`taffish-mcp -h`, `taffish-mcp --help`, and `taffish-mcp help` are human CLI
+surfaces. They follow the same `taf config language` and `TAFFISH_LANGUAGE`
+selection as `taf` and `taffish`, with built-in English and Chinese help.
+
+Starting `taffish-mcp` without a help option enters the stdio server directly.
+That server does not establish a human-language context: MCP tool/resource/
+prompt names, descriptions, schemas, structured results, and AI-facing help
+remain stable English machine interfaces.
+
 ## Safety Boundary
 
 The MCP server exposes read-oriented and compile-oriented capabilities. It deliberately does not expose:
@@ -62,6 +73,7 @@ These only affect generated shell. MCP does not run the shell.
 | --- | --- |
 | `package.lisp` | Package exports. |
 | `protocol.lisp` | MCP JSON-RPC framing, response helpers, JSON conversion, version/help text. |
+| `i18n.lisp` | Built-in English/Chinese help for the human CLI entry point only. |
 | `compiler.lisp` | Source/file validation, compilation, and summary helpers over `taffish-core`. |
 | `app.lisp` | Installed taf-app resolution, inspection, usage summary, and safe app invocation compile. |
 | `project.lisp` | Current project inspection, usage summary, check, compile, and safe build helpers. |

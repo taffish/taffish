@@ -353,6 +353,7 @@ TAFFISH_SYSTEM_HOME      覆盖系统级 TAFFISH home
 TAFFISH_SYSTEM_BIN_DIR   覆盖系统级命令 bin 目录
 TAFFISH_CONFIG           使用一个显式 config.toml 文件
 TAFFISH_INDEX_URL        覆盖 taf update 的默认 index URL
+TAFFISH_LANGUAGE         覆盖面向用户的 CLI 语言
 ```
 
 自定义用户级安装示例：
@@ -417,12 +418,58 @@ sudo taf update --system
 user scope 会先加载 system config，再应用可选的 user config 覆盖；system scope
 读取 system config，但不读取 user config。`TAFFISH_CONFIG` 仍然是最后的显式覆盖。
 
+### CLI 人类语言
+
+TAFFISH 二进制内置完整的英文（`en`）和中文（`zh`）help catalog。新安装且没有已保存
+语言偏好时，人类 CLI 默认使用 `auto`：可识别的主机 locale 会选择对应语言；locale
+不可用、未设置、为 `C` 或 `POSIX` 时回退到英文。查看当前配置、实际显示语言及所有
+可用语言：
+
+```sh
+taf config language
+taf config language --show
+```
+
+以上两个命令等价且不会修改配置。持久切换当前用户的语言：
+
+```sh
+taf config language en
+taf config language zh
+taf config language auto
+```
+
+管理员可以用 `--system` 设置受管设备的系统默认值，例如
+`sudo taf config language zh --system`。setter 只修改顶层 `language` 字段，保留 config
+中的其他内容。
+
+如果只想让单次命令使用中文而不改变已保存设置：
+
+```sh
+TAFFISH_LANGUAGE=zh taf --help
+TAFFISH_LANGUAGE=zh taffish --help
+TAFFISH_LANGUAGE=zh taffish-mcp --help
+```
+
+没有已保存的 `language` 字段时，configured selection 就是 `auto`。解析顺序依次是
+`TAFFISH_LANGUAGE`、显式 `TAFFISH_CONFIG`、user config、system config，以及隐含的
+`auto` 默认值。选中 `auto` 时，TAFFISH 才会读取 `LC_ALL`、`LC_MESSAGES` 和 `LANG`；
+整个查找链最终始终回退到内置英文。如果需要不受主机 locale 影响的确定性人类输出，
+应显式保存 `en` 或 `zh`。外部语言包是高级可选能力；文件损坏或翻译不完整时会安全
+回退到英文。`taf config language` 会发现 user/system `share/locales/<locale>/` 下的
+有效语言包；可选 `example.txt` 用于显示一行语言示例。无效或不完整的语言包不会成为
+可选项。
+
+本地化只影响面向用户的 CLI help、常见顶层错误、config 输出和 doctor 诊断，其中包括
+`taffish-mcp -h`，但不包括 MCP stdio 协议。command/option、生成 shell、JSON schema、
+history/index/config key 以及 MCP tools/resources/prompts 仍是稳定的英文机器接口。语言包目录和安全规则见
+[本地化契约](docs/standards/zh-CN/localization.md)。
+
 生成的中国镜像模板有意保持简单：
 
 ```toml
 schema_version = "taffish.config/v1"
 profile = "china"
-language = "en"
+language = "auto"
 
 [index]
 url = "https://gitee.com/taffish-org/taffish-index/raw/main/index/index.json"

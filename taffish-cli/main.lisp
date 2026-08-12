@@ -173,7 +173,7 @@
                  (core-args (cdr raw-argv)))
              (values input-source core-args
                      (%make-core-context cmd input-source core-args))))))
-      (error "Command missing!")))
+      (error "~A" (%taffish-command-missing-message))))
 
 ;;;; -----------------------------------------------------------
 ;;;; main
@@ -203,7 +203,7 @@
 (defun %print-general-error (condition)
   (format *error-output* "[TAFFISH-ERROR] ~A~%" condition))
 
-(defun main (&optional (raw-argv (han.host:argv t)))
+(defun %main (raw-argv)
   (handler-case
       (progn
         (multiple-value-bind (input-source core-args core-context)
@@ -222,3 +222,7 @@
     (error (c)
       (%print-general-error c)
       (han.host:quit 1))))
+
+(defun main (&optional (raw-argv (han.host:argv t)))
+  (taffish.i18n:call-with-resolved-language
+   (lambda () (%main raw-argv))))

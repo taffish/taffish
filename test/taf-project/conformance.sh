@@ -434,7 +434,9 @@ case "${1:-} ${2:-}" in
     tag=$(cat "$state/release-tag")
     title=$(cat "$state/release-title")
     body=$(cat "$state/release-notes")
-    printf '{"tagName":"%s","name":"%s","body":"%s","isDraft":false,"isPrerelease":false,"targetCommitish":"main"}\n' \
+    # GitHub's release API can return a final LF even when the local reader
+    # supplied the same notes without one.
+    printf '{"tagName":"%s","name":"%s","body":"%s\\n","isDraft":false,"isPrerelease":false,"targetCommitish":"main"}\n' \
       "$tag" "$title" "$body"
     ;;
   "release create")

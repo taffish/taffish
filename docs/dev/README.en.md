@@ -10,12 +10,13 @@ This manual explains how TAFFISH itself is implemented. It is not a tutorial for
 4. [Development Workflow And Maintenance Rules](en/03-development-workflow.md)
 5. [Build From Source](en/build-from-source.md)
 6. [han Base Library](en/han/README.md)
-7. [taffish-core](en/taffish-core/README.md)
-8. [taf-core](en/taf-core/README.md)
-9. [taffish-cli](en/taffish-cli/README.md)
-10. [taf-cli](en/taf-cli/README.md)
-11. [taffish-mcp](en/taffish-mcp/README.md)
-12. [Public API](en/api/README.md)
+7. [taffish-i18n](en/taffish-i18n/README.md)
+8. [taffish-core](en/taffish-core/README.md)
+9. [taf-core](en/taf-core/README.md)
+10. [taffish-cli](en/taffish-cli/README.md)
+11. [taf-cli](en/taf-cli/README.md)
+12. [taffish-mcp](en/taffish-mcp/README.md)
+13. [Public API](en/api/README.md)
 
 Historical release-engineering context:
 
@@ -29,11 +30,12 @@ This manual only covers TAFFISH development content in the current repository. T
 
 ## Current Code Layers
 
-TAFFISH can currently be understood as six layers:
+TAFFISH can currently be understood as seven layers:
 
 | Layer | Directory or system | Main responsibility |
 | --- | --- | --- |
 | Base library | `vendor/han` | Common capabilities such as platform adaptation, paths, JSON, argument specification, and binding. |
+| Human localization | `taffish-i18n` | Resolve human CLI language and render safe built-in/external catalogs without changing machine interfaces. |
 | TAF language core | `taffish-core` | Compile `.taf` source code from text into runnable shell scripts. |
 | TAF compiler CLI | `taffish-cli` | Provide the CLI entry point for the TAF compiler. |
 | Project and Hub tooling | `taf-core` | Support project, Hub, system config, history, and diagnostic features behind the `taf` command. |

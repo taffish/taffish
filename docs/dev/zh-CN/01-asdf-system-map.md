@@ -9,6 +9,13 @@ TAFFISH 使用 ASDF 描述 Common Lisp 系统。当前主系统是 `taffish`，�
 当前顺序可以分为五组，再加上面向 AI 的 MCP 层：
 
 ```text
+taffish-i18n
+  package
+  locale
+  render
+  catalog
+  builtin
+
 taffish-core
   package
   model
@@ -27,6 +34,7 @@ taffish-core
 
 taffish-cli
   package
+  i18n
   run
   main
 
@@ -50,10 +58,12 @@ taf-core
   system/home
   system/config
   system/history
+  system/doctor-i18n
   system/doctor
 
 taf-cli
   package
+  i18n
   run
   main
 
@@ -69,7 +79,9 @@ taffish-mcp
 
 ## 加载顺序背后的意义
 
-`taffish-core` 先加载，因为它定义了 TAF 语言从源码到 shell 的完整编译能力。`taffish-cli` 只是在其上包了一层命令行入口。
+`taffish-i18n` 在 `han` 之后、语言与业务层之前加载，提供不依赖 `taf-core` 的窄人类表现
+API。随后 `taffish-core` 定义 TAF 语言从源码到 shell 的完整编译能力，`taffish-cli`
+只是在其上包一层命令行入口。
 
 `taf-core` 后加载，因为它需要把 `taffish-core` 的编译能力接入项目系统、hub 系统和运行系统。`taf-cli` 是用户命令的分发入口。`taffish-mcp` 在 CLI/core 模块之后加载，因为它是在已有 API 上提供一个保守的 AI 协议层，而不是定义新的业务逻辑。
 
@@ -95,6 +107,7 @@ TAFFISH 的包边界大体和系统边界一致：
 
 | 包 | 主要目录 | 说明 |
 | --- | --- | --- |
+| `taffish.i18n` | `taffish-i18n/` | 共享的人类语言解析、catalog 与安全回退。 |
 | `taffish-core` | `taffish-core/` | TAF 编译器核心 API。 |
 | `taffish-cli` | `taffish-cli/` | `taffish` 命令实现。 |
 | `taf-core` | `taf-core/` | `taf` 命令背后的核心业务 API。 |

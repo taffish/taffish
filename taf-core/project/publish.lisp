@@ -750,18 +750,22 @@
                        :details (format nil "~A~A" out err))))))
 
 (defun %publish-normalize-notes (notes)
-  (with-output-to-string (out)
-    (loop with string = (or notes "")
-          for index from 0 below (length string)
-          for char = (char string index)
-          do (cond
-               ((char= char #\Return)
-                (write-char #\Newline out)
-                (when (and (< (1+ index) (length string))
-                           (char= (char string (1+ index)) #\Newline))
-                  (incf index)))
-               (t
-                (write-char char out))))))
+  ;; GitHub may add a final line break to release bodies. It is transport
+  ;; formatting, while spaces and all non-trailing content remain significant.
+  (string-right-trim
+   '(#\Newline)
+   (with-output-to-string (out)
+     (loop with string = (or notes "")
+           for index from 0 below (length string)
+           for char = (char string index)
+           do (cond
+                ((char= char #\Return)
+                 (write-char #\Newline out)
+                 (when (and (< (1+ index) (length string))
+                            (char= (char string (1+ index)) #\Newline))
+                   (incf index)))
+                (t
+                 (write-char char out)))))))
 
 (defun %publish-json-object-from-output (out)
   (handler-case

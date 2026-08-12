@@ -15,6 +15,7 @@
 - [TAFFISH 项目规范](taffish-project-spec.md)
 - [TAFFISH home 与系统布局规范](system-home-spec.md)
 - [TAFFISH 配置规范](system-config-spec.md)
+- [TAFFISH 本地化契约](localization.md)
 - [TAFFISH hub index 规范](hub-index-spec.md)
 - [TAFFISH 安装元数据规范](install-metadata-spec.md)
 - [TAFFISH history 规范](history-spec.md)
@@ -91,3 +92,4 @@ TAFFISH 当前按四个层级治理：
 4. 生成 shell、wrapper shell、容器后端和运行时环境变量。
 5. GitHub/Gitee source rewrite、索引 URL、安装路径和命令别名规则。
 6. MCP tool 名称、安全边界、结构化结果形状、resources 和 prompts。
+7. 人类语言选择、语言包目录、semantic message key 和机器接口隔离。

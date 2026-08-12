@@ -384,6 +384,7 @@ TAFFISH_SYSTEM_HOME      Override system TAFFISH home
 TAFFISH_SYSTEM_BIN_DIR   Override system command bin dir
 TAFFISH_CONFIG           Use an explicit config.toml file
 TAFFISH_INDEX_URL        Override default index URL for taf update
+TAFFISH_LANGUAGE         Override the human CLI language
 ```
 
 Example custom user install:
@@ -450,12 +451,66 @@ User scope loads the system config first and then applies an optional user
 config override. System scope reads the system config but not the user config.
 `TAFFISH_CONFIG` remains an explicit final override.
 
+### Human CLI language
+
+TAFFISH embeds complete English (`en`) and Chinese (`zh`) help catalogs.
+For a new installation with no saved language preference, the human CLI uses
+`auto`: a recognized host locale selects its language, while an unavailable,
+unset, `C`, or `POSIX` locale falls back to English. Inspect the configured
+selection, displayed language, and every available language with:
+
+```sh
+taf config language
+taf config language --show
+```
+
+The two commands above are equivalent and do not modify configuration. Make a
+persistent user-scope choice with:
+
+```sh
+taf config language en
+taf config language zh
+taf config language auto
+```
+
+Use `--system` with administrator privileges to set the managed system
+default, for example `sudo taf config language zh --system`. The setter changes
+only the top-level `language` field and preserves the other config content.
+
+Select Chinese for one command without changing the saved preference:
+
+```sh
+TAFFISH_LANGUAGE=zh taf --help
+TAFFISH_LANGUAGE=zh taffish --help
+TAFFISH_LANGUAGE=zh taffish-mcp --help
+```
+
+With no saved language field, the configured selection is `auto`. Resolution
+order is `TAFFISH_LANGUAGE`, explicit `TAFFISH_CONFIG`, user config, system
+config, and the implicit `auto` default. When the selected value is `auto`,
+TAFFISH consults `LC_ALL`, `LC_MESSAGES`, and `LANG`; lookup always ends at the
+built-in English fallback. Save `en` or `zh` when deterministic human output
+is required regardless of host locale. External locale packs are an optional
+advanced feature. Valid packs discovered under user/system
+`share/locales/<locale>/` are listed by `taf config language`; an optional
+`example.txt` supplies the one-line sample shown beside a language. Invalid or
+incomplete packs are not selectable and runtime lookup safely falls back to
+English.
+
+Localization only affects human-readable CLI help, common top-level errors,
+config output, and doctor diagnostics. This includes `taffish-mcp -h`, but not
+the MCP stdio protocol. Commands/options, generated shell, JSON schemas,
+history/index/config keys, and MCP tools/resources/prompts remain stable
+English machine interfaces. See the
+[localization contract](docs/standards/en/localization.md) for locale-pack
+layout and security rules.
+
 The generated China template is intentionally simple:
 
 ```toml
 schema_version = "taffish.config/v1"
 profile = "china"
-language = "en"
+language = "auto"
 
 [index]
 url = "https://gitee.com/taffish-org/taffish-index/raw/main/index/index.json"

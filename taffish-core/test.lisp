@@ -674,6 +674,18 @@ c"))
     ;; <shell> should not wrap code into bash heredoc
     (check-equal (%string-contains-p shell "bash <<'EOF'") nil)))
 
+(deftest test-taffish-to-shell-is-language-invariant ()
+  (let* ((code (format nil "RUN~%<shell>~%echo invariant~%"))
+         (input (%default-test-input-args))
+         (context (%default-test-context))
+         (english
+           (taffish.i18n:with-language ("en")
+             (taffish.core:taffish-to-shell code input context)))
+         (chinese
+           (taffish.i18n:with-language ("zh")
+             (taffish.core:taffish-to-shell code input context))))
+    (check-equal chinese english)))
+
 (deftest test-taffish-to-shell-block-slot-args-render-as-shell-tokens ()
   (let* ((code (format nil
                        "ARGS~%<(@:)only-step>~%RUN~%<shell>~%echo ::(@:)only-step::~%"))
