@@ -30,7 +30,54 @@ Unsupported implementations load `unsupported.lisp`; calling related functions s
 8. POSIX shell token escaping.
 9. Temporary input/output file mechanism needed by synchronous process execution.
 
+## Runtime I/O And Terminal Detection
+
+| API | Role |
+| --- | --- |
+| `configure-runtime-io` | Configure implementation-specific character I/O before a delivered CLI handles user text. LispWorks selects UTF-8 console I/O; SBCL currently needs no extra setup. |
+| `standard-input-terminal-p` | Report whether file descriptor 0 is a terminal, so commands can distinguish interactive stdin from an actual pipe. |
+| `standard-error-terminal-p` | Query whether process stderr (file descriptor 2) is a terminal, without reading, writing or spawning a process. |
+| `append-utf8-line` | Append one complete UTF-8 line with host-native append semantics so concurrent processes do not overwrite earlier records. |
+
+These functions are host-specific by design. Upper layers must not reproduce
+SBCL/LispWorks terminal checks or console encoding setup directly.
+
+`standard-error-terminal-p` queries fd 2, not a dynamically rebound
+`*error-output*`. On supported hosts, closed/non-terminal descriptors return
+false; unsupported implementations signal `unsupported-host-function`.
+It is not a terminal-size or cursor-capability query. Progress callers separately
+check the actual output stream and `TERM=dumb` before using in-place rendering;
+redirected logs use rate-limited lines. JSON/MCP callers suppress human progress.
+The LispWorks UTF-8 output stream implements `interactive-stream-p` from its
+live descriptor; a terminal, pipe, and closed stream must remain distinguishable.
+
+`append-utf8-line` is intentionally narrow. It provides the one-record append
+boundary used by JSONL logs; it is not a general transaction or file-lock API.
+It creates a missing parent directory and tolerates the specific race where
+another process creates that same parent first. Other path and permission
+errors still propagate from directory preparation or the append operation.
+
 ## Process API
+
+### Executable Error Boundary
+
+The three CLI entry points use a private host error boundary around runtime I/O
+and language initialization. Escaping errors are reported to stderr with the
+command's existing error prefix and exit status 1. If stderr or the condition's
+printer fails, reporting is best-effort and the command still exits unsuccessfully;
+it never uses stdout as an error fallback, including in MCP stdio mode.
+
+SBCL interactive interrupts are handled at this boundary without a runtime
+backtrace, retaining exit status 1. LispWorks retains its existing interrupt
+handling, including its fixed `Interrupted - quitting` stdout notification on
+SIGINT. The CLI does not replace global LispWorks signal handlers.
+SIGTERM behavior is not changed. This is not a guarantee for native
+crashes or exhausted runtime resources.
+
+The boundary is internal, not an exported han API. It does not suppress warnings,
+change library condition handling, or alter ordinary CLI/MCP response contracts.
+
+### Process Operations
 
 | API | Role |
 | --- | --- |
@@ -49,6 +96,7 @@ SBCL uses:
 2. `sb-ext:posix-getenv`
 3. `sb-ext:exit`
 4. `sb-ext:run-program`
+5. `O_APPEND` with `write(2)` for complete UTF-8 log records
 
 Synchronous execution captures stdout/stderr to temporary files and then reads strings back or replays them to streams.
 
@@ -61,6 +109,7 @@ LispWorks uses:
 3. `lw:quit`
 4. `system:run-shell-command`
 5. `system:pipe-exit-status`
+6. C append mode plus direct UTF-8 byte writes for complete log records
 
 It also returns through the unified `host-process` wrapper.
 
@@ -83,4 +132,4 @@ Be very careful when changing the host layer:
 3. Preserve process return semantics.
 4. Do not weaken directory deletion safety checks.
 5. Shell escaping behavior affects TAFFISH security as a whole.
-
+6. Recheck delivered CLI stdin and non-ASCII diagnostics on both release hosts.

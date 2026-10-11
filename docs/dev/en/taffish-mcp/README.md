@@ -23,9 +23,28 @@ That server does not establish a human-language context: MCP tool/resource/
 prompt names, descriptions, schemas, structured results, and AI-facing help
 remain stable English machine interfaces.
 
+## Process Errors And Interrupts
+
+Request-level failures handled by the server remain JSON-RPC errors or tool error
+results; they do not automatically terminate the session. Fatal startup or
+transport errors escaping the server are reported to stderr with
+`[TAFFISH-MCP-ERROR]` and exit status 1. If that report cannot be written, the
+process still exits unsuccessfully; it does not send fallback prose to stdout.
+
+External interrupts are distinct from request errors. SBCL SIGINT produces a
+short stderr diagnostic and exits 1. LispWorks retains its native fixed
+`<executable> : Interrupted - quitting` stdout notification and exits 1 on
+SIGINT; this is a known exception to normal protocol-only stdout. Global signal
+handlers and SIGTERM behavior are unchanged. See [han.host](../han/host.md) for
+the boundary's scope and limitations.
+
 ## Safety Boundary
 
-The MCP server exposes read-oriented and compile-oriented capabilities. It deliberately does not expose:
+The MCP server includes read-oriented and compile-oriented capabilities, but is
+not wholly read-only. Existing `taffish_update_index`, `taffish_create_project`
+and `taffish_build_project` tools write local files; `taffish_install_app` and
+`taffish_uninstall_app` default to dry-run but can apply changes when requested.
+These existing capabilities are unchanged. It deliberately does not expose:
 
 1. `taf run`.
 2. `taf publish`.
@@ -44,11 +63,42 @@ bounded backend probes. Its input schema intentionally contains no init, fix,
 force, or repair operation. It does not edit configuration, change
 permissions, start services, pull images, or run containers.
 
+Optional `check` selects `environment` (default), `index`, or `hub`.
+`hub_command` warnings concern the unversioned shortcut, independently of
+`hub_installation` artifact integrity. Missing evidence establishes neither
+health nor damage; inspect the relevant finding rather than guessing.
+`targets: ["APP", "taf-APP-v1.4.0-r1"]` is accepted only with `check: "hub"`.
+Index/Hub checks are offline and skip backend probes. The tool returns findings
+as a successful diagnostic call, even when `exit_code` is 1; inspect
+`diagnostic_status`, per-item `inspection.state` and issue codes, not just
+`isError`. Invalid arguments still produce tool errors. No new tool name or
+automatic repair capability is introduced. Missing legacy manifests are
+unverified evidence, not proof of damage; unsafe links/unknown formats remain
+unknown. Human-language selection does not translate machine fields.
+
+Default human Hub summaries do not limit the MCP evidence: all structured
+inspections/issues remain available, with stable machine fields and types.
+Read-only batching speeds the shared scan without persistent verification caches
+or reduced checksum checks. Human TTY/log progress is suppressed for MCP.
+CLI/core `install --repair` is intentionally not exposed: no repair tool,
+argument or execution route is added, and an existing install tool is not a
+repair entry point. This boundary does not remove existing MCP write operations.
+
 Package maintenance tools are planner-oriented. `taffish_check_outdated`,
 `taffish_plan_install_all`, `taffish_plan_upgrade`, and `taffish_plan_prune`
 call the same `taf-core` maintenance APIs as the CLI, but always use dry-run
 semantics from MCP. They may read the local index and install metadata; they
 must not install, upgrade, prune, delete, or run containers.
+
+These planners use index.latest as the online target and the shared version
+comparator for local precedence, including mixed numeric suffixes. They do not
+automatically downgrade. Prune plans require a valid installed same-source latest;
+missing targets and protected versions do not become deletion candidates. Tool
+names, argument schemas, and dry-run safety are unchanged. Additive
+`validation`/`validations` fields separate file evidence from version status.
+Legacy unverified installs no longer block ordinary planning; invalid/unknown
+selected installs aggregate actionable errors before a write-capable planner
+could be applied. Prune protects packages containing unverified evidence.
 
 For compile tools that expose `containerBackend`, the effective backend priority is:
 
@@ -134,4 +184,15 @@ When changing `taffish-mcp`, check:
 4. Does the returned JSON preserve arrays as arrays and objects as objects?
 5. Does the error result contain enough structure for an AI client?
 6. Do resources/prompts explain the intended safe workflow without overloading context?
-7. If it plans a mutating CLI operation, is the MCP version still dry-run only?
+7. Do maintenance planners remain dry-run, existing write tools keep their explicit controls, and repair stay unexposed?
+
+## Human Command Status
+
+CLI stage notices do not enter MCP stdout or stderr. Tools keep their existing
+quiet core calls and result schemas; no progress tool or notification is added.
+See [command status](../taf-core/command-progress.md) for the separate human display contract.
+
+CLI `taf install --all-installed --repair` is a separate, human-authorized
+repair preview for all installed versions. It is not an MCP tool or argument;
+MCP maintenance plans retain index.latest semantics. Doctor remains read-only,
+and its complete structured findings are unaffected by human summary formatting.

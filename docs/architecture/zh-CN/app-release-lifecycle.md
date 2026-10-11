@@ -171,7 +171,10 @@ target/taf-<app>-v<version>-r<release>
 target/.taf-<app>-v<version>-r<release>/
 ```
 
-构建后的 command 使用冻结 source snapshot，而不是实时读取当前 `src/`。这使发布版本和本地验证更接近用户安装后的状态。
+构建后的 command 使用冻结 source snapshot，而不是实时读取当前 `src/`。私有
+`.taf-build.json` 会记录精确的 source/wrapper 身份。产物未变化且有效时，重复
+`taf build` 不写文件；source 改变、产物缺失/损坏或 snapshot 多出内容时，则执行事务式
+精确重建。这使发布版本和本地验证更接近用户安装后的状态。
 
 容器化 app 如果需要本地试运行镜像，应显式构建 image：
 
@@ -185,7 +188,9 @@ taf build --image --backend docker
 taf build --all --backend docker
 ```
 
-注意：`taf publish --release --yes --build` 当前只在发布前构建 command wrapper，不负责构建并推送 GHCR 镜像。远端镜像发布由 app 仓库自己的 GitHub Actions workflow 接力完成。
+注意：`taf publish --release --yes --build` 会在发布 commit 前以幂等方式确保 command
+wrapper。发布身份建立后，使用同一命令续跑会校验该身份并跳过重建。它不负责构建或推送
+GHCR 镜像；远端镜像发布由 app 仓库自己的 GitHub Actions workflow 接力完成。
 
 ## 阶段五：发布前 dry-run
 
@@ -202,7 +207,7 @@ dry-run 应检查：
 1. 目标 repository 是否正确。
 2. 目标 tag 是否为 `v<version>-r<release>`。
 3. 已存在的本地/远端对象是否与发布意图一致；冲突是否被明确报告。
-4. latest 发布策略是否允许当前版本。
+4. Release 渠道是否正确：默认/`--latest`、`--pre` 或 `--no-latest`；版本大小不是发布门槛。
 5. 是否会创建 GitHub Release。
 6. 计划执行的 git/gh 命令是否符合预期。
 

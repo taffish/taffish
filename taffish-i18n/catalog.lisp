@@ -233,6 +233,22 @@ with the same canonical id; external packs cannot replace built-in en or zh."
         (%render-template template bindings)
         key)))
 
+(defun %message-binding-name (name)
+  (etypecase name
+    (string name)
+    (symbol (string-downcase (symbol-name name)))))
+
+(defun message-with (key &rest bindings)
+  "Render KEY with keyword/string name and value pairs.
+
+This is a convenience layer over MESSAGE. It does not alter locale selection
+or fallback and deliberately rejects malformed binding lists."
+  (unless (evenp (length bindings))
+    (error "i18n message bindings must contain name/value pairs: ~S" bindings))
+  (message key
+           (loop for (name value) on bindings by #'cddr
+                 collect (cons (%message-binding-name name) value))))
+
 (defun help-text (program command english chinese &optional bindings)
   "Render built-in or external help while preserving English as baseline."
   (unless (and (stringp english) (stringp chinese))

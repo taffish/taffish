@@ -29,6 +29,25 @@
   (declare (ignore code))
   (signal-unsupported-host-function 'quit))
 
+(defmacro prepare-runtime-io ()
+  '(signal-unsupported-host-function 'prepare-runtime-io))
+
+(defun configure-runtime-io ()
+  (signal-unsupported-host-function 'configure-runtime-io))
+
+(defun standard-input-terminal-p ()
+  (signal-unsupported-host-function 'standard-input-terminal-p))
+
+(defun standard-error-terminal-p ()
+  (signal-unsupported-host-function 'standard-error-terminal-p))
+
+(defun current-process-id ()
+  (signal-unsupported-host-function 'current-process-id))
+
+(defun append-utf8-line (path line)
+  (declare (ignore path line))
+  (signal-unsupported-host-function 'append-utf8-line))
+
 (defun run-program-sync
     (command &key input output error-output ignore-error-status)
   (declare (ignore command input output error-output ignore-error-status))

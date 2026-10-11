@@ -9,7 +9,8 @@
   (column 1))
 
 (defun make-char-source (string)
-  (let ((s (coerce string 'simple-string)))
+  (check-type string string)
+  (let ((s (copy-seq string)))
     (%make-char-source :id (gensym) :string s :length (length s))))
 
 (defstruct (char-source-mark (:constructor %make-char-source-mark))

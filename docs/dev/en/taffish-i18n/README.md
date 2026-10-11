@@ -1,7 +1,7 @@
 # taffish-i18n
 
 `taffish-i18n` is the shared human-presentation layer used by `taf-cli`,
-`taffish-cli`, and selected human renderers in `taf-core`. Its package is
+`taffish-cli`, and all `taf-core` human renderers. Its package is
 `taffish.i18n`.
 
 ## Responsibility
@@ -56,7 +56,7 @@ The exported API includes:
 2. `available-languages` for deterministic built-in/user/system discovery.
 3. `current-language`, `call-with-resolved-language`, `call-with-language`,
    and `with-language`.
-4. `register-message`, `message`, `help-text`, and
+4. `register-message`, `message`, `message-with`, `help-text`, and
    `builtin-message-keys`.
 
 `taf-cli:main` and `taffish-cli:main` establish a resolved language context.
@@ -71,6 +71,12 @@ packs sorted by canonical ID. User packs shadow system packs. An optional
 `example.txt` contributes only its first non-empty line, capped at 256
 characters; it never establishes pack validity by itself.
 
+Help files and `messages.json` are independent sparse components. Lookup is
+per file/per semantic key and follows exact locale, base locale, then English.
+The CLI entry point establishes the language once per invocation, so core
+renderers must use `current-language`/`message` rather than resolving config
+again. Invalid placeholders reject only the affected candidate.
+
 Configuration mutation deliberately remains outside this module.
 `taf.core:system-config-language` validates against discovery and performs the
 narrow top-level config update.
@@ -83,6 +89,7 @@ Built-in `en` and `zh` cannot be overridden externally. Invalid files must
 fall back rather than prevent startup.
 
 When changing this module, verify all CLI help option tokens, compiler shell
-bytes, doctor/config JSON, and MCP tools/resources/prompts remain invariant.
+bytes, JSON/history/config/index data, external process output, and MCP
+tools/resources/prompts/results remain invariant.
 The normative behavior is documented in the
 [localization contract](../../../standards/en/localization.md).

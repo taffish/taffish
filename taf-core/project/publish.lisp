@@ -5,9 +5,11 @@
 ;;;; ============================================================
 
 (defparameter *publish-operation-adapter* nil)
+(defparameter *publish-build-runner* nil)
 (defparameter *publish-journal-user-home* nil)
 (defparameter *publish-query-attempts* 3)
 (defparameter *publish-query-delay-seconds* 0.05)
+(defparameter *publish-repository-readiness-delays* '(0.25 0.5 1.0 2.0))
 
 (define-condition publish-state-error (error)
   ((kind
@@ -36,167 +38,22 @@
          :stage stage
          :message (apply #'format nil format-control format-arguments)))
 
+(defun %publish-fail-message (kind stage suffix &rest bindings)
+  (%publish-fail kind stage "~A"
+                 (apply #'%project-message
+                        (format nil "error.publish-~A" suffix)
+                        bindings)))
+
+(defun %publish-human-status (status)
+  (%project-message
+   (format nil "publish.status.~A"
+           (string-downcase (string status)))))
+
 (defun %publish-state (state evidence &rest fields)
   (append (list :state state :evidence evidence) fields))
 
-(defparameter *publish-sha256-round-constants*
-  #(#x428a2f98 #x71374491 #xb5c0fbcf #xe9b5dba5
-    #x3956c25b #x59f111f1 #x923f82a4 #xab1c5ed5
-    #xd807aa98 #x12835b01 #x243185be #x550c7dc3
-    #x72be5d74 #x80deb1fe #x9bdc06a7 #xc19bf174
-    #xe49b69c1 #xefbe4786 #x0fc19dc6 #x240ca1cc
-    #x2de92c6f #x4a7484aa #x5cb0a9dc #x76f988da
-    #x983e5152 #xa831c66d #xb00327c8 #xbf597fc7
-    #xc6e00bf3 #xd5a79147 #x06ca6351 #x14292967
-    #x27b70a85 #x2e1b2138 #x4d2c6dfc #x53380d13
-    #x650a7354 #x766a0abb #x81c2c92e #x92722c85
-    #xa2bfe8a1 #xa81a664b #xc24b8b70 #xc76c51a3
-    #xd192e819 #xd6990624 #xf40e3585 #x106aa070
-    #x19a4c116 #x1e376c08 #x2748774c #x34b0bcb5
-    #x391c0cb3 #x4ed8aa4a #x5b9cca4f #x682e6ff3
-    #x748f82ee #x78a5636f #x84c87814 #x8cc70208
-    #x90befffa #xa4506ceb #xbef9a3f7 #xc67178f2))
-
-(defun %publish-u32 (value)
-  (logand value #xffffffff))
-
-(defun %publish-rotr32 (value count)
-  (%publish-u32
-   (logior (ash value (- count))
-           (ash value (- 32 count)))))
-
-(defun %publish-sha256-small-sigma-0 (value)
-  (logxor (%publish-rotr32 value 7)
-          (%publish-rotr32 value 18)
-          (ash value -3)))
-
-(defun %publish-sha256-small-sigma-1 (value)
-  (logxor (%publish-rotr32 value 17)
-          (%publish-rotr32 value 19)
-          (ash value -10)))
-
-(defun %publish-sha256-big-sigma-0 (value)
-  (logxor (%publish-rotr32 value 2)
-          (%publish-rotr32 value 13)
-          (%publish-rotr32 value 22)))
-
-(defun %publish-sha256-big-sigma-1 (value)
-  (logxor (%publish-rotr32 value 6)
-          (%publish-rotr32 value 11)
-          (%publish-rotr32 value 25)))
-
-(defun %publish-sha256-choice (x y z)
-  (logxor (logand x y)
-          (logand (lognot x) z)))
-
-(defun %publish-sha256-majority (x y z)
-  (logxor (logand x y)
-          (logand x z)
-          (logand y z)))
-
-(defun %publish-string-utf8-bytes (string)
-  (let ((bytes nil))
-    (labels ((emit (&rest values)
-               (dolist (value values)
-                 (push value bytes))))
-      (loop for char across string
-            for code = (char-code char)
-            do
-               (cond
-                 ((<= code #x7f)
-                  (emit code))
-                 ((<= code #x7ff)
-                  (emit (logior #xc0 (ash code -6))
-                        (logior #x80 (logand code #x3f))))
-                 ((<= code #xffff)
-                  (emit (logior #xe0 (ash code -12))
-                        (logior #x80 (logand (ash code -6) #x3f))
-                        (logior #x80 (logand code #x3f))))
-                 ((<= code #x10ffff)
-                  (emit (logior #xf0 (ash code -18))
-                        (logior #x80 (logand (ash code -12) #x3f))
-                        (logior #x80 (logand (ash code -6) #x3f))
-                        (logior #x80 (logand code #x3f))))
-                 (t
-                  (error "[publish] can't encode character as UTF-8: ~S" char)))))
-    (nreverse bytes)))
-
-(defun %publish-sha256-padded-bytes (string)
-  (let* ((bytes (%publish-string-utf8-bytes string))
-         (bit-length (* 8 (length bytes)))
-         (padded (append bytes (list #x80))))
-    (loop until (= (mod (length padded) 64) 56) do
-      (setf padded (append padded (list 0))))
-    (loop for shift from 56 downto 0 by 8 do
-      (setf padded
-            (append padded
-                    (list (logand #xff (ash bit-length (- shift)))))))
-    padded))
-
-(defun %publish-sha256-word (bytes offset)
-  (%publish-u32
-   (logior (ash (nth offset bytes) 24)
-           (ash (nth (+ offset 1) bytes) 16)
-           (ash (nth (+ offset 2) bytes) 8)
-           (nth (+ offset 3) bytes))))
-
 (defun %publish-sha256 (string)
-  (let ((h0 #x6a09e667)
-        (h1 #xbb67ae85)
-        (h2 #x3c6ef372)
-        (h3 #xa54ff53a)
-        (h4 #x510e527f)
-        (h5 #x9b05688c)
-        (h6 #x1f83d9ab)
-        (h7 #x5be0cd19)
-        (bytes (%publish-sha256-padded-bytes string)))
-    (loop for chunk from 0 below (length bytes) by 64 do
-      (let ((words (make-array 64 :initial-element 0)))
-        (dotimes (index 16)
-          (setf (aref words index)
-                (%publish-sha256-word bytes (+ chunk (* index 4)))))
-        (loop for index from 16 below 64 do
-          (setf (aref words index)
-                (%publish-u32
-                 (+ (%publish-sha256-small-sigma-1
-                     (aref words (- index 2)))
-                    (aref words (- index 7))
-                    (%publish-sha256-small-sigma-0
-                     (aref words (- index 15)))
-                    (aref words (- index 16))))))
-        (let ((a h0) (b h1) (c h2) (d h3)
-              (e h4) (f h5) (g h6) (h h7))
-          (dotimes (index 64)
-            (let* ((temp1
-                     (%publish-u32
-                      (+ h
-                         (%publish-sha256-big-sigma-1 e)
-                         (%publish-sha256-choice e f g)
-                         (aref *publish-sha256-round-constants* index)
-                         (aref words index))))
-                   (temp2
-                     (%publish-u32
-                      (+ (%publish-sha256-big-sigma-0 a)
-                         (%publish-sha256-majority a b c)))))
-              (setf h g
-                    g f
-                    f e
-                    e (%publish-u32 (+ d temp1))
-                    d c
-                    c b
-                    b a
-                    a (%publish-u32 (+ temp1 temp2)))))
-          (setf h0 (%publish-u32 (+ h0 a))
-                h1 (%publish-u32 (+ h1 b))
-                h2 (%publish-u32 (+ h2 c))
-                h3 (%publish-u32 (+ h3 d))
-                h4 (%publish-u32 (+ h4 e))
-                h5 (%publish-u32 (+ h5 f))
-                h6 (%publish-u32 (+ h6 g))
-                h7 (%publish-u32 (+ h7 h))))))
-    (string-downcase
-     (format nil "~8,'0X~8,'0X~8,'0X~8,'0X~8,'0X~8,'0X~8,'0X~8,'0X"
-             h0 h1 h2 h3 h4 h5 h6 h7))))
+  (%project-sha256-string string))
 
 (defun %publish-timestamp ()
   (multiple-value-bind (second minute hour date month year)
@@ -216,8 +73,7 @@
 (defun %publish-journal-file (repository-url tag)
   (let ((slug (%publish-github-slug repository-url)))
     (unless slug
-      (error "[publish] can't derive journal key from repository URL: ~A"
-             repository-url))
+      (%project-error "publish-journal-key" :url repository-url))
     (han.path:join-path
      (%taffish-user-home *publish-journal-user-home*)
      "history"
@@ -337,32 +193,14 @@
       (mapcar #'parse-integer parts))))
 
 (defun %publish-compare-number-lists (a b)
-  (labels ((scan (x y)
-             (cond
-               ((and (null x) (null y)) 0)
-               ((> (or (car x) 0) (or (car y) 0)) 1)
-               ((< (or (car x) 0) (or (car y) 0)) -1)
-               (t (scan (cdr x) (cdr y))))))
-    (scan a b)))
+  (%version-number-order a b))
 
 (defun %publish-compare-versions (a b)
-  (let ((a-numbers (%publish-version-numbers a))
-        (b-numbers (%publish-version-numbers b)))
-    (cond
-      ((and a-numbers b-numbers)
-       (%publish-compare-number-lists a-numbers b-numbers))
-      ((string= a b) 0)
-      ((string< a b) -1)
-      (t 1))))
+  (%compare-versions a b))
 
 (defun %publish-compare-version-release
     (version release other-version other-release)
-  (let ((version-order (%publish-compare-versions version other-version)))
-    (cond
-      ((not (= version-order 0)) version-order)
-      ((> release other-release) 1)
-      ((< release other-release) -1)
-      (t 0))))
+  (%compare-version-release version release other-version other-release))
 
 (defun %publish-last-search (needle string)
   (let ((pos nil)
@@ -432,8 +270,11 @@
     ((or (eql channel :pre)
          (and (stringp channel) (string-equal channel "pre")))
      :pre)
+    ((or (eql channel :no-latest)
+         (and (stringp channel) (string-equal channel "no-latest")))
+     :no-latest)
     (t
-     (error "[publish] channel must be latest or pre, but got: ~S" channel))))
+     (%project-error "publish-channel" :value (%project-repr channel)))))
 
 (defun %normalize-publish-repo-visibility (visibility)
   (cond
@@ -445,20 +286,20 @@
          (and (stringp visibility) (string-equal visibility "private")))
      :private)
     (t
-     (error "[publish] repository visibility must be public or private, but got: ~S"
-            visibility))))
+     (%project-error "publish-visibility"
+                     :value (%project-repr visibility)))))
 
 (defun %publish-git-program ()
   (or (han.os:find-executable "git")
-      (error "[publish] can't find git executable.")))
+      (%project-error "publish-git-missing")))
 
 (defun %publish-gh-program ()
   (or (han.os:find-executable "gh")
-      (error "[publish] can't find gh executable. Install GitHub CLI or create the repository manually.")))
+      (%project-error "publish-gh-missing")))
 
 (defun %publish-env-program ()
   (or (han.os:find-executable "env")
-      (error "[publish] can't find env executable.")))
+      (%project-error "publish-env-missing")))
 
 (defun %publish-program-argument (program)
   (etypecase program
@@ -467,7 +308,10 @@
 
 (defun %publish-noninteractive-env-args ()
   ;; Never let git ask for GitHub credentials through TAFFISH.
-  '("GIT_TERMINAL_PROMPT=0"
+  '("LC_ALL=C"
+    "LANG=C"
+    "LANGUAGE=C"
+    "GIT_TERMINAL_PROMPT=0"
     "GIT_ASKPASS="
     "SSH_ASKPASS="
     "GH_PROMPT_DISABLED=1"
@@ -475,14 +319,14 @@
     "GIT_SSH_COMMAND=ssh -o BatchMode=yes"))
 
 (defun %publish-noninteractive-auth-hint ()
-  "TAF does not handle GitHub login. Please authenticate GitHub yourself, for example by using an SSH repository URL with a loaded key, configuring a git credential helper, or running `gh auth login` outside TAF.")
+  (%project-message "publish.auth-hint"))
 
 (defun %publish-repository-missing-hint (repository-url)
-  (format nil "GitHub repository does not exist or is not accessible: ~A. Create it manually or rerun with --create-repo."
-          repository-url))
+  (%project-message "publish.repository-missing-hint" :url repository-url))
 
 (defun %publish-run-program
     (program args &key (noninteractive nil) (prompt nil) (interactive-output nil))
+  (when (or prompt interactive-output) (%operation-progress-yield))
   (han.os:run-program
    (if noninteractive
        (cons (%publish-env-program)
@@ -511,10 +355,15 @@
                         :prompt prompt
                         :interactive-output interactive-output)
     (unless (and (integerp code) (= code 0))
-      (error "[publish] git command failed (~A): git -C ~A ~{~A~^ ~}~%~A~A~@[~%~A~]"
-             code root args out err
-             (and noninteractive
-                  (%publish-noninteractive-auth-hint))))
+      (%project-error
+       "publish-git-command"
+       :code code
+       :root root
+       :args (format nil "~{~A~^ ~}" args)
+       :output (format nil "~A~A" out err)
+       :hint (if noninteractive
+                 (format nil "~%~A" (%publish-noninteractive-auth-hint))
+                 "")))
     (values out err code)))
 
 (defun %publish-string-lines (string)
@@ -563,6 +412,8 @@
         (last-err nil)
         (last-code nil))
     (loop for attempt from 1 to *publish-query-attempts* do
+      (when (> attempt 1)
+        (%operation-stage "retry" :target (format nil "~D/~D" attempt *publish-query-attempts*) :force-p t))
       (multiple-value-setq (last-out last-err last-code)
         (%publish-run-program program args
                               :noninteractive noninteractive
@@ -661,20 +512,34 @@
                        "remote branch inspection failed"
                        :details evidence)))))
 
+(defun %publish-git-worktree-state (root)
+  (let ((git-marker (han.path:join-path root ".git")))
+    (multiple-value-bind (out err code)
+        (%publish-run-git root '("rev-parse" "--is-inside-work-tree"))
+      (cond
+        ((and (integerp code)
+              (= code 0)
+              (string= "true" (%publish-trim-output out)))
+         (%publish-state :matching "project is a Git worktree"))
+        ((and (not (han.path:file-exists-p git-marker))
+              (not (han.path:directory-exists-p git-marker)))
+         (%publish-state :missing
+                         "project is not initialized as a Git worktree"))
+        (t
+         (%publish-state :unavailable
+                         "failed to inspect the project Git worktree"
+                         :details (format nil "~A~A" out err)))))))
+
 (defun %publish-git-worktree-p (root)
-  (multiple-value-bind (out err code)
-      (%publish-run-git root '("rev-parse" "--is-inside-work-tree"))
-    (declare (ignore err))
-    (and (integerp code)
-         (= code 0)
-         (string= "true" (%publish-trim-output out)))))
+  (eql (getf (%publish-git-worktree-state root) :state) :matching))
 
 (defun %publish-ensure-git-worktree (root verbose)
   (if (%publish-git-worktree-p root)
       nil
       (progn
         (when verbose
-          (format t "[TAF] initializing git repository.~%"))
+          (%operation-progress-yield)
+          (%project-print-message "publish.initializing-git"))
         (%publish-run-git/checked root '("init"))
         t)))
 
@@ -690,21 +555,23 @@
     (cond
       ((%blank-string-p origin)
        (when verbose
-         (format t "[TAF] adding git remote origin: ~A~%" repository-url))
+         (%operation-progress-yield)
+         (%project-print-message "publish.adding-origin" :url repository-url))
        (%publish-run-git/checked root
                                  (list "remote" "add" "origin" repository-url))
        :added)
       ((%publish-same-repository-p origin repository-url)
        :ok)
       (t
-       (error "[publish] git remote origin does not match [repository].url.~%  origin: ~A~%  toml  : ~A"
-              origin repository-url)))))
+       (%project-error "publish-origin-mismatch"
+                       :origin origin :toml repository-url)))))
 
 (defun %publish-git-status-lines (root)
   (multiple-value-bind (out err code)
       (%publish-run-git root '("status" "--porcelain"))
     (unless (and (integerp code) (= code 0))
-      (error "[publish] failed to inspect git status.~%~A~A" out err))
+      (%project-error "publish-git-status"
+                      :output (format nil "~A~A" out err)))
     (%publish-string-lines out)))
 
 (defun %publish-head-exists-p (root)
@@ -730,24 +597,45 @@
       (%publish-trim-output out))))
 
 (defun %publish-local-tag-commit (root tag)
-  (multiple-value-bind (out err code)
-      (%publish-run-git root
-                        (list "rev-parse" "--verify"
-                              (format nil "~A^{commit}" tag)))
-    (cond
-      ((and (integerp code) (= code 0))
-       (%publish-state :matching
-                       (format nil "local tag ~A -> ~A"
-                               tag (%publish-trim-output out))
-                       :commit (%publish-trim-output out)))
-      ((or (%publish-output-contains-p "unknown revision" out err)
-           (%publish-output-contains-p "needed a single revision" out err)
-           (%publish-output-contains-p "ambiguous argument" out err))
-       (%publish-state :missing (format nil "local tag ~A is missing" tag)))
-      (t
+  (let ((worktree (%publish-git-worktree-state root)))
+    (case (getf worktree :state)
+      (:missing
+       (%publish-state :missing
+                       (format nil "local tag ~A is missing because the project is not a Git worktree"
+                               tag)))
+      (:unavailable worktree)
+      (:matching
+       (multiple-value-bind (ref-out ref-err ref-code)
+           (%publish-run-git root
+                             (list "show-ref" "--verify" "--quiet"
+                                   (format nil "refs/tags/~A" tag)))
+         (cond
+           ((and (integerp ref-code) (= ref-code 1))
+            (%publish-state :missing
+                            (format nil "local tag ~A is missing" tag)))
+           ((and (integerp ref-code) (= ref-code 0))
+            (multiple-value-bind (out err code)
+                (%publish-run-git root
+                                  (list "rev-parse" "--verify" "--quiet"
+                                        (format nil "~A^{commit}" tag)))
+              (let ((commit (%publish-trim-output out)))
+                (if (and (integerp code)
+                         (= code 0)
+                         (not (%blank-string-p commit)))
+                    (%publish-state :matching
+                                    (format nil "local tag ~A -> ~A" tag commit)
+                                    :commit commit)
+                    (%publish-state
+                     :conflicting
+                     (format nil "local tag ~A does not resolve to a commit" tag)
+                     :details (format nil "~A~A" out err))))))
+           (t
+            (%publish-state :unavailable
+                            (format nil "failed to inspect local tag ref ~A" tag)
+                            :details (format nil "~A~A" ref-out ref-err))))))
+      (otherwise
        (%publish-state :unavailable
-                       (format nil "failed to inspect local tag ~A" tag)
-                       :details (format nil "~A~A" out err))))))
+                       "unexpected Git worktree inspection state")))))
 
 (defun %publish-normalize-notes (notes)
   ;; GitHub may add a final line break to release bodies. It is transport
@@ -805,17 +693,17 @@
 (defun %publish-read-release-file (project tag)
   (let ((path (%publish-release-file project)))
     (unless (%project-file-exists-p path)
-      (error "[publish] --release requires release.md in project root."))
+      (%project-error "publish-release-missing"))
     (let* ((content (han.os:load-string path))
            (trimmed (%publish-trim-output content))
            (first-line (car (%publish-string-lines content)))
            (message (%publish-release-message-from-line first-line)))
       (when (%blank-string-p trimmed)
-        (error "[publish] release.md is empty."))
+        (%project-error "publish-release-empty"))
       (when (%blank-string-p message)
-        (error "[publish] first line of release.md is empty."))
+        (%project-error "publish-release-title-empty"))
       (when (%publish-default-release-summary-p message)
-        (error "[publish] first line of release.md is still the default TODO release summary. Replace it before publishing."))
+        (%project-error "publish-release-todo"))
       (list :file path
             :file-display "release.md"
             :message message
@@ -839,12 +727,12 @@
 (defun %publish-ensure-license-ready (project)
   (let ((license-file (%publish-license-file project)))
     (unless (%project-file-exists-p license-file)
-      (error "[publish] LICENSE is missing. Add a real LICENSE file before publishing."))
+      (%project-error "publish-license-missing"))
     (let ((content (han.os:load-string license-file)))
       (when (%blank-string-p content)
-        (error "[publish] LICENSE is empty. Add a real LICENSE file before publishing."))
+        (%project-error "publish-license-empty"))
       (when (%publish-placeholder-license-p content)
-        (error "[publish] LICENSE is still a placeholder. Replace it with a real license before publishing."))))
+        (%project-error "publish-license-placeholder"))))
   t)
 
 (defun %publish-lock-repo-plan-commands (slug)
@@ -857,9 +745,30 @@
          "--input" "taffish-release-tag-ruleset.json"
          "[if creating repo]")))
 
+(defun %publish-release-command-args
+    (repository-url tag release-info channel notes-file)
+  (let ((slug (%publish-github-slug repository-url)))
+    (unless slug
+      (%project-error "publish-github-slug" :url repository-url))
+    (append (list "release" "create" tag
+                  "--repo" slug
+                  "--title" (getf release-info :title)
+                  "--notes-file" notes-file
+                  "--verify-tag")
+            (case (%normalize-publish-channel channel)
+              (:latest '("--latest"))
+              (:pre '("--prerelease" "--latest=false"))
+              (:no-latest '("--latest=false"))))))
+
+(defun %publish-latest-policy (context)
+  (cond
+    ((not (getf context :release-requested-p)) "not-applicable")
+    ((eq (getf context :channel) :latest) "promote")
+    (t "preserve")))
+
 (defun %publish-plan-commands
     (repository-url tag commit-message create-repo-p repo-visibility
-     release-info lock-repo-p)
+     release-info lock-repo-p &optional (channel :latest))
   (let ((create-commands nil)
         (slug (%publish-github-slug repository-url)))
     (when create-repo-p
@@ -892,11 +801,10 @@
         (setf commands
               (append commands
                       (list
-                       (list "gh" "release" "create" tag
-                             "--repo" (or slug repository-url)
-                             "--title" (getf release-info :title)
-                             "--notes-file"
-                             (getf release-info :file-display))))))
+                       (cons "gh"
+                             (%publish-release-command-args
+                              repository-url tag release-info channel
+                              (getf release-info :file-display)))))))
       commands)))
 
 (defun %publish-format-command (command)
@@ -912,66 +820,85 @@
         (repo-visibility (getf context :repo-visibility))
         (remote-checked-p (getf context :remote-checked-p))
         (remote-missing-p (getf context :remote-missing-p))
-        (latest-info (getf context :remote-latest))
         (remote-error (getf context :remote-error))
         (release-info (getf context :release-info))
         (lock-repo-p (getf context :lock-repo-p))
         (phases (nreverse (copy-list (getf context :phases)))))
-  (format t "[TAF] publish ~A: ~A~%"
-          (if dry-run "dry-run" "ready")
-          (getf project :name))
-  (format t "  root    : ~A~%" (getf project :root-dir))
-  (format t "  repo    : ~A~%" (getf project :repository-url))
-  (format t "  tag     : ~A~%" tag)
-  (format t "  channel : ~A~%" (string-downcase (string channel)))
-  (format t "  build   : ~A~%" (if build-p "yes" "no"))
-  (format t "  release : ~A~%" (if release-info "yes" "no"))
+  (%operation-progress-yield)
+  (%project-print-message (if dry-run
+                              "publish.header.dry-run"
+                              "publish.header.ready")
+                          :name (getf project :name))
+  (%project-print-field "publish" "root" (getf project :root-dir))
+  (%project-print-field "publish" "repo" (getf project :repository-url))
+  (%project-print-field "publish" "tag" tag)
+  (%project-print-field "publish" "channel"
+                        (string-downcase (string channel)))
+  (%project-print-field "publish" "build"
+                        (%project-message (if build-p
+                                              "publish.yes"
+                                              "publish.no")))
+  (%project-print-field "publish" "release"
+                        (%project-message (if release-info
+                                              "publish.yes"
+                                              "publish.no")))
   (when release-info
-    (format t "  message : ~A~%" (getf release-info :message))
-    (format t "  notes   : ~A~%" (getf release-info :file-display)))
-  (format t "  prompt  : ~A~%" (if prompt-p "yes" "no"))
-  (format t "  create  : ~A~%"
-          (if create-repo-p
-              (string-downcase (string repo-visibility))
-              "no"))
-  (format t "  lock    : ~A~%"
-          (cond
-            ((not create-repo-p) "no")
-            (lock-repo-p "yes")
-            (t "no")))
-  (format t "  remote  : ~A~%"
-          (cond
-            (remote-missing-p "missing")
-            (remote-checked-p "checked")
-            (t "not checked")))
-  (when latest-info
-    (format t "  latest  : ~A~%" (getf latest-info :tag)))
+    (%project-print-field "publish" "message" (getf release-info :message))
+    (%project-print-field "publish" "notes" (getf release-info :file-display)))
+  (%project-print-field "publish" "prompt"
+                        (%project-message (if prompt-p
+                                              "publish.yes"
+                                              "publish.no")))
+  (%project-print-field
+   "publish" "create"
+   (if create-repo-p
+       (string-downcase (string repo-visibility))
+       (%project-message "publish.no")))
+  (%project-print-field
+   "publish" "lock"
+   (%project-message (if (and create-repo-p lock-repo-p)
+                         "publish.yes"
+                         "publish.no")))
+  (%project-print-field
+   "publish" "remote"
+   (%project-message
+    (cond
+      (remote-missing-p "publish.remote.missing")
+      (remote-checked-p "publish.remote.checked")
+      (t "publish.remote.not-checked"))))
+  (unless release-info
+    (%project-print-field "publish" "release-policy"
+                          (%project-message "publish.tag-only")))
   (when remote-error
-    (format t "  warning : remote check skipped in dry-run: ~A~%" remote-error))
+    (%project-print-field
+     "publish" "warning"
+     (%project-message "publish.remote-check-skipped" :error remote-error)))
   (when (and remote-missing-p (not create-repo-p))
-    (format t "  warning : ~A~%"
-            (%publish-repository-missing-hint (getf project :repository-url))))
-  (format t "  outcome : ~A~%" (string-downcase (string outcome)))
-  (format t "  phases  :~%")
+    (%project-print-field
+     "publish" "warning"
+     (%publish-repository-missing-hint (getf project :repository-url))))
+  (%project-print-field "publish" "outcome"
+                        (%publish-human-status outcome))
+  (format t "  ~A:~%" (%project-message "publish.field.phases"))
   (dolist (phase phases)
     (format t "    ~A: ~A~@[ (~A)~]~%"
             (string-downcase (string (getf phase :id)))
-            (string-downcase (string (getf phase :status)))
+            (%publish-human-status (getf phase :status))
             (getf phase :evidence)))
   (when dry-run
-    (format t "  action  : use --yes to ~A~%"
-            (cond
-              ((and remote-missing-p (not create-repo-p))
-               "publish after creating the repository manually or adding --create-repo")
-              (create-repo-p
-               (if lock-repo-p
-                   "create missing repo, lock release tags and publish"
-                   "create missing repo and publish"))
-              (release-info
-               "run git commit/tag/push and create GitHub release")
-              (t
-               "run git commit/tag/push")))
-    (format t "  plan    :~%")
+    (%project-print-field
+     "publish" "action"
+     (%project-message
+      (cond
+        ((and remote-missing-p (not create-repo-p))
+         "publish.action.manual-or-create")
+        (create-repo-p
+         (if lock-repo-p
+             "publish.action.create-lock"
+             "publish.action.create"))
+        (release-info "publish.action.release")
+        (t "publish.action.git"))))
+    (format t "  ~A:~%" (%project-message "publish.field.plan"))
     (dolist (command commands)
       (format t "    ~A~%" (%publish-format-command command))))))
 
@@ -979,12 +906,13 @@
     (repository-url repo-visibility prompt-p verbose)
   (let ((slug (%publish-github-slug repository-url)))
     (unless slug
-      (error "[publish] can't derive GitHub owner/repo from repository URL: ~A"
-             repository-url))
+      (%project-error "publish-github-slug" :url repository-url))
     (when verbose
-      (format t "[TAF] creating GitHub repository: ~A (~A)~%"
-              slug
-              (string-downcase (string repo-visibility))))
+      (%operation-progress-yield)
+      (%project-print-message "publish.creating-repository"
+                              :slug slug
+                              :visibility
+                              (string-downcase (string repo-visibility))))
     (multiple-value-bind (out err code)
         (%publish-run-program
          (%publish-gh-program)
@@ -996,10 +924,13 @@
          :prompt prompt-p
          :interactive-output prompt-p)
       (unless (and (integerp code) (= code 0))
-        (error "[publish] failed to create GitHub repository ~A.~%~A~A~@[~%~A~]"
-               slug out err
-               (and (not prompt-p)
-                    (%publish-noninteractive-auth-hint))))
+        (%project-error
+         "publish-create-repository"
+         :slug slug
+         :output (format nil "~A~A" out err)
+         :hint (if prompt-p
+                   ""
+                   (format nil "~%~A" (%publish-noninteractive-auth-hint)))))
       (list :slug slug
             :visibility repo-visibility
             :stdout out
@@ -1051,12 +982,16 @@
        :prompt prompt-p
        :interactive-output prompt-p)
     (unless (and (integerp code) (= code 0))
-      (error "[publish] failed to ~A.~%~A~A~@[~%~A~]"
-             action out err
-             (and (not prompt-p)
-                  (%publish-noninteractive-auth-hint))))
+      (%project-error
+       "publish-action"
+       :action action
+       :output (format nil "~A~A" out err)
+       :hint (if prompt-p
+                 ""
+                 (format nil "~%~A" (%publish-noninteractive-auth-hint)))))
     (when verbose
-      (format t "[TAF] ~A.~%" action))
+      (%operation-progress-yield)
+      (%project-print-message "publish.action-complete" :action action))
     (values out err code)))
 
 (defun %publish-enable-immutable-releases
@@ -1066,7 +1001,7 @@
          (format nil "repos/~A/immutable-releases" slug))
    :prompt-p prompt-p
    :verbose verbose
-   :action (format nil "enabled immutable releases for ~A" slug)))
+   :action (%project-message "publish.action.immutable-enabled" :slug slug)))
 
 (defun %publish-create-release-tag-ruleset
     (slug prompt-p verbose)
@@ -1083,35 +1018,35 @@
                   "--input" (han.path:->namestring ruleset-file))
             :prompt-p prompt-p
             :verbose verbose
-            :action (format nil "created TAFFISH release tag ruleset for ~A"
-                            slug)))
+            :action (%project-message "publish.action.ruleset-created"
+                                      :slug slug)))
       (%publish-delete-file-safely ruleset-file))))
 
 (defun %publish-create-github-release
-    (repository-url tag release-info prompt-p verbose)
+    (repository-url tag release-info prompt-p verbose &optional (channel :latest))
   (let ((slug (%publish-github-slug repository-url)))
     (unless slug
-      (error "[publish] can't derive GitHub owner/repo from repository URL: ~A"
-             repository-url))
+      (%project-error "publish-github-slug" :url repository-url))
     (when verbose
-      (format t "[TAF] creating GitHub release: ~A~%" tag))
+      (%operation-progress-yield)
+      (%project-print-message "publish.creating-release" :tag tag))
     (multiple-value-bind (out err code)
         (%publish-run-program
          (%publish-gh-program)
-         (list "release" "create"
-               tag
-               "--repo" slug
-               "--title" (getf release-info :title)
-               "--notes-file" (han.path:->namestring
-                               (getf release-info :file)))
+         (%publish-release-command-args
+          repository-url tag release-info channel
+          (han.path:->namestring (getf release-info :file)))
          :noninteractive (not prompt-p)
          :prompt prompt-p
          :interactive-output prompt-p)
       (unless (and (integerp code) (= code 0))
-        (error "[publish] failed to create GitHub release ~A.~%~A~A~@[~%~A~]"
-               tag out err
-               (and (not prompt-p)
-                    (%publish-noninteractive-auth-hint))))
+        (%project-error
+         "publish-create-release"
+         :tag tag
+         :output (format nil "~A~A" out err)
+         :hint (if prompt-p
+                   ""
+                   (format nil "~%~A" (%publish-noninteractive-auth-hint)))))
       (list :tag tag
             :title (getf release-info :title)
             :notes-file (getf release-info :file)
@@ -1120,7 +1055,7 @@
 
 (defun %publish-make-context
     (project tag channel dry-run prompt-p create-repo-p repo-visibility
-     lock-repo-p release-info commit-message remote-tags verbose)
+     lock-repo-p release-info commit-message remote-tags build-p verbose)
   (list :project project
         :root (getf project :root-dir)
         :repository-url (getf project :repository-url)
@@ -1139,6 +1074,10 @@
              (%publish-sha256
               (%publish-normalize-notes (getf release-info :notes))))
         :commit-message commit-message
+        :build-p build-p
+        :build-result nil
+        :build-status (if build-p :pending :not-requested)
+        :build-evidence nil
         :remote-tags-override remote-tags
         :remote-tags nil
         :remote-checked-p nil
@@ -1153,8 +1092,11 @@
         :policy-required-p nil
         :policy-inspection nil
         :journal nil
+        :journal-validated-p nil
+        :journal-channel-confirmed-p nil
         :journal-file nil
         :journal-error nil
+        :journal-last-stage nil
         :created-at nil
         :last-stage nil
         :last-confirmed-stage nil
@@ -1170,44 +1112,59 @@
   (not (null value)))
 
 (defun %publish-journal-object (context status)
-  (han.json:json-object
-   (cons "schema" "taffish.publish-transaction/v1")
-   (cons "repository" (getf context :repository-url))
-   (cons "tag" (getf context :tag))
-   (cons "commit" (or (getf context :target-commit) :null))
-   (cons "release_requested"
-         (%publish-bool-json (getf context :release-requested-p)))
-   (cons "release_title" (or (getf context :release-title) :null))
-   (cons "release_notes_sha256"
-         (or (getf context :release-notes-sha256) :null))
-   (cons "create_repository"
-         (%publish-bool-json (getf context :create-repo-p)))
-   (cons "repository_create_started"
-         (%publish-bool-json (getf context :repository-create-started-p)))
-   (cons "repository_created"
-         (%publish-bool-json (getf context :repository-created-p)))
-   (cons "lock_repository"
-         (%publish-bool-json (getf context :lock-repo-p)))
-   (cons "visibility"
-         (string-downcase (string (getf context :repo-visibility))))
-   (cons "branch" (or (getf context :branch) :null))
-   (cons "last_known_stage"
-         (or (and (getf context :last-stage)
-                  (string-downcase
-                   (symbol-name (getf context :last-stage))))
-             :null))
-   (cons "last_confirmed_stage"
-         (or (and (getf context :last-confirmed-stage)
-                  (string-downcase
-                   (symbol-name (getf context :last-confirmed-stage))))
-             :null))
-   (cons "status" (string-downcase (string status)))
-   (cons "created_at" (or (getf context :created-at)
-                           (%publish-timestamp)))
-   (cons "updated_at" (%publish-timestamp))))
+  (let ((object
+          (han.json:json-object
+           (cons "schema" "taffish.publish-transaction/v1")
+           (cons "repository" (getf context :repository-url))
+           (cons "tag" (getf context :tag))
+           (cons "commit" (or (getf context :target-commit) :null))
+           (cons "build_requested"
+                 (%publish-bool-json (getf context :build-p)))
+           (cons "release_requested"
+                 (%publish-bool-json (getf context :release-requested-p)))
+           (cons "release_title" (or (getf context :release-title) :null))
+           (cons "release_notes_sha256"
+                 (or (getf context :release-notes-sha256) :null))
+           (cons "create_repository"
+                 (%publish-bool-json (getf context :create-repo-p)))
+           (cons "repository_create_started"
+                 (%publish-bool-json (getf context :repository-create-started-p)))
+           (cons "repository_created"
+                 (%publish-bool-json (getf context :repository-created-p)))
+           (cons "lock_repository"
+                 (%publish-bool-json (getf context :lock-repo-p)))
+           (cons "visibility"
+                 (string-downcase (string (getf context :repo-visibility))))
+           (cons "branch" (or (getf context :branch) :null))
+           (cons "last_known_stage"
+                 (or (and (getf context :last-stage)
+                          (string-downcase
+                           (symbol-name (getf context :last-stage))))
+                     :null))
+           (cons "last_confirmed_stage"
+                 (or (and (getf context :last-confirmed-stage)
+                          (string-downcase
+                           (symbol-name (getf context :last-confirmed-stage))))
+                     :null))
+           (cons "status" (string-downcase (string status)))
+           (cons "created_at" (or (getf context :created-at)
+                                   (%publish-timestamp)))
+           (cons "updated_at" (%publish-timestamp)))))
+    ;; Do not stamp guessed channel intent into a legacy journal before the
+    ;; remote Release has been checked. A rejected retry must remain recoverable.
+    (dolist (field (list (cons "channel"
+                              (string-downcase (string (getf context :channel))))
+                        (cons "latest_policy" (%publish-latest-policy context))))
+      (when (or (null (getf context :journal))
+                (getf context :journal-channel-confirmed-p)
+                (nth-value 1 (han.json:get-json (getf context :journal)
+                                              (car field))))
+        (setf (gethash (car field) object) (cdr field))))
+    object))
 
 (defun %publish-write-journal (context status)
-  (unless (getf context :dry-run)
+  (when (and (not (getf context :dry-run))
+             (getf context :journal-validated-p))
     (let ((file (or (getf context :journal-file)
                     (%publish-journal-file
                      (getf context :repository-url)
@@ -1240,8 +1197,8 @@
       (when (and journal
                  (string= "taffish.publish-transaction/v1"
                           (or (%publish-journal-value journal "schema") "")))
-        (dolist (check
-                 (list
+        (let ((checks
+                (list
                   (list "repository" (getf context :repository-url))
                   (list "tag" (getf context :tag))
                   (list "release_requested"
@@ -1256,13 +1213,34 @@
                         (%publish-bool-json (getf context :lock-repo-p)))
                   (list "visibility"
                         (string-downcase
-                         (string (getf context :repo-visibility))))))
-          (unless (%publish-journal-string-equal
-                   journal (first check) (second check))
-            (%publish-fail
-             :conflict :project-validated
-             "publish intent conflicts with the existing transaction journal (~A). Use the same publish options and release.md, or inspect ~A manually."
-             (first check) (han.path:->namestring file))))
+                         (string (getf context :repo-visibility)))))))
+          ;; Journals created before build intent became explicit remain
+          ;; readable. New journals require the same --build choice on retry.
+          (unless (eq (%publish-journal-value
+                       journal "build_requested" :missing)
+                      :missing)
+            (setf checks
+                  (append checks
+                          (list
+                           (list "build_requested"
+                                 (%publish-bool-json
+                                  (getf context :build-p)))))))
+          ;; Older journals did not record channel intent. In that case the
+          ;; remote Release type must still match; never rewrite it on retry.
+          (dolist (check
+                   (list (list "channel"
+                               (string-downcase (string (getf context :channel))))
+                         (list "latest_policy" (%publish-latest-policy context))))
+            (unless (eq (%publish-journal-value journal (first check) :missing)
+                        :missing)
+              (push check checks)))
+          (dolist (check checks)
+            (unless (%publish-journal-string-equal
+                     journal (first check) (second check))
+              (%publish-fail-message
+               :conflict :project-validated "journal-conflict"
+               :field (first check)
+               :file (han.path:->namestring file)))))
         (let ((commit (%publish-journal-value journal "commit")))
           (when (stringp commit)
             (setf (getf context :target-commit) commit)))
@@ -1274,12 +1252,15 @@
               (getf context :repository-created-p)
               (%publish-journal-value journal "repository_created" nil))
         (let ((last-stage (%publish-journal-value journal "last_known_stage")))
-          (when (and (stringp last-stage)
-                     (not (member last-stage
-                                  '("project-validated" "publish-complete")
-                                  :test #'string=)))
-            (setf (getf context :journal-resume-p) t
-                  (getf context :resume-evidence-p) t))))
+          (when (stringp last-stage)
+            (setf (getf context :journal-last-stage)
+                  (intern (string-upcase last-stage) :keyword))
+            (unless (member last-stage
+                            '("project-validated" "publish-complete")
+                            :test #'string=)
+              (setf (getf context :journal-resume-p) t
+                    (getf context :resume-evidence-p) t)))))
+      (setf (getf context :journal-validated-p) t)
       journal)))
 
 (defun %publish-record-phase
@@ -1304,10 +1285,9 @@
     (when commit
       (let ((expected (getf context :target-commit)))
         (when (and expected (not (string= expected commit)))
-          (%publish-fail
-           :conflict stage
-           "commit identity differs: expected ~A, observed ~A"
-           expected commit))
+          (%publish-fail-message
+           :conflict stage "commit-identity"
+           :expected expected :actual commit))
         (setf (getf context :target-commit) commit))))
   (let ((branch (getf result :branch)))
     (when branch
@@ -1554,10 +1534,20 @@
              (rest strings))))
 
 (defun %publish-default-inspect-commit (context)
-  (let ((root (getf context :root)))
-    (unless (%publish-git-worktree-p root)
-      (return-from %publish-default-inspect-commit
-        (%publish-state :missing "git repository and release commit are not ready")))
+  (let* ((root (getf context :root))
+         (worktree (%publish-git-worktree-state root)))
+    (case (getf worktree :state)
+      (:missing
+       (return-from %publish-default-inspect-commit
+         (%publish-state :missing
+                         "git repository and release commit are not ready")))
+      (:unavailable
+       (return-from %publish-default-inspect-commit worktree))
+      (:matching nil)
+      (otherwise
+       (return-from %publish-default-inspect-commit
+         (%publish-state :unavailable
+                         "unexpected Git worktree inspection state"))))
     (let ((origin (%publish-git-origin-url root)))
       (cond
         ((or (null origin) (%blank-string-p origin))
@@ -1578,9 +1568,12 @@
         (return-from %publish-default-inspect-commit
           (%publish-state :unavailable
                           "tag identity inspection is unavailable")))
-      (when (member :conflicting
-                    (list (getf local-tag :state) (getf remote-tag :state)))
-        (return-from %publish-default-inspect-commit remote-tag))
+      (let ((conflict
+              (find :conflicting
+                    (list local-tag remote-tag)
+                    :key (lambda (state) (getf state :state)))))
+        (when conflict
+          (return-from %publish-default-inspect-commit conflict)))
       (let* ((candidates (%publish-commit-candidates
                           context local-tag remote-tag))
              (head (%publish-head-commit root))
@@ -1628,11 +1621,12 @@
        root '("rm" "--cached" "--ignore-unmatch" "release.md")))
     (when (%publish-git-status-lines root)
       (when (getf context :verbose)
-        (format t "[TAF] committing project changes.~%"))
+        (%operation-progress-yield)
+        (%project-print-message "publish.committing"))
       (%publish-run-git/checked
        root (list "commit" "-m" (getf context :commit-message))))
     (unless (%publish-head-exists-p root)
-      (error "[publish] git repository has no commit to tag."))
+      (%project-error "publish-no-commit"))
     (when initialized-p
       (%publish-run-git/checked root '("branch" "-M" "main")))
     (setf (getf context :branch) (%publish-current-branch root)
@@ -1678,15 +1672,17 @@
 
 (defun %publish-default-inspect-local-tag (context)
   (let ((result (%publish-local-tag-commit
-                 (getf context :root) (getf context :tag))))
+                 (getf context :root) (getf context :tag)))
+        (expected (getf context :target-commit)))
     (if (and (eql (getf result :state) :matching)
+             expected
              (not (string= (getf result :commit)
-                           (getf context :target-commit))))
+                           expected)))
         (%publish-state
          :conflicting
          (format nil "local tag ~A points to ~A, expected ~A"
                  (getf context :tag) (getf result :commit)
-                 (getf context :target-commit)))
+                 expected))
         result)))
 
 (defun %publish-default-create-local-tag (context)
@@ -1695,15 +1691,17 @@
    (list "tag" (getf context :tag) (getf context :target-commit))))
 
 (defun %publish-default-inspect-remote-tag-phase (context)
-  (let ((result (%publish-default-inspect-remote-tag context)))
+  (let ((result (%publish-default-inspect-remote-tag context))
+        (expected (getf context :target-commit)))
     (if (and (eql (getf result :state) :matching)
+             expected
              (not (string= (getf result :commit)
-                           (getf context :target-commit))))
+                           expected)))
         (%publish-state
          :conflicting
          (format nil "remote tag ~A points to ~A, expected ~A"
                  (getf context :tag) (getf result :commit)
-                 (getf context :target-commit)))
+                 expected))
         result)))
 
 (defun %publish-default-create-remote-tag (context)
@@ -1713,6 +1711,17 @@
    :noninteractive (not (getf context :prompt-p))
    :prompt (getf context :prompt-p)
    :interactive-output (getf context :prompt-p)))
+
+(defun %publish-release-response-p (object)
+  (and (han.json:json-object-p object)
+       (every (lambda (key)
+                (stringp (han.json:get-json object key)))
+              '("tagName" "name" "body"))
+       (every (lambda (key)
+                (multiple-value-bind (value present-p)
+                    (han.json:get-json object key)
+                  (and present-p (or (eq value t) (null value)))))
+              '("isDraft" "isPrerelease"))))
 
 (defun %publish-default-inspect-release (context)
   (if (not (getf context :release-requested-p))
@@ -1727,17 +1736,20 @@
           (cond
             ((and (integerp code) (= code 0))
              (let* ((object (%publish-json-object-from-output out))
-                    (tag (%publish-json-string object "tagName"))
-                    (title (%publish-json-string object "name"))
-                    (body (%publish-json-string object "body"))
+                    (valid-p (%publish-release-response-p object))
+                    (tag (and valid-p (%publish-json-string object "tagName")))
+                    (title (and valid-p (%publish-json-string object "name")))
+                    (body (and valid-p (%publish-json-string object "body")))
                     (digest (and body
                                  (%publish-sha256
                                   (%publish-normalize-notes body)))))
                (cond
-                 ((null object)
+                 ((not valid-p)
                   (%publish-state :unavailable
-                                  "GitHub Release response is not valid JSON"))
+                                  (%project-message "publish.phase.release-incomplete")))
                  ((or (%publish-json-true-p object "isDraft")
+                      (not (eq (%publish-json-true-p object "isPrerelease")
+                               (eq (getf context :channel) :pre)))
                       (not (string= (or tag "") (getf context :tag)))
                       (not (string= (or title "")
                                     (getf context :release-title)))
@@ -1745,10 +1757,12 @@
                                     (getf context :release-notes-sha256))))
                   (%publish-state
                    :conflicting
-                   "GitHub Release exists but tag/title/notes intent differs"))
+                   (%project-message "publish.phase.release-conflict")))
                  (t
+                  ;; Latest is a mutable recommendation, not Release identity.
+                  ;; Retrying an older completed release must not promote it.
                   (%publish-state :matching
-                                  "GitHub Release tag/title/notes match")))))
+                                  (%project-message "publish.phase.release-matching"))))))
             ((%publish-release-not-found-output-p out err)
              (%publish-state :missing "GitHub Release is missing"))
             (t
@@ -1762,7 +1776,8 @@
    (getf context :tag)
    (getf context :release-info)
    (getf context :prompt-p)
-   (getf context :verbose)))
+   (getf context :verbose)
+   (getf context :channel)))
 
 (defun %publish-default-operation (operation context)
   (case operation
@@ -1781,22 +1796,165 @@
     (:inspect-release (%publish-default-inspect-release context))
     (:create-release (%publish-default-create-release context))
     (otherwise
-     (error "[publish] unknown operation: ~S" operation))))
+     (%project-error "publish-operation"
+                     :value (%project-repr operation)))))
 
 (defun %publish-operation (operation context)
   (if *publish-operation-adapter*
       (funcall *publish-operation-adapter* operation context)
       (%publish-default-operation operation context)))
 
+(defun %publish-journal-reached-commit-p (context)
+  (member (getf context :journal-last-stage)
+          '(:commit-ready :branch-pushed :local-tag-ready
+            :remote-tag-ready :github-release-ready :publish-complete)
+          :test #'eql))
+
+(defun %publish-build-identity-state (context)
+  (let* ((local-tag (%publish-operation :inspect-local-tag context))
+         (remote-tag (%publish-operation :inspect-remote-tag context))
+         (states (list (getf local-tag :state)
+                       (getf remote-tag :state))))
+    (when (member :unavailable states :test #'eql)
+      (return-from %publish-build-identity-state
+        (%publish-state :unavailable
+                        (%project-message
+                         "publish.phase.build-identity-unavailable"))))
+    (when (member :conflicting states :test #'eql)
+      (return-from %publish-build-identity-state
+        (or (find :conflicting (list local-tag remote-tag)
+                  :key (lambda (result) (getf result :state))
+                  :test #'eql)
+            (%publish-state :conflicting
+                            "release tag identity conflicts"))))
+    (let ((candidates (%publish-commit-candidates
+                       context local-tag remote-tag)))
+      (unless (%publish-identical-strings-p candidates)
+        (return-from %publish-build-identity-state
+          (%publish-state
+           :conflicting
+           (format nil "journal/local/remote tag commits disagree: ~{~A~^, ~}"
+                   candidates))))
+      (if (or candidates (%publish-journal-reached-commit-p context))
+          (let ((commit-state (%publish-operation :inspect-commit context)))
+            (%publish-accept-state-fields context commit-state :build-ready)
+            (if (and candidates
+                     (eql (getf commit-state :state) :missing))
+                (%publish-state
+                 :conflicting
+                 (format nil
+                         "release tag commit ~A exists, but the local project cannot prove a matching clean HEAD"
+                         (first candidates)))
+                commit-state))
+          (%publish-state :missing
+                          (%project-message
+                           "publish.phase.build-not-established"))))))
+
+(defun %publish-run-build (context)
+  (let ((runner (or *publish-build-runner* #'project-build)))
+    (funcall runner
+             :command-p t
+             :image-p nil
+             :start-dir (getf context :root)
+             :verbose (getf context :verbose))))
+
+(defun %publish-ensure-build-phase (context)
+  (cond
+    ((not (getf context :build-p))
+     (setf (getf context :build-status) :not-requested
+           (getf context :build-evidence)
+           (%project-message "publish.phase.build-not-requested"))
+     (%publish-record-phase context :build-ready :skipped
+                            (getf context :build-evidence)))
+    ((getf context :dry-run)
+     (setf (getf context :build-status) :planned
+           (getf context :build-evidence)
+           (%project-message "publish.phase.build-planned"))
+     (%publish-record-phase context :build-ready :pending
+                            (getf context :build-evidence)))
+    (t
+     (let ((identity (%publish-build-identity-state context)))
+       (case (getf identity :state)
+         (:matching
+          (setf (getf context :build-status) :release-established
+                (getf context :build-evidence)
+                (%project-message
+                 "publish.phase.build-release-established"
+                 :commit (getf context :target-commit)))
+          (%publish-record-phase context :build-ready :skipped
+                                 (getf context :build-evidence)))
+         (:missing
+          (handler-case
+              (let* ((result (%publish-run-build context))
+                     (command (getf result :command))
+                     (status (or (getf command :status) :rebuilt)))
+                (setf (getf context :build-result) result
+                      (getf context :build-status) status
+                      (getf context :project)
+                      (or (getf result :project)
+                          (getf context :project))
+                      (getf context :build-evidence)
+                      (%project-message
+                       (if (eql status :up-to-date)
+                           "publish.phase.build-current"
+                           "publish.phase.build-ready")))
+                (%publish-record-phase
+                 context :build-ready
+                 (if (eql status :up-to-date) :skipped :ready)
+                 (getf context :build-evidence)))
+            (publish-state-error (condition)
+              (error condition))
+            (error (condition)
+              (%publish-record-phase
+               context :build-ready :failed (princ-to-string condition))
+              (%publish-fail-message
+               :failed :build-ready "build-failed"
+               :error condition))))
+         (:unavailable
+          (%publish-record-phase context :build-ready :unavailable
+                                 (getf identity :evidence))
+          (%publish-fail-message
+           :unavailable :build-ready "inspection-unavailable"
+           :evidence (getf identity :evidence)
+           :stage (or (getf context :last-confirmed-stage) :none)))
+         (:conflicting
+          (%publish-record-phase context :build-ready :conflict
+                                 (getf identity :evidence))
+          (%publish-fail :conflict :build-ready "~A"
+                         (getf identity :evidence)))
+         (otherwise
+          (%publish-fail-message
+           :failed :build-ready "inspection-state"
+           :value (%project-repr (getf identity :state)))))))))
+
+(defun %publish-reconcile-inspection
+    (context inspect-operation create-operation)
+  (%operation-stage "confirm" :target (getf context :tag))
+  (let ((result (%publish-operation inspect-operation context)))
+    ;; GitHub may acknowledge repository creation before its Git endpoint is
+    ;; reachable. Retry only this post-create missing state; initial discovery
+    ;; and all other mutations retain their existing behavior.
+    (when (eql create-operation :create-repository)
+      (dolist (delay *publish-repository-readiness-delays*)
+        (unless (eql (getf result :state) :missing)
+          (return))
+        (sleep delay)
+        (%operation-stage "confirm" :target (getf context :tag))
+        (setf result (%publish-operation inspect-operation context))))
+    result))
+
 (defun %publish-reconcile-mutation
     (context phase-id inspect-operation create-operation)
+  (%operation-stage "write-remote" :target (getf context :tag))
+  (%operation-progress-yield)
   (let ((mutation-error nil)
         (last-confirmed-stage (getf context :last-confirmed-stage)))
     (handler-case
         (%publish-operation create-operation context)
       (error (condition)
         (setf mutation-error condition)))
-    (let ((after (%publish-operation inspect-operation context)))
+    (let ((after (%publish-reconcile-inspection
+                  context inspect-operation create-operation)))
       (%publish-accept-state-fields context after phase-id)
       (case (getf after :state)
         (:matching
@@ -1816,37 +1974,50 @@
         (:unavailable
          (%publish-record-phase context phase-id :unavailable
                                 (getf after :evidence))
-         (%publish-fail
-          :unavailable phase-id
-          "could not confirm whether ~A completed; rerun the same taf publish command after connectivity is restored. Last confirmed stage: ~A"
-          create-operation (or last-confirmed-stage :none)))
+         (%publish-fail-message
+          :unavailable phase-id "reconcile-unavailable"
+          :operation create-operation
+          :stage (or last-confirmed-stage :none)))
         (:missing
          (if (getf after :actual)
              (progn
                (%publish-record-phase context phase-id :conflict
                                       (getf after :evidence))
-               (%publish-fail
-                :conflict phase-id
-                "~A did not reach the required commit after ~A; refusing to overwrite the remote ref"
-                (getf after :evidence) create-operation))
+               (%publish-fail-message
+                :conflict phase-id "ref-not-ready"
+                :evidence (getf after :evidence)
+                :operation create-operation))
              (progn
                (%publish-record-phase context phase-id :failed
                                       (getf after :evidence))
-               (%publish-fail
-                :failed phase-id
-                "~A did not reach the required state.~@[ Cause: ~A~]"
-                create-operation mutation-error))))
+               (%publish-fail-message
+                :failed phase-id "operation-not-ready"
+                :operation create-operation
+                :cause (if mutation-error
+                           (%project-message "publish.cause"
+                                             :error mutation-error)
+                           "")))))
         (otherwise
          (%publish-record-phase context phase-id :failed
                                 (getf after :evidence))
-         (%publish-fail
-          :failed phase-id
-          "~A did not reach the required state.~@[ Cause: ~A~]"
-          create-operation mutation-error))))))
+         (%publish-fail-message
+          :failed phase-id "operation-not-ready"
+          :operation create-operation
+          :cause (if mutation-error
+                     (%project-message "publish.cause"
+                                       :error mutation-error)
+                     "")))))))
 
 (defun %publish-ensure-phase
     (context phase-id inspect-operation create-operation
      &key (matching-status :skipped) missing-error)
+  (%operation-stage
+   (case phase-id
+     (:repository-policy-ready "policy") (:commit-ready "commit")
+     (:branch-pushed "branch") (:local-tag-ready "local-tag")
+     (:remote-tag-ready "remote-tag") (:github-release-ready "release")
+     (otherwise "query"))
+   :target (getf context :tag))
   (let ((before (%publish-operation inspect-operation context)))
     (%publish-accept-state-fields context before phase-id)
     (case (getf before :state)
@@ -1872,11 +2043,10 @@
        (%publish-record-phase context phase-id :unavailable
                               (getf before :evidence))
        (unless (getf context :dry-run)
-         (%publish-fail
-          :unavailable phase-id
-          "~A; rerun the same taf publish command after connectivity is restored. Last confirmed stage: ~A"
-          (getf before :evidence)
-          (or (getf context :last-confirmed-stage) :none))))
+         (%publish-fail-message
+          :unavailable phase-id "inspection-unavailable"
+          :evidence (getf before :evidence)
+          :stage (or (getf context :last-confirmed-stage) :none))))
       (:missing
        (cond
          ((getf context :dry-run)
@@ -1891,8 +2061,9 @@
           (%publish-reconcile-mutation
            context phase-id inspect-operation create-operation))))
       (otherwise
-       (%publish-fail :failed phase-id
-                      "unknown inspection state: ~S" (getf before :state))))))
+       (%publish-fail-message
+        :failed phase-id "inspection-state"
+        :value (%project-repr (getf before :state)))))))
 
 (defun %publish-mark-repository-create-intent (context)
   (setf (getf context :repository-create-started-p) t
@@ -1900,9 +2071,12 @@
   (%publish-write-journal context :repository-create-started))
 
 (defun %publish-ensure-repository-phase (context)
+  (%operation-stage "repository" :target (getf context :tag))
   (let ((before (%publish-operation :inspect-repository context)))
     (case (getf before :state)
       (:matching
+       (when (getf context :repository-create-started-p)
+         (setf (getf context :repository-created-p) t))
        (setf (getf context :policy-required-p)
              (and (getf context :lock-repo-p)
                   (or (getf context :repository-create-started-p)
@@ -1915,7 +2089,7 @@
           (if (getf context :dry-run)
               (%publish-record-phase
                context :repository-ready :pending
-               "repository must be created manually or with --create-repo")
+               (%project-message "publish.phase.repository-manual"))
               (%publish-fail
                :failed :repository-ready "~A"
                (%publish-repository-missing-hint
@@ -1924,7 +2098,8 @@
           (setf (getf context :policy-required-p)
                 (getf context :lock-repo-p))
           (%publish-record-phase context :repository-ready :pending
-                                 "missing repository will be created"))
+                                 (%project-message
+                                  "publish.phase.repository-create")))
          (t
           (%publish-mark-repository-create-intent context)
           (%publish-reconcile-mutation
@@ -1938,46 +2113,37 @@
        (%publish-record-phase context :repository-ready :unavailable
                               (getf before :evidence))
        (unless (getf context :dry-run)
-         (%publish-fail
-          :unavailable :repository-ready
-          "~A; rerun the same taf publish command after connectivity is restored. Last confirmed stage: ~A"
-          (getf before :evidence)
-          (or (getf context :last-confirmed-stage) :none))))
+         (%publish-fail-message
+          :unavailable :repository-ready "inspection-unavailable"
+          :evidence (getf before :evidence)
+          :stage (or (getf context :last-confirmed-stage) :none))))
       (otherwise
        (%publish-fail :conflict :repository-ready "~A"
                       (getf before :evidence))))))
 
-(defun %publish-validate-version-order (context)
+(defun %publish-collect-version-diagnostic (context)
+  ;; Preserve the legacy :remote-latest return value for callers only. It is
+  ;; neither GitHub Latest nor a publication gate; Hub comparison stays intact.
   (when (getf context :remote-checked-p)
     (let* ((tag (getf context :tag))
            (other-infos
              (remove tag (getf context :remote-tags)
                      :key (lambda (info) (getf info :tag))
                      :test #'string=))
-           (latest (%publish-latest-info other-infos))
-           (project (getf context :project)))
-      (setf (getf context :remote-latest) latest)
-      (when (and (eql (getf context :channel) :latest)
-                 latest
-                 (<= (%publish-compare-version-release
-                      (getf project :version)
-                      (getf project :release)
-                      (getf latest :version)
-                      (getf latest :release))
-                     0))
-        (%publish-fail
-         :conflict :repository-ready
-         "current version is not newer than remote latest tag ~A. Use --pre for a pre-release publish."
-         (getf latest :tag))))))
+           (latest (%publish-latest-info other-infos)))
+      (setf (getf context :remote-latest) latest))))
 
 (defun %publish-run-state-machine (context)
   (%publish-load-journal context)
   (%publish-record-phase context :project-validated :ready
-                         "project, repository URL and LICENSE are valid")
+                         (%project-message
+                          "publish.phase.project-valid"))
   (%publish-ensure-repository-phase context)
-  (%publish-validate-version-order context)
+  (%publish-collect-version-diagnostic context)
   (%publish-ensure-phase context :repository-policy-ready
                          :inspect-policy :create-policy)
+  (when (getf context :build-p)
+    (%publish-ensure-build-phase context))
   (%publish-ensure-phase context :commit-ready
                          :inspect-commit :create-commit)
   (%publish-ensure-phase context :branch-pushed
@@ -1988,8 +2154,9 @@
                          :inspect-remote-tag :create-remote-tag)
   (%publish-ensure-phase context :github-release-ready
                          :inspect-release :create-release)
+  (setf (getf context :journal-channel-confirmed-p) t)
   (%publish-record-phase context :publish-complete :ready
-                         "Git tag and requested GitHub Release are complete")
+                         (%project-message "publish.phase.complete"))
   (cond
     ((getf context :dry-run) :planned)
     ((= (getf context :mutation-count) 0)
@@ -2057,6 +2224,7 @@
                              remote-tags
                              commit-message
                              (verbose t))
+  (%with-operation-progress (verbose)
   (let* ((normalized-channel (%normalize-publish-channel channel))
          (normalized-visibility
            (%normalize-publish-repo-visibility repo-visibility))
@@ -2067,28 +2235,21 @@
                             (%publish-read-release-file project tag)))
          (message (%publish-commit-message
                    project tag normalized-channel commit-message release-info))
-         (build-result nil)
          (commands (%publish-plan-commands
                     repository-url tag message
                     create-repo-p normalized-visibility
-                    release-info lock-repo-p))
+                    release-info lock-repo-p normalized-channel))
          (context nil)
          (outcome nil)
          (phases nil)
          (execute-result nil))
     (%ensure-github-repository-url repository-url "[publish] [repository].url")
     (%publish-ensure-license-ready project)
-    (when (and build-p (not dry-run))
-      (setf build-result
-            (project-build :command-p t
-                           :image-p nil
-                           :start-dir start-dir
-                           :verbose verbose)))
     (setf context
           (%publish-make-context
            project tag normalized-channel dry-run prompt-p create-repo-p
            normalized-visibility lock-repo-p release-info message remote-tags
-           verbose)
+           build-p verbose)
           outcome (%publish-execute context)
           phases (nreverse (copy-list (getf context :phases)))
           execute-result
@@ -2098,8 +2259,9 @@
                 :target-commit (getf context :target-commit)
                 :branch (getf context :branch)))
     (when verbose
+      (%operation-progress-yield)
       (%print-project-publish-summary context build-p commands outcome))
-    (list :project project
+    (list :project (getf context :project)
           :dry-run dry-run
           :channel normalized-channel
           :prompt-p prompt-p
@@ -2115,7 +2277,8 @@
           :remote-error (getf context :remote-error)
           :remote-tags (getf context :remote-tags)
           :remote-latest (getf context :remote-latest)
-          :build build-result
+          :build (getf context :build-result)
+          :build-status (getf context :build-status)
           :commands commands
           :execute execute-result
           :outcome outcome
@@ -2128,4 +2291,4 @@
           :journal-file (and (not dry-run)
                              (getf context :journal-file))
           :warnings (nreverse (copy-list (getf context :warnings)))
-          :published-p (not dry-run))))
+          :published-p (not dry-run)))))

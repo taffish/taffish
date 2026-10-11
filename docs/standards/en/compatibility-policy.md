@@ -94,8 +94,9 @@ Current code treats `[container].platforms` as a legacy compatibility field for 
 
 ## Conformance Test Direction
 
-The current external suites cover real compiler, project, and Hub/package
-workflows. Coverage should continue expanding toward:
+The current external suites cover delivered-binary startup, compiler, project,
+Hub/package, system/doctor, and localization workflows. Coverage should
+continue expanding toward:
 
 1. Golden outputs for TAF lexer/parser/binder/compiler.
 2. `taffish.toml` schema validation.
@@ -103,6 +104,9 @@ workflows. Coverage should continue expanding toward:
 4. Install metadata read/write and uninstall compatibility.
 5. Config merge, index URL resolution, source rewrite.
 6. Container backend selection and key generated-shell fragments.
+7. Human-language fallback while preserving JSON, shell, history, and MCP
+   machine interfaces.
+8. Host/process/path behavior on both macOS/SBCL and Linux/LispWorks.
 
 Complete contract-oriented conformance coverage remains necessary before
 considering specification `v1.0`.

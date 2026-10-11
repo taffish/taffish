@@ -30,7 +30,48 @@ SBCL, LispWorks
 8. POSIX shell token escape。
 9. 同步进程运行需要的临时输入输出文件机制。
 
+## Runtime I/O 与终端检测
+
+| API | 作用 |
+| --- | --- |
+| `configure-runtime-io` | delivered CLI 处理用户文本前配置实现相关字符 I/O。LispWorks 会选择 UTF-8 console I/O；SBCL 当前不需要额外设置。 |
+| `standard-input-terminal-p` | 判断文件描述符 0 是否为终端，使命令可以区分交互式 stdin 与真实管道输入。 |
+| `standard-error-terminal-p` | 查询进程 stderr（文件描述符 2）是否为终端，不读写、不启动子进程。 |
+| `append-utf8-line` | 以宿主原生追加语义写入一条完整 UTF-8 行，避免多个进程覆盖先前记录。 |
+
+这些函数刻意属于 host 层。上层不能直接重复 SBCL/LispWorks 的终端检测或 console encoding
+配置。
+
+`standard-error-terminal-p` 查询 fd 2，不是动态绑定后的 `*error-output*`。
+支持的宿主对已关闭或非终端描述符返回假；不支持的实现抛出 `unsupported-host-function`。
+它不查询终端尺寸或光标能力。进度调用方使用原地渲染前还须检查实际输出流和 `TERM=dumb`；
+重定向日志限频逐行输出，JSON/MCP 调用方禁止人类进度。
+LispWorks 的 UTF-8 输出流按实际文件描述符实现 `interactive-stream-p`，
+区分终端、管道和已关闭的流，避免交付后的终端进度被误判为日志输出。
+
+`append-utf8-line` 的边界刻意保持窄小：它只提供 JSONL 日志所需的单条记录追加，
+不是通用事务或文件锁 API。父目录缺失时会先创建；如果另一进程恰好先创建了同一父目录，
+只容忍这一种竞态。其他路径或权限错误仍会从目录准备或追加操作中正常抛出。
+
 ## process API
+
+### 可执行程序错误边界
+
+三个 CLI 入口使用 host 内部错误边界包裹 runtime I/O 和语言初始化。逃逸的错误
+使用原有命令错误前缀写入 stderr，并以状态码 1 退出。如果 stderr 或 condition 的
+打印函数再次失败，只尽力报告，然后仍然以失败退出；包括 MCP stdio 模式在内，
+都不使用 stdout 作为错误输出的备用通道。
+
+SBCL 的交互中断在这一边界处理，不显示运行时回溯，并保留退出码 1。
+LispWorks 保留已有中断处理，包括 SIGINT 时向 stdout 打印固定的
+`Interrupted - quitting` 提示；CLI 不替换 LispWorks 全局信号处理器。
+SIGTERM 行为不变。这不保证覆盖原生崩溃或运行时
+资源耗尽等异常。
+
+该边界是内部实现，不是导出的 han API；它不屏蔽 warning，不改变库函数的
+condition 处理方式，也不改变正常 CLI/MCP 响应契约。
+
+### 进程操作
 
 | API | 作用 |
 | --- | --- |
@@ -49,6 +90,7 @@ SBCL 使用：
 2. `sb-ext:posix-getenv`
 3. `sb-ext:exit`
 4. `sb-ext:run-program`
+5. `O_APPEND` 配合 `write(2)` 写入完整 UTF-8 日志记录
 
 同步运行会把 stdout/stderr 捕获到临时文件，再读回字符串或 replay 到 stream。
 
@@ -61,6 +103,7 @@ LispWorks 使用：
 3. `lw:quit`
 4. `system:run-shell-command`
 5. `system:pipe-exit-status`
+6. C append mode 配合直接 UTF-8 字节写入完整日志记录
 
 同样通过统一的 `host-process` 包装返回。
 
@@ -83,3 +126,4 @@ LispWorks 使用：
 3. process 返回值语义必须保持。
 4. 删除目录的安全校验不能削弱。
 5. shell escaping 的行为会影响整个 TAFFISH 的安全性。
+6. 必须在两个 release host 上复查 delivered CLI stdin 与非 ASCII 诊断。

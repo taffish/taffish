@@ -26,6 +26,9 @@ taffish-core
 
 ## Public API
 
+Human-only [command status](command-progress.md) is shared internally by slow
+operations; it does not add a public API or alter machine results.
+
 APIs exported by `taf-core/package.lisp` cover three capability groups:
 
 | Category | Examples |
@@ -44,7 +47,11 @@ The exact export list should be checked in `taf-core/package.lisp`.
 2. Hub index schema and package parsing belong in Hub files such as `hub/info.lisp`.
 3. Config defaults and source merging belong in `system/config.lisp`.
 4. Filesystem directory conventions belong in `system/home.lisp`.
-5. CLI wording and subcommand dispatch should live mostly in `taf-cli`, not inside `taf-core`.
+5. CLI help, argument parsing, and subcommand dispatch belong in `taf-cli`;
+   business-layer human messages belong beside the `taf-core` renderer that
+   owns their semantics and use `taffish.i18n`.
+6. Human localization must not alter JSON, persisted state, generated shell,
+   external process output, or MCP projections.
 
 ## Related Topics
 

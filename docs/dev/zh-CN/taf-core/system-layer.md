@@ -19,6 +19,7 @@
 | --- | --- |
 | `home.lisp` | 定义系统与用户目录约定。 |
 | `config.lisp` | 定义配置 schema、默认值、读取与合并逻辑。 |
+| `history-i18n.lisp` | 注册本地化 history 人类标签与状态消息。 |
 | `history.lisp` | 记录系统历史事件。 |
 | `doctor-i18n.lisp` | 把稳定 doctor 诊断映射为本地化人类文本。 |
 | `doctor.lisp` | 诊断系统环境。 |

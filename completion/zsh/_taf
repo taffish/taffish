@@ -77,8 +77,9 @@ _taf() {
         '(-n --dry-run -y --yes)'{-y,--yes}'[commit, tag, push and release]' \
         '(-b --build)'{-b,--build}'[build command wrapper before publishing]' \
         '(-r --release)'{-r,--release}'[read release.md and create GitHub release]' \
-        '(- --latest --pre)--latest[require newer than remote latest]' \
-        '(- --latest --pre)--pre[allow non-latest prerelease]' \
+        '(--latest --pre --no-latest)--latest[mark new GitHub Release as Latest]' \
+        '(--latest --pre --no-latest)--pre[create GitHub Pre-release, not Latest]' \
+        '(--latest --pre --no-latest)--no-latest[create formal Release without setting Latest]' \
         '--create-repo[create repository if missing]' \
         '(- --public --private)--public[create repository as public]' \
         '(- --public --private)--private[create repository as private]' \
@@ -116,9 +117,11 @@ _taf() {
         '(-u --user -s --system)'{-u,--user}'[install into user home]' \
         '(-u --user -s --system)'{-s,--system}'[install into system home]' \
         '(-n --dry-run -y --yes)'{-n,--dry-run}'[print plan only]' \
-        '(-n --dry-run -y --yes)'{-y,--yes}'[apply install-all plan]' \
+        '(-n --dry-run -y --yes)'{-y,--yes}'[apply batch install/repair plan]' \
         '(-f --force)'{-f,--force}'[replace existing version]' \
-        '(-a --all)'{-a,--all}'[install all indexed apps]' \
+        '--repair[safely rebuild verifiable existing installations]' \
+        '(-a --all)--all-installed[select all installed versions; requires --repair]' \
+        '(-a --all --all-installed)'{-a,--all}'[install all indexed apps]' \
         '(-k --kind)'{-k,--kind}'[filter by kind]:kind:(tool flow all)' \
         '--tools[filter by tool]' \
         '--flows[filter by flow]' \
@@ -199,14 +202,22 @@ _taf() {
         '*:app or command:'
       ;;
     doctor)
+      local -a environment_options
+      if (( ! $words[(Ie)hub] && ! $words[(Ie)index] )); then
+        environment_options=(
+          '(-i --init)'{-i,--init}'[create missing TAFFISH home directories]'
+          '--shell[select shell completion diagnosis]:shell:(auto bash zsh fish)'
+        )
+      fi
       _arguments \
+        '1:check:(index hub)' \
+        '*:installed app or command:' \
         '(-h --help)'{-h,--help}'[show help]' \
-        '(-i --init)'{-i,--init}'[create missing TAFFISH home directories]' \
         '(-u --user -s --system)'{-u,--user}'[check or initialize user home]' \
         '(-u --user -s --system)'{-s,--system}'[check or initialize system home]' \
         '(-j --json --verbose)'{-j,--json}'[print stable JSON diagnostics]' \
         '(-j --json --verbose)--verbose[show evidence and remediation details]' \
-        '--shell[select shell completion diagnosis]:shell:(auto bash zsh fish)'
+        "${environment_options[@]}"
       ;;
     config)
       _arguments \

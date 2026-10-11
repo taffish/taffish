@@ -64,6 +64,10 @@ Language affects human presentation only. Machine interfaces, config keys,
 generated shell, and MCP contracts remain stable. See the
 [localization contract](localization.md).
 
+External help and runtime-message components are optional independently.
+Missing or invalid entries fall back per semantic key and do not alter the
+selected language for the rest of the command.
+
 Use `taf config language` to inspect resolution and discovered packs, and
 `taf config language <LANGUAGE>` to update the preference without rewriting
 other config content. Add `--system` for the root-managed system scope.

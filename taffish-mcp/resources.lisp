@@ -255,6 +255,8 @@ Hub and local package state:
 - taffish_search_apps, taffish_get_app_info, taffish_list_apps, taffish_locate_app are read-oriented.
 - taffish_check_outdated compares installed apps with index latest.
 - taffish_plan_install_all, taffish_plan_upgrade, and taffish_plan_prune are dry-run only package-management planners.
+- Index latest selects the online target; local version precedence does not override it. Automatic downgrade is not performed.
+- Prune requires a valid same-source installed index latest; private, newer, unknown-source and unorderable versions are protected. A skipped prune plan is not permission to delete manually.
 - taffish_install_app and taffish_uninstall_app default to dryRun=true.
 
 App inspection:
@@ -274,6 +276,8 @@ Project:
 System:
 - taffish_check_environment returns structured diagnostics for homes, config, index, PATH, shell completion, Vim/Neovim, the Apptainer SIF cache, and bounded container-backend readiness probes.
 - taffish_check_environment never initializes directories, edits configuration, changes permissions, starts services, pulls images, or runs containers.
+- Select check=index or check=hub for offline index integrity or installed-file diagnostics; targets is optional in hub mode. Omit check to keep the lightweight environment checks.
+- Missing old build manifests mean unverified, not verified or necessarily damaged. Inspect issue codes, evidence and remediation; never automatically execute suggested overwrite commands. Local checksum consistency does not authenticate an official source.
 - taffish_get_config, taffish_get_config_paths, and taffish_list_history are read-only."))
         ((string= uri "taffish://mcp/safety")
          (%resource-result
@@ -290,6 +294,7 @@ Default-safe behavior:
 - Project inspection and project usage tools read local project files but do not execute generated shell code.
 - Smoke metadata is exposed as data only. MCP does not execute smoke commands, pull images, or start containers to verify them.
 - Environment checks are read-only and expose no init, fix, force, or repair input.
+- Repair is CLI-only. Do not emulate it with forced installs, uninstalls, or manually generated manifests.
 - Publish, run, and container image build are not exposed.
 
 AI clients should ask before any tool that writes files, installs apps, uninstalls apps, downloads indexes, or modifies local TAFFISH state."))
@@ -370,6 +375,8 @@ Recommended AI flow:
 5. Use taffish_plan_install_all, taffish_plan_upgrade, or taffish_plan_prune for safe package-management plans.
 6. Use taffish_install_app with dryRun=true first for a specific install.
 7. Ask the user before dryRun=false or before recommending CLI --yes commands.
+
+For incomplete installation evidence, use taffish_check_environment with check=hub and optional targets. Its JSON retains full issue details even when CLI text is summarized. CLI install --repair is a separate opt-in operation, not an MCP input or permission to overwrite a private or unknown installation. For a human repair preview including historical installed versions, use taf install --all-installed --repair with the matching scope; --all --repair still selects installed index.latest only. Neither repair mode upgrades or installs missing versions.
 
 Installed version-pinned commands are reproducibility anchors, for example taf-example-v1.0.0-r1. Unversioned aliases may track the local latest installed version."))
         ((string= uri "taffish://mcp/app-inspection-model")

@@ -8,8 +8,9 @@ Build is the step that turns a project directory into installable artifacts. It 
 
 1. Command file under target.
 2. Source snapshot under target.
-3. Optional container image.
-4. Dependency synchronization for flow projects.
+3. Private build manifest inside the snapshot.
+4. Optional container image.
+5. Dependency synchronization for flow projects.
 
 ## Artifact Naming
 
@@ -41,8 +42,36 @@ Including:
 2. `src/`
 3. `docs/`
 4. Main TAF file
+5. `.taf-build.json`, containing the artifact, source, and wrapper identities
 
 The generated wrapper references this snapshot rather than the development directory directly.
+
+## Exact And Idempotent Command Build
+
+Command-wrapper build computes a stable SHA-256 identity over `taffish.toml`,
+`src/`, and `docs/`, including directory layout and binary file content. It
+also computes the exact wrapper digest. A second build is reported as
+`up-to-date` and does not rewrite the wrapper or snapshot only when the wrapper,
+snapshot, executable bit, and `.taf-build.json` all match.
+
+Missing or corrupt manifests, changed source, missing artifacts, or extra
+snapshot files/directories cause one exact rebuild. This includes abnormal
+residue such as `help2.md`, `docs2/`, or `src2/`; these names have no special
+meaning and disappear because the rebuilt snapshot exactly matches project
+source.
+
+Rebuild uses same-directory staging and backup paths. Staged artifacts are
+fully validated before replacement. If replacement fails, the last valid
+wrapper and snapshot are restored. Cleanup is scoped to temporary paths for the
+same artifact and does not touch another app or version.
+
+The final wrapper pathname is exact even when the version text contains no
+period, such as `492`. Staging or backup suffixes are never inherited by the
+installed wrapper pathname, and residue from interrupted older transactions is
+cleaned or restored within the same artifact boundary.
+
+This idempotency applies to the command wrapper and frozen snapshot. Explicit
+container image builds still invoke Docker or Podman normally.
 
 ## Wrapper Behavior
 
@@ -87,6 +116,13 @@ The build command is roughly:
 docker build -t <image> -f <dockerfile> <root>
 ```
 
+## Return Data
+
+The public result retains `:project`, `:command`, and `:image`. The command
+plist retains its previous path/name/dependency fields and additionally reports
+`:status` (`:rebuilt` or `:up-to-date`), `:source-sha256`,
+`:wrapper-sha256`, and `:manifest-file`.
+
 ## Modification Guide
 
 When changing build, check:
@@ -96,4 +132,12 @@ When changing build, check:
 3. Whether the snapshot contains all files required at runtime.
 4. Whether flow dependency sync remains consistent with `project-check` rules.
 5. Whether the container image tag still matches `[package].version/release`.
+6. Whether repeated command builds remain write-free and failed replacement
+   preserves the last valid artifact.
 
+## Operation Status
+
+Slow human-facing operations report their current target and stage on stderr.
+TTY updates, log throttling, target-count semantics, quiet/JSON behavior and
+limits are described in [command status](command-progress.md). These notices do not change
+validation, mutation, retry or exit-code rules.

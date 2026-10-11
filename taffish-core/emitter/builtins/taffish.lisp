@@ -57,7 +57,7 @@
 (defparameter *all-taf-apps* nil)
 
 (defun %chars-to-token (line-number line-column kind chars)
-  (let ((token (list :kind kind :value (format nil "~{~A~}" chars)
+  (let ((token (list :kind kind :value (taffish.core::%format-character-string "~{~A~}" chars)
                      :line-number line-number
                      :line-column line-column
                      :number *taf-apps-count*)))
@@ -155,11 +155,11 @@
                   (declare (ignore rest-options))
                   (if (string= "--compile" (%clean-string first-option))
                       string
-                      (format nil "~A --compile ~A" cmd options))))
-              (format nil "~A --compile" cmd))
+                      (taffish.core::%format-character-string "~A --compile ~A" cmd options))))
+              (taffish.core::%format-character-string "~A --compile" cmd))
           ;;(error "'[[taf: CMD ...]]' CMD must start with 'taf-', but: ~S" cmd)
           (taffish.core:signal-taffish-error
-           (format nil "'[[taf: CMD ...]]' CMD must start with 'taf-', but: ~S" cmd)
+           (taffish.core::%format-character-string "'[[taf: CMD ...]]' CMD must start with 'taf-', but: ~S" cmd)
            :line (getf taf-app :line-number)
            :column (getf taf-app :line-column)
            :source-string raw-string)))))
@@ -179,17 +179,17 @@
                (compiled-value (%sure-compiled taf-app))
                (append-lines
                  (list
-                  (format nil "taffish_step_~A=\"$taffish_tmpdir/step-~A-taf-xxx.sh\""
+                  (taffish.core::%format-character-string "taffish_step_~A=\"$taffish_tmpdir/step-~A-taf-xxx.sh\""
                           number number)
-                  (format nil "if ~A > \"$taffish_step_~A\" ; then"
+                  (taffish.core::%format-character-string "if ~A > \"$taffish_step_~A\" ; then"
                           compiled-value number)
                   "    :"
                   "else"
-                  (format nil "    echo \"[TAFFISH] failed to compile taf step: ~A\" >&2"
+                  (taffish.core::%format-character-string "    echo \"[TAFFISH] failed to compile taf step: ~A\" >&2"
                           compiled-value)
                   "    exit 1"
                   "fi"
-                  (format nil "chmod +x \"$taffish_step_~A\" || exit 1" number)
+                  (taffish.core::%format-character-string "chmod +x \"$taffish_step_~A\" || exit 1" number)
                   "")))
           (dolist (line append-lines) (push line prelude-lines))))
       (nreverse prelude-lines))))
@@ -197,14 +197,14 @@
 (defun %parse-token-string (token)
   (case (getf token :kind)
     (:text (getf token :value))
-    (:taf-app (format nil "\"$taffish_step_~A\"" (getf token :number)))))
+    (:taf-app (taffish.core::%format-character-string "\"$taffish_step_~A\"" (getf token :number)))))
 
 (defun %tokened-line-to-string (tokened-line)
   "TOKENED-LINE-LIST -> LINE-STRING"
   (let ((string-list nil))
     (dolist (token tokened-line)
       (push (%parse-token-string token) string-list))
-    (format nil "~{~A~}" (nreverse string-list))))
+    (taffish.core::%format-character-string "~{~A~}" (nreverse string-list))))
 
 (defun emit-taffish (parsed-info lines taf-result)
   (declare (ignore parsed-info taf-result))

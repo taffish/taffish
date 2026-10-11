@@ -7,18 +7,34 @@
 (defun %error-diagnostic-p (diagnostic)
   (eql :error (han.args:arg-diagnostic-kind diagnostic)))
 
+(defun %diagnostic-option-text (diagnostic args-result)
+  (let* ((position (han.args:arg-diagnostic-position diagnostic))
+         (tokens (han.args:args-input-tokens
+                  (han.args:args-result-input args-result))))
+    (when (and (integerp position)
+               (<= 0 position)
+               (< position (length tokens)))
+      (han.args:arg-token-text (aref tokens position)))))
+
 (defun %check-args-result (args-result)
   (dolist (diagnostic (han.args:args-result-diagnostics args-result))
     (when (%error-diagnostic-p diagnostic)
-      (error "~A" (han.args:arg-diagnostic-message diagnostic))))
+      (let ((option (or (%diagnostic-option-text diagnostic args-result)
+                        "<unknown>")))
+        (case (han.args:arg-diagnostic-code diagnostic)
+          (:missing-option-value
+           (%project-error "new-option-value" :option option))
+          (:conflict
+           (%project-error "new-option-conflict" :option option))
+          (otherwise
+           (%project-error
+            "new-arguments"
+            :detail (han.args:arg-diagnostic-message diagnostic)))))))
   args-result)
 
 ;;;; taffish.toml
 (defparameter *default-container-platforms*
   "linux/amd64,linux/arm64")
-
-(defparameter *default-smoke-timeout*
-  60)
 
 (defun %make-smoke-toml-lines ()
   (list "[smoke]"
@@ -119,8 +135,8 @@ ENV TAFFISH_NAME=~A"
          (string-equal license "Apache"))
      "Apache-2.0")
     (t
-     (error "[new] unsupported license: ~S. Supported license template: Apache-2.0"
-            license))))
+     (%project-error "new-license-template"
+                     :license (%project-repr license)))))
 
 (defun %make-apache-2.0-license-string ()
   (format nil "~{~A~%~}"
@@ -332,7 +348,7 @@ ENV TAFFISH_NAME=~A"
       ((string= normalized-license "Apache-2.0")
        (%make-apache-2.0-license-string))
       (t
-       (error "[new] unsupported license: ~S" license)))))
+       (%project-error "new-license" :license (%project-repr license))))))
 
 ;;;; .gitignore
 (defun %make-gitignore-string ()
@@ -690,8 +706,7 @@ Options:
 
 (defun project-new (name args)
   (unless (%valid-project-name-p name)
-    (error "[new] invalid project name: ~S~%Project name should use only letters, digits, '-' and '_', and must not start with '-' or '.'."
-           name))
+    (%project-error "new-name" :name (%project-repr name)))
   (let* ((args-spec (han.args:parse-args-spec
                      (mapcar #'han.args:parse-arg-spec
                              '("(--/-t)tool?"
@@ -730,10 +745,9 @@ Options:
          (docs-dir   (han.path:join-path project-dir "docs")))
     (when (or (han.path:directory-exists-p (han.path:directory-pathname project-dir))
               (han.path:file-exists-p project-dir))
-      (error "[new] project already exists: ~A" project-dir))
+      (%project-error "new-exists" :path project-dir))
     (unless (%valid-version-string-p version)
-      (error "[new] version must be a non-empty string without spaces, but got: ~S"
-             version))
+      (%project-error "new-version" :value (%project-repr version)))
     (%ensure-repository-url repository-url "[new] --repo")
     (dolist (dir (list project-dir src-dir target-dir docs-dir))
       (%make-dir dir))
@@ -741,6 +755,7 @@ Options:
      project-dir src-dir docs-dir
      name tool-or-flow version release-number license repository-url
      image docker-p actions-p)
-    (format t "[TAF] created new ~A project: ~A~%"
-            (string-downcase (string tool-or-flow))
-            (han.path:->namestring project-dir))))
+    (%project-print-message
+     "new.created"
+     :kind (string-downcase (string tool-or-flow))
+     :path (han.path:->namestring project-dir))))

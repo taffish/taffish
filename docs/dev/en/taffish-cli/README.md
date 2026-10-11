@@ -13,6 +13,43 @@ dispatch. `i18n.lisp` owns the built-in English/Chinese help and top-level
 missing-command diagnostic. Compiler diagnostics and generated shell remain
 outside the localization layer.
 
+## Help and input
+
+`taffish --help` describes usage, input, container settings, examples, language,
+and contact links in that order. Both built-in languages expose the same
+options. `--version` remains a single command-name/version line.
+
+Except for help/version and a leading `--`, an existing regular file in the
+first argument selects file input. Otherwise the compiler reads standard input
+and treats the arguments as TAF program arguments. This includes nonexistent
+filenames, so a typo can leave the compiler waiting for terminal input.
+`taffish -- < example.taf > example.sh` explicitly selects standard input.
+
+`TAFFISH_CONTAINER_BACKEND` accepts `apptainer`, `podman`, or `docker`. Unset,
+it selects an available backend for generic `<container:...>` tags; explicit
+backend tags are unchanged. For example:
+
+```sh
+TAFFISH_CONTAINER_BACKEND=podman taffish example.taf > example.sh
+```
+
+The named backend must be available when a generic container tag is compiled.
+This command only generates shell; it does not pull an image or run a container.
+The three `TAFFISH_*_RUN_ARGS` settings append arguments for their corresponding
+backends. Language selection never changes those variable names or generated shell.
+
+## Error Handling
+
+The executable entry point covers TAFFISH runtime I/O and language initialization
+with the same internal error boundary used for compilation failures. Errors use
+the `[TAFFISH-ERROR]` stderr prefix and exit status 1; compiler line, column, and
+caret diagnostics are preserved. If stderr or error rendering fails, the process
+still exits unsuccessfully without using generated-shell stdout as a fallback.
+
+Library conditions and warnings are not globally suppressed. See
+[han.host](../han/host.md) for the implementation-specific interrupt behavior
+and the limits of this boundary.
+
 ## System Position
 
 ```text

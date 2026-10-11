@@ -12,17 +12,19 @@ permissions:
 jobs:
   sbcl-tests:
     name: SBCL tests and script syntax
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Install runtime tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y sbcl zsh fish
+          sudo apt-get install -y sbcl zsh fish gnupg shellcheck
 
       - name: Run Common Lisp tests
         env:
@@ -34,8 +36,29 @@ jobs:
 
       - name: Check installer scripts
         run: |
+          install/generate-installers.sh --check
+          sh -n install/generate-installers.sh
+          sh -n install/install-taffish.template.sh
+          sh -n install/install-taffish.sh
+          sh -n install/install-taffish.gitee.sh
           bash -n install/install-taffish.sh
           bash -n install/install-taffish.gitee.sh
+          shellcheck -s sh install/generate-installers.sh
+          shellcheck -s sh install/install-taffish.template.sh
+          shellcheck -s sh install/install-taffish.sh
+          shellcheck -s sh install/install-taffish.gitee.sh
+
+      - name: Run installer conformance tests
+        run: |
+          test/run-tests.sh --filter installer/
+
+      - name: Require installer GPG verification coverage
+        run: |
+          test/run-tests.sh --filter installer/gpg-verification
+
+      - name: Check root-only system installer policies
+        run: |
+          sudo test/run-tests.sh --filter installer/system-permissions
 
       - name: Check shell completions
         run: |
@@ -50,3 +73,8 @@ jobs:
         run: |
           cd target
           shasum -a 256 -c SHA256SUMS
+          keydir=$(mktemp -d)
+          keyring=$keydir/release.gpg
+          gpg --batch --yes --dearmor --output "$keyring" TAFFISH-RELEASE-KEY.asc
+          gpgv --keyring "$keyring" SHA256SUMS.asc SHA256SUMS
+          rm -rf "$keydir"

@@ -98,6 +98,10 @@
      (han.args:arg-spec-default arg)
      '(:concat "hello, @name " (:query "real")))))
 
+(deftest test-parse-arg-spec-preserves-unicode-default ()
+  (let ((arg (han.args:parse-arg-spec "(--/-m)message=你好，世界")))
+    (check-equal (han.args:arg-spec-default arg) "你好，世界")))
+
 (deftest test-parse-arg-spec-basic ()
   (let ((arg (han.args:parse-arg-spec "(--/-t)threads=8")))
     (check-equal (han.args:arg-spec-name arg) "threads")

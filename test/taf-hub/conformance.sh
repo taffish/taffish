@@ -225,9 +225,93 @@ _taf_hub_case_text_hides_current_items() {
   )
 }
 
+_taf_hub_install_fingerprint() {
+  home=$1
+  {
+    find "$home/apps/multi-demo/0.1.0-r2" -type f -print | \
+      LC_ALL=C sort | while IFS= read -r file; do
+        cksum "$file"
+      done
+    cksum "$home/bin/taf-multi-demo-v0.1.0-r2"
+    cksum "$home/bin/taf-multi-demo"
+  } | LC_ALL=C sort
+}
+
+_taf_hub_case_install_uninstall_idempotency() {
+  dir=$TAFFISH_TEST_TMP_ROOT/taf-hub-idempotency
+  (
+    export TAFFISH_USER_HOME=$dir/user-home
+    export TAFFISH_SYSTEM_HOME=$dir/system-home
+    export PATH=$TAFFISH_USER_HOME/bin:$PATH
+    mkdir -p "$TAFFISH_USER_HOME" "$TAFFISH_SYSTEM_HOME"
+    _taf_hub_prepare_index_fixture "$dir" || exit 1
+
+    "$TAF_BIN" install taf-multi-demo-v0.1.0-r2 >/dev/null || exit 1
+    before=$(_taf_hub_install_fingerprint "$TAFFISH_USER_HOME") || exit 1
+    run_before=$(taf-multi-demo) || exit 1
+    assert_eq "multi r2" "$run_before" \
+      "installed alias before idempotency checks" || exit 1
+
+    capture_command "$TAF_BIN" install taf-multi-demo-v0.1.0-r2
+    assert_capture_failure "reinstall without force" || exit 1
+    assert_contains "$TAFFISH_CAPTURE_OUTPUT" "already installed" \
+      "reinstall reports existing version" || exit 1
+    assert_eq "$before" "$(_taf_hub_install_fingerprint "$TAFFISH_USER_HOME")" \
+      "failed reinstall preserves installation" || exit 1
+
+    capture_command "$TAF_BIN" install --dry-run --force \
+      taf-multi-demo-v0.1.0-r2
+    assert_capture_success "forced install dry-run" || exit 1
+    assert_eq "$before" "$(_taf_hub_install_fingerprint "$TAFFISH_USER_HOME")" \
+      "install dry-run preserves installation" || exit 1
+
+    capture_command "$TAF_BIN" uninstall --dry-run \
+      taf-multi-demo-v0.1.0-r2
+    assert_capture_success "uninstall dry-run" || exit 1
+    assert_eq "$before" "$(_taf_hub_install_fingerprint "$TAFFISH_USER_HOME")" \
+      "uninstall dry-run preserves installation" || exit 1
+
+    "$TAF_BIN" uninstall taf-multi-demo-v0.1.0-r2 >/dev/null || exit 1
+    [ ! -e "$TAFFISH_USER_HOME/apps/multi-demo/0.1.0-r2" ] || {
+      printf 'uninstall preserved installed app directory\n' >&2
+      exit 1
+    }
+    [ ! -e "$TAFFISH_USER_HOME/bin/taf-multi-demo-v0.1.0-r2" ] || {
+      printf 'uninstall preserved exact launcher\n' >&2
+      exit 1
+    }
+    [ ! -e "$TAFFISH_USER_HOME/bin/taf-multi-demo" ] || {
+      printf 'uninstall preserved alias with no remaining versions\n' >&2
+      exit 1
+    }
+
+    capture_command "$TAF_BIN" uninstall --force \
+      taf-multi-demo-v0.1.0-r2
+    assert_capture_success "repeated forced uninstall" || exit 1
+  )
+}
+
 run_taf_hub_conformance() {
+  for size in 300 1000; do
+    run_case "taf-hub/performance-$size" \
+      python3 "$TAFFISH_TEST_REPO_ROOT/test/taf-hub/performance.py" "$size"
+  done
+  for diagnostic_case in summary-211 summary-300 summary-mixed legacy-batch legacy-prune corruption index readonly permissions-links mcp metadata-paths metadata-schema root-types alias-entries applied-json; do
+    run_case "taf-hub/diagnostics-$diagnostic_case" \
+      python3 "$TAFFISH_TEST_REPO_ROOT/test/taf-hub/diagnostics.py" "$diagnostic_case"
+  done
+  for version_case in mixed authoritative protections failure-scope mcp kind-tools kind-flows; do
+    run_case "taf-hub/version-order-$version_case" \
+      python3 "$TAFFISH_TEST_REPO_ROOT/test/taf-hub/version-order.py" "$version_case"
+  done
   run_case "taf-hub/install-all-filters-kind" _taf_hub_case_install_all_filters_kind
   run_case "taf-hub/outdated-upgrade-prune-old" _taf_hub_case_outdated_upgrade_and_prune
   run_case "taf-hub/prune-keeps-newest" _taf_hub_case_prune_keeps_newest
   run_case "taf-hub/text-hides-current-items" _taf_hub_case_text_hides_current_items
+  run_case "taf-hub/install-uninstall-idempotency" \
+    _taf_hub_case_install_uninstall_idempotency
+  for repair_case in conflicts healthy legacy corruption commit-conflict fixed-commit source-unavailable blocked-private blocked-schema blocked-path entry-conflict exact-old multi multi-blocked all-selection mcp installed-history installed-old-only installed-blocked installed-filters installed-output installed-conflicts installed-paths; do
+    run_case "taf-hub/repair-$repair_case" \
+      python3 "$TAFFISH_TEST_REPO_ROOT/test/taf-hub/repair.py" "$repair_case"
+  done
 }

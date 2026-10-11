@@ -140,6 +140,21 @@ Examples:
                  '("--taffish" "--taf" "--taffish-mcp" "--mcp")
                  :test #'string-equal))
 
+#+lispworks
+(defun %lispworks-taffish-delivery-main ()
+  (han.host:prepare-runtime-io)
+  (taffish.cli:main))
+
+#+lispworks
+(defun %lispworks-taf-delivery-main ()
+  (han.host:prepare-runtime-io)
+  (taf.cli:main))
+
+#+lispworks
+(defun %lispworks-taffish-mcp-delivery-main ()
+  (han.host:prepare-runtime-io)
+  (taffish.mcp:main))
+
 (defun %make-taffish-bin ()
   (let ((file (han.path:join-path
                (han.path:parent-directory-pathname *load-truename*)
@@ -154,7 +169,9 @@ Examples:
     #+lispworks
     (progn
       (format t "[LispWorks] Delivering TAFFISH -> ~A~%" file)
-      (deliver 'taffish.cli::main (han.path:->namestring file) 5))
+      (compile '%lispworks-taffish-delivery-main)
+      (deliver '%lispworks-taffish-delivery-main
+               (han.path:->namestring file) 5))
     #-(or sbcl lispworks)
     (error "[TAFFISH] <COMPILE ERROR> Now only support SBCL and LispWorks!")))
 
@@ -172,7 +189,9 @@ Examples:
     #+lispworks
     (progn
       (format t "[LispWorks] Delivering TAF -> ~A~%" file)
-      (deliver 'taf.cli::main (han.path:->namestring file) 5))
+      (compile '%lispworks-taf-delivery-main)
+      (deliver '%lispworks-taf-delivery-main
+               (han.path:->namestring file) 5))
     #-(or sbcl lispworks)
     (error "[TAFFISH] <COMPILE ERROR> Now only support SBCL and LispWorks!")))
 
@@ -190,7 +209,9 @@ Examples:
     #+lispworks
     (progn
       (format t "[LispWorks] Delivering TAFFISH-MCP -> ~A~%" file)
-      (deliver 'taffish.mcp::main (han.path:->namestring file) 5))
+      (compile '%lispworks-taffish-mcp-delivery-main)
+      (deliver '%lispworks-taffish-mcp-delivery-main
+               (han.path:->namestring file) 5))
     #-(or sbcl lispworks)
     (error "[TAFFISH] <COMPILE ERROR> Now only support SBCL and LispWorks!")))
 

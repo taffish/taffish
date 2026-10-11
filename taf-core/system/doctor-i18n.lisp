@@ -8,6 +8,8 @@
 (dolist
     (entry
      '(("doctor.header" "[TAF] doctor" "[TAF] 环境诊断")
+       ("doctor.error.check" "[doctor] check must be environment, index or hub." "[doctor] 检查模式必须是 environment、index 或 hub。")
+       ("doctor.error.check-options" "[doctor] targets require hub mode; index/hub checks are read-only and do not accept init or shell selection." "[doctor] 仅 hub 模式接受目标；index/hub 为只读检查，不接受 init 或 shell 选择。")
        ("doctor.heading.diagnostics-status" "Diagnostics: {status}"
         "诊断：{status}")
        ("doctor.heading.directories" "Directories:" "目录：")
@@ -27,6 +29,12 @@
         "缺失（{requirement}）")
        ("doctor.path-hint" "add TAFFISH bin to your shell PATH:"
         "请将 TAFFISH 命令目录加入 shell PATH：")
+       ("doctor.error.shell"
+        "[doctor] shell must be auto, bash, zsh, or fish, but got: {value}"
+        "[doctor] shell 必须是 auto、bash、zsh 或 fish，实际收到：{value}")
+       ("doctor.error.init-system-root"
+        "[doctor] --init --system requires root permission."
+        "[doctor] --init --system 需要 root 权限。")
        ("doctor.status.ok" "ok" "正常")
        ("doctor.status.warning" "warning" "警告")
        ("doctor.status.error" "error" "错误")
@@ -199,6 +207,12 @@
         "Review the reported backend status; doctor does not start daemons or machines."
         "请检查报告的后端状态；doctor 不会启动守护进程或虚拟机。")))
   (apply #'taffish.i18n:register-message entry))
+
+(defun %doctor-error (suffix &rest bindings)
+  (error "~A"
+         (apply #'taffish.i18n:message-with
+                (format nil "doctor.error.~A" suffix)
+                bindings)))
 
 (defun %doctor-evidence-has-key-p (evidence key)
   (loop for (current value) on evidence by #'cddr

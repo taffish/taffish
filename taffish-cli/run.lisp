@@ -9,7 +9,7 @@
 ;;;; ------------------------------------------------------------
 
 (defparameter *taffish-version*
-  "taffish     0.10.1")
+  "taffish     0.11.0")
 
 (defun run-taffish-version ()
   (format t "~A~%" *taffish-version*))
@@ -30,24 +30,43 @@
     (format t "~%")))
 
 (defun %get-taffish-help-string-english ()
-  "Usage:
-  taffish [-h | --help]           Print help info and exit
-  taffish [-v | --version]        Print version info and exit
-  taffish [ARGS...]               Compile TAFFISH code from STDIN
-  taffish <FILE.TAF> [ARGS...]    Compile FILE.TAF to shell
-  taffish -- [ARGS...]            Compile TAFFISH code from STDIN
+  "Compile TAF source to POSIX shell on standard output, without executing it.
 
-Details:
-  - If the first argument is an existing file, TAFFISH reads that file.
-  - Otherwise TAFFISH reads source code from STDIN and treats arguments
-    as .taf program arguments.
-  - Generated shell code is printed to STDOUT.
-  - TAFFISH_CONTAINER_BACKEND=apptainer|podman|docker forces generic
-    <container:...> tags without overriding explicit backend tags.
-  - TAFFISH_DOCKER_RUN_ARGS, TAFFISH_PODMAN_RUN_ARGS, and
-    TAFFISH_APPTAINER_RUN_ARGS append local backend-specific runtime args.
-  - Run `taf config language` to inspect languages or
-    `taf config language zh` to select built-in Chinese.")
+Usage:
+  taffish <FILE.TAF> [ARGS...]
+  taffish [ARGS...]
+  taffish -- [ARGS...]
+  taffish [-h | --help]
+  taffish [-v | --version]
+
+Input:
+  When compiling, an existing regular file as the first argument is the source.
+  Otherwise, read standard input and pass all arguments to the TAF program.
+  A nonexistent filename also selects standard input and may wait for input.
+  A leading -- forces standard input and forwards the remaining arguments.
+
+Container settings:
+  TAFFISH_CONTAINER_BACKEND
+    Values: apptainer, podman, docker; unset: choose an available backend.
+    Only affects <container:...>, not tags that explicitly name a backend.
+
+  TAFFISH_DOCKER_RUN_ARGS        Append Docker runtime arguments
+  TAFFISH_PODMAN_RUN_ARGS        Append Podman runtime arguments
+  TAFFISH_APPTAINER_RUN_ARGS     Append Apptainer runtime arguments
+
+Examples:
+  taffish example.taf > example.sh
+  taffish -- < example.taf > example.sh
+  TAFFISH_CONTAINER_BACKEND=podman taffish example.taf > example.sh
+
+Language:
+  taf config language         Show current and available languages
+  taf config language zh      Chinese; en: English; auto: host locale [default]
+
+More information:
+  Website: https://taffish.com
+  Hub: https://taffish.github.io/
+  Support: support@taffish.com")
 
 (defun run-taffish-help ()
   (format t "~A~%" *taffish-version*)

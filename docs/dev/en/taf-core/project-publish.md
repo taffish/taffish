@@ -26,6 +26,7 @@ The ordered phases are:
 project-validated
 repository-ready
 repository-policy-ready
+build-ready                 # only when --build is requested
 commit-ready
 branch-pushed
 local-tag-ready
@@ -68,6 +69,23 @@ If a local tag, remote tag, repository identity, visibility, release notes, or
 other immutable identity differs, publish raises a conflict instead of
 continuing.
 
+## `--build` Coordination
+
+`--build` participates in the same inspect/ensure model instead of running
+unconditionally at the start of every invocation:
+
+1. Dry-run records a planned `build-ready` phase and writes no build artifact.
+2. Before a release commit exists, publish invokes the idempotent command build.
+3. A valid unchanged wrapper/snapshot is accepted without rewriting it.
+4. After a matching release commit, local tag, or remote tag identity is
+   established, a rerun checks the clean local commit identity and skips build.
+5. Dirty or conflicting local state after that boundary fails before touching
+   target artifacts.
+
+The publish journal records whether build was requested, so a resumed command
+cannot silently drop or add `--build`. Git and GitHub identities remain the
+source of truth; the journal does not authorize skipping an inconsistent build.
+
 ## Publish Journal
 
 Non-dry-run publication records intent and last-known progress under:
@@ -76,7 +94,7 @@ Non-dry-run publication records intent and last-known progress under:
 $TAFFISH_USER_HOME/history/publish/<owner>--<repo>/<tag>.json
 ```
 
-The journal records the repository, tag, target commit, release intent,
+The journal records the repository, tag, target commit, build intent, release intent,
 repository-policy intent, last processed phase, and last confirmed phase. It is
 supporting evidence, not the source of truth. Every rerun still inspects local
 Git and GitHub. A missing or corrupt journal does not authorize an overwrite.
@@ -89,9 +107,47 @@ Tag name:
 v<version>-r<release>
 ```
 
-The `latest` channel requires the current version/release to be newer than the
-latest other remote release. `--pre` permits a non-latest publication; it does
-not weaken tag identity checks.
+Version ordering does not gate publication. A new valid identity can be
+published even when its version is lower than an existing version; arbitrary
+upstream version strings need not be converted to SemVer. An existing tag must
+still refer to the same commit and publication intent to resume or become a no-op.
+
+With `--release`, select exactly one channel:
+
+| Option | New GitHub Release |
+| --- | --- |
+| Default or `--latest` | Formal release, explicitly marked Latest. |
+| `--pre` | Pre-release, explicitly not Latest. |
+| `--no-latest` | Formal release without setting Latest, e.g. a maintenance branch. |
+
+These options are mutually exclusive. Without `--release`, publication remains
+tag-only: channel options neither create a Release nor set GitHub Latest or
+Pre-release status. A version containing `alpha` or `rc` does not implicitly
+select `--pre`. No Git tag or container image named `latest` is managed here.
+
+Dry-run and execution share the Release argument builder. Release creation uses
+`--verify-tag`, so GitHub CLI cannot synthesize a missing tag from the default branch.
+Release inspection checks tag, title, normalized notes, draft status and
+prerelease type. Incomplete or malformed identity/type fields are unavailable,
+not a match. Conflicting Releases are never edited or replaced automatically.
+
+New journals record `channel` and `latest_policy`; changing them on retry is a
+conflict. Older journals remain readable, but the remote Release type must still
+match. An old `--pre` publication that actually created a formal Release is not
+silently converted. If no Release exists yet, the requested channel is used.
+Rejecting a channel mismatch does not overwrite an existing journal's intent.
+Missing legacy channel fields are only completed after Release reconciliation
+succeeds, so an incorrect retry does not prevent a subsequent correct retry.
+
+Latest is a creation-time policy, not immutable Release identity. If release B
+has become Latest since A was published, rerunning A remains a no-op and does
+not reclaim Latest. Lost network responses are reconciled through the existing
+inspect/ensure stages, not by blindly repeating create/edit operations.
+
+The legacy API result `:remote-latest` remains a version-sorted diagnostic for
+compatibility. It is not GitHub Latest, is not a publication gate, and is no
+longer shown as a human-facing latest recommendation. Shared Hub comparators
+and Index selection are outside this publish policy.
 
 ## GitHub URL Recognition
 
@@ -144,7 +200,9 @@ pre-existing repository.
 Publish history distinguishes `created`, `resumed`, `skipped`, `conflict`, and
 `failed`. `project-publish` preserves its existing result fields and adds
 structured `:outcome`, `:phases`, `:resumed-p`, `:complete-p`, `:journal-file`,
-and `:warnings` fields.
+`:warnings`, and `:build-status` fields. When a build actually runs, the legacy
+`:build` field contains its result; an established release identity may skip
+the build and leave that field empty.
 
 ## Modification Guide
 
@@ -157,3 +215,10 @@ When changing publish:
 5. Treat journals as hints and Git/GitHub facts as authoritative.
 6. Add fault-injection tests at every new side-effect boundary.
 7. Keep publish outside the MCP mutation surface.
+
+## Operation Status
+
+Slow human-facing operations report their current target and stage on stderr.
+TTY updates, log throttling, target-count semantics, quiet/JSON behavior and
+limits are described in [command status](command-progress.md). These notices do not change
+validation, mutation, retry or exit-code rules.

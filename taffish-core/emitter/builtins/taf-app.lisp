@@ -65,7 +65,7 @@
          (context (taffish.core:taf-result-context taf-result))
          (argv-list (and context
                          (taffish.core:taf-context-argv context)))
-         (argv-string (format nil "~{~A~^ ~}" argv-list)))
+         (argv-string (taffish.core::%format-character-string "~{~A~^ ~}" argv-list)))
     (list
      (if (%argv-command-p (car argv-list))
          (let ((next-lines (list (list :line argv-string :number 0))))
@@ -78,7 +78,7 @@
            (= (length shell-lines-list) 2)
            (stringp (car shell-lines-list))
            (stringp (second shell-lines-list)))
-      (format nil "~{~A~^~%~}" shell-lines-list)
+      (taffish.core::%format-character-string "~{~A~^~%~}" shell-lines-list)
       (error "TAF-APP finalize expects one prelude line and one shell string, but got: ~S"
              shell-lines-list)))
 

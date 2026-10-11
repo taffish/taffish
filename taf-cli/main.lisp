@@ -73,7 +73,11 @@
             (:list    (run-taf-list args))
             (:which   (run-taf-which args))
             ;; system
-            (:doctor  (run-taf-doctor args))
+            (:doctor
+             (let ((result (run-taf-doctor args)))
+               (when (and (listp result) (getf result :exit-code)
+                          (not (zerop (getf result :exit-code))))
+                 (han.host:quit (getf result :exit-code)))))
             (:config  (run-taf-config args))
             (:history (run-taf-history args))
             (:unknown
@@ -86,5 +90,8 @@
       (han.host:quit 1))))
 
 (defun main (&optional (raw-argv (han.host:argv)))
-  (taffish.i18n:call-with-resolved-language
-   (lambda () (%main raw-argv))))
+  (han.host::%with-cli-error-boundary ("[TAF-ERROR]")
+    (han.host:prepare-runtime-io)
+    (han.host:configure-runtime-io)
+    (taffish.i18n:call-with-resolved-language
+     (lambda () (%main raw-argv)))))

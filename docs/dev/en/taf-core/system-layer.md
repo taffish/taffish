@@ -19,6 +19,7 @@ The system layer provides the environment foundation required for normal `taf` o
 | --- | --- |
 | `home.lisp` | Define system and user directory conventions. |
 | `config.lisp` | Define config schema, defaults, read and merge logic. |
+| `history-i18n.lisp` | Register localized human history labels and status messages. |
 | `history.lisp` | Record system history events. |
 | `doctor-i18n.lisp` | Map stable doctor diagnostics to localized human text. |
 | `doctor.lisp` | Diagnose system environment. |

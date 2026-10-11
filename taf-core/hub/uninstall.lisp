@@ -34,6 +34,69 @@
                   when (han.path:file-exists-p metadata-file)
                     collect metadata-file)))))
 
+(defun %hub-installed-path-key (path directory-p)
+  ;; Resolve existing ancestors, including /tmp vs /private/tmp, without needing
+  ;; the leaf to exist. Never accept traversal or relative metadata paths.
+  (let* ((p (if directory-p (han.path:directory-pathname path)
+                (han.path:->pathname path)))
+         (parts (pathname-directory p)))
+    (unless (and (eq (first parts) :absolute)
+                 (not (wild-pathname-p p))
+                 (not (intersection parts '(:up :back))))
+      (error "Unsafe installation path."))
+    (labels ((resolve-directory (dir)
+               (or (han.path:directory-exists-p dir)
+                   (let* ((components (pathname-directory dir))
+                          (parent (make-pathname :directory (butlast components)
+                                                 :defaults dir)))
+                     (merge-pathnames
+                      (make-pathname :directory (list :relative (car (last components))))
+                      (resolve-directory parent))))))
+      (namestring
+       (if directory-p (resolve-directory p)
+           (merge-pathnames (make-pathname :name (pathname-name p) :type (pathname-type p))
+                            (resolve-directory (make-pathname :name nil :type nil :defaults p))))))))
+
+(defun %hub-installed-path-problem (entry)
+  (handler-case
+      (let* ((root (getf entry :install-root))
+             (home (getf entry :installation-home))
+             (artifact (getf entry :artifact-name))
+             (base (getf entry :command-base))
+             (metadata (getf entry :metadata))
+             (bin (getf entry :bin-dir))
+             (expected (%hub-install-paths home (getf entry :package-name)
+                                           (getf entry :version-id) artifact))
+             (source (getf expected :source-dir)))
+        (unless (and home root bin base) (return-from %hub-installed-path-problem "metadata"))
+        ;; System installs may persist a custom bin directory. User launchers
+        ;; belong to home/bin; both launcher names must agree with their bin.
+        (dolist (pair (append
+                      (list (list :metadata-file (getf expected :metadata-file) nil)
+                            (list :install-root (getf expected :install-root) t)
+                            (list :source-dir source t)
+                            (list :command-file (han.path:join-path source "target/" artifact) nil)
+                            (list :launcher-file (han.path:join-path bin artifact) nil))
+                      (unless (equal (%hub-json-string metadata "scope") "system")
+                        (list (list :bin-dir (getf expected :bin-dir) t)))
+                      (when (getf entry :command-launcher-file)
+                        (list (list :command-launcher-file (han.path:join-path bin base) nil)))))
+          (destructuring-bind (key path directory-p) pair
+            (unless (equal (%hub-installed-path-key (getf entry key) directory-p)
+                           (%hub-installed-path-key path directory-p))
+              (return-from %hub-installed-path-problem (string-downcase (string key))))))
+        (dolist (path (list (%taffish-home-dir home "apps")
+                           (han.path:parent-directory-pathname
+                            (han.path:directory-pathname root))
+                           root (getf entry :metadata-file) source
+                           (han.path:join-path source "target/")
+                           (getf entry :command-file) (getf entry :launcher-file)
+                           (getf entry :command-launcher-file)))
+          (when (and path (%hub-diagnostic-test "-L" path))
+            (return-from %hub-installed-path-problem (han.path:->namestring path))))
+        nil)
+    (error () "metadata")))
+
 (defun %hub-uninstall-read-entry (home metadata-file)
   (handler-case
       (let* ((metadata (han.json:read-json-file metadata-file))
@@ -66,7 +129,8 @@
                  (command-base
                    (%hub-uninstall-command-base artifact-name version-id)))
             (append
-             (list :metadata metadata
+             (list :installation-home (han.path:->namestring home)
+                   :metadata metadata
                    :metadata-file (han.path:->namestring metadata-file)
                    :package-name package-name
                    :version-id version-id
@@ -116,14 +180,20 @@
     (cond
       ((null matches)
        (unless force-p
-         (error "[uninstall] app version is not installed: ~A~@[ ~A~]"
-                query
-                normalized-version-id))
+         (%hub-error "installed-missing"
+                     :command "uninstall"
+                     :query query
+                     :version (if normalized-version-id
+                                  (format nil " ~A" normalized-version-id)
+                                  "")))
        nil)
       ((> (length matches) 1)
-       (error "[uninstall] multiple installed versions match ~A. Specify VERSION-ID.~%Candidates: ~{~A~^; ~}"
-              query
-              (mapcar #'%hub-uninstall-candidate-string matches)))
+       (%hub-error "installed-multiple"
+                   :command "uninstall"
+                   :query query
+                   :candidates
+                   (format nil "~{~A~^; ~}"
+                           (mapcar #'%hub-uninstall-candidate-string matches))))
       (t
        (first matches)))))
 
@@ -139,6 +209,17 @@
                               :test #'char=)))))))
 
 (defun %hub-uninstall-delete-entry (entry dry-run-p)
+  ;; Re-read before applying a plan. In particular, never delete a directory
+  ;; named only by an untrusted install_root field.
+  (let* ((fresh (%hub-uninstall-read-entry (getf entry :installation-home)
+                                          (getf entry :metadata-file)))
+         (problem (or (null fresh) (%hub-installed-path-problem entry)
+                      (%hub-installed-path-problem fresh))))
+    (when problem
+      (%hub-error "unsafe-installed-path" :path (getf entry :metadata-file)))
+    (let ((schema (han.json:get-json (getf fresh :metadata) "schema_version" :missing)))
+      (unless (or (eq schema :missing) (equal schema "taffish.install/v1"))
+        (%hub-error "unsupported-install-schema" :path (getf entry :metadata-file)))))
   (let* ((install-root (getf entry :install-root))
          (launcher-file (getf entry :launcher-file))
          (command-launcher-file (getf entry :command-launcher-file))
@@ -170,28 +251,31 @@
      entry)))
 
 (defun %hub-uninstall-print-result (result)
+  (%operation-progress-yield)
   (cond
     ((getf result :missing-p)
-     (format t "[TAF] uninstall skipped: ~A~%" (getf result :query))
+     (%hub-print-message "uninstall.skipped" :query (getf result :query))
      (%print-hub-info-field "scope"
                             (string-downcase (string (getf result :scope))))
-     (%print-hub-info-field "reason" "not installed"))
+     (%print-hub-info-field "reason" (%hub-message "uninstall.not-installed")))
     (t
-     (format t "[TAF] ~A: ~A ~A~%"
-             (if (getf result :dry-run-p)
-                 "uninstall dry-run"
-                 "uninstalled")
-             (getf result :package-name)
-             (getf result :version-id))
+     (%hub-print-message
+      "uninstall.header"
+      :action (%hub-status-display
+               (if (getf result :dry-run-p)
+                   :uninstall-dry-run
+                   :uninstalled))
+      :app (getf result :package-name)
+      :version (getf result :version-id))
      (%print-hub-info-field "scope"
                             (string-downcase (string (getf result :scope))))
      (%print-hub-info-field "app" (getf result :install-root))
      (%print-hub-info-field "command" (getf result :launcher-file))
      (%print-hub-info-field "bin" (getf result :bin-dir))
-     (%print-hub-info-field "images" "kept")
+     (%print-hub-info-field "images" (%hub-message "uninstall.images-kept"))
      (when (getf result :dry-run-p)
        (%print-hub-info-field "action"
-                              "rerun without --dry-run to uninstall"))))
+                              (%hub-message "uninstall.apply-hint")))))
   nil)
 
 (defun hub-uninstall (&key
@@ -203,6 +287,8 @@
                         force-p
                         dry-run-p
                         (verbose t))
+  (%with-operation-progress (verbose)
+  (unless dry-run-p (%operation-stage "inspect" :target query))
   (let* ((normalized-scope (%normalize-taffish-scope scope))
          (user-home-path (%taffish-user-home user-home))
          (system-home-path (%taffish-system-home system-home))
@@ -210,11 +296,14 @@
                               :user-home user-home-path
                               :system-home system-home-path)))
     (unless (%hub-non-empty-string-p query)
-      (error "[uninstall] app name or command name missing."))
-    (let ((entry (%hub-uninstall-find-installed home query version-id force-p)))
-      (let ((result
+      (%hub-error "target-missing" :command "uninstall"))
+    (let* ((entry (%hub-uninstall-find-installed home query version-id force-p))
+           (locked-bin (and entry (getf entry :bin-dir))))
+      (labels ((perform-uninstall ()
+        (let ((result
               (if entry
-                  (let* ((delete-result
+                  (let* ((notice (unless dry-run-p (%operation-stage "remove" :target (getf entry :artifact-name))))
+                         (delete-result
                            (%hub-uninstall-delete-entry entry dry-run-p))
                          (alias-result
                            (and (not dry-run-p)
@@ -222,6 +311,7 @@
                                  home
                                  (getf delete-result :command-base)
                                  (getf delete-result :bin-dir)))))
+                    (declare (ignore notice))
                     (append
                      alias-result
                      (list :scope normalized-scope
@@ -243,23 +333,37 @@
                         :uninstalled-p nil))))
         (when verbose
           (%hub-uninstall-print-result result))
-        result))))
+          result)))
+        (if (or dry-run-p (null entry))
+            (perform-uninstall)
+            (progn
+              (when (%hub-installed-path-problem entry)
+                (%hub-error "unsafe-installed-path" :path (getf entry :metadata-file)))
+              (%hub-call-with-write-locks
+               home (getf entry :bin-dir)
+               (lambda ()
+                 ;; A cooperating writer may have changed this entry while the
+                 ;; caller was planning. Resolve again before deleting anything.
+                 (setf entry (%hub-uninstall-find-installed home query version-id force-p))
+                 (when (and entry
+                            (not (equal (%hub-installed-path-key locked-bin t)
+                                        (%hub-installed-path-key (getf entry :bin-dir) t))))
+                   (%hub-error "unsafe-installed-path" :path (getf entry :metadata-file)))
+                 (perform-uninstall))))))))))
 
 (defun %hub-uninstall-print-many-summary (results)
-  (format t "[TAF] uninstall batch summary: ~D target~:P~%"
-          (length results))
-  (format t "  uninstalled/skipped : ~D/~D~%"
-          (count-if (lambda (result)
-                      (getf result :uninstalled-p))
-                    results)
-          (count-if-not (lambda (result)
-                          (getf result :uninstalled-p))
-                        results))
-  (format t "  commands            : ~{~A~^, ~}~%"
-          (mapcar (lambda (result)
-                    (or (getf result :artifact-name)
-                        (getf result :query)))
-                  results)))
+  (%hub-print-message "uninstall.batch" :count (length results))
+  (%hub-print-message
+   "uninstall.batch-counts"
+   :uninstalled (count-if (lambda (result) (getf result :uninstalled-p)) results)
+   :skipped (count-if-not (lambda (result) (getf result :uninstalled-p)) results))
+  (%hub-print-message
+   "batch.commands"
+   :commands (format nil "~{~A~^, ~}"
+                     (mapcar (lambda (result)
+                               (or (getf result :artifact-name)
+                                   (getf result :query)))
+                             results))))
 
 (defun hub-uninstall-many (&key
                              targets
@@ -269,9 +373,11 @@
                              force-p
                              dry-run-p
                              (verbose t))
-  (let ((items (%hub-normalize-targets targets "uninstall"))
-        (results nil))
+  (%with-operation-progress (verbose)
+  (let* ((items (%hub-normalize-targets targets "uninstall"))
+         (results nil) (*operation-item* 0) (*operation-total* (length items)))
     (dolist (item items)
+      (incf *operation-item*)
       (push (hub-uninstall :query (getf item :query)
                            :version-id (getf item :version-id)
                            :scope scope
@@ -291,4 +397,4 @@
       (when (and verbose
                  (> (length ordered-results) 1))
         (%hub-uninstall-print-many-summary ordered-results))
-      summary)))
+      summary))))

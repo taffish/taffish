@@ -11,7 +11,7 @@
 
 (defun %hub-search-split-query (query)
   (unless (%hub-non-empty-string-p query)
-    (error "[search] keyword missing."))
+    (%hub-error "keyword-missing"))
   (let ((terms nil)
         (start nil))
     (labels ((emit (end)
@@ -29,7 +29,7 @@
       (emit (length query)))
     (let ((result (nreverse terms)))
       (unless result
-        (error "[search] keyword missing."))
+        (%hub-error "keyword-missing"))
       result)))
 
 (defun %hub-search-string (value)
@@ -202,7 +202,7 @@
 (defun %print-hub-search-result (result)
   (let ((matches (getf result :matches))
         (total (getf result :total)))
-    (format t "[TAF] search: ~A~%" (getf result :query))
+    (%hub-print-message "search.header" :query (getf result :query))
     (%print-hub-info-field "scope"
                            (string-downcase (string (getf result :scope))))
     (%print-hub-info-field "index" (getf result :index-file))
@@ -220,10 +220,14 @@
                   (format t "  ~A" (getf match :version-id)))
                 (format t "~%")
                 (when (getf match :container-image)
-                  (format t "      image: ~A~%" (getf match :container-image)))
+                  (format t "      ~A: ~A~%"
+                          (%hub-message "search.item.image")
+                          (getf match :container-image)))
                 (when (getf match :repository-url)
-                  (format t "      repo : ~A~%" (getf match :repository-url))))
-        (format t "  no matches~%")))
+                  (format t "      ~A : ~A~%"
+                          (%hub-message "search.item.repo")
+                          (getf match :repository-url))))
+        (%hub-print-message "search.no-matches")))
   nil)
 
 (defun hub-search (&key
@@ -245,7 +249,9 @@
          (packages (%hub-json-ref index "packages"))
          (terms (%hub-search-split-query query)))
     (unless (han.json:json-object-p packages)
-      (error "[search] index is missing object field: packages"))
+      (%hub-error "index-missing-object"
+                  :command "search"
+                  :field "packages"))
     (let* ((matches
              (sort
               (remove nil

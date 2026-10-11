@@ -117,7 +117,7 @@ _taf_complete()
             opts="-b --backend -h --help --"
             ;;
         publish)
-            opts="-n --dry-run -y --yes -b --build -r --release --latest --pre --create-repo --public --private --no-lock-repo --prompt -h --help"
+            opts="-n --dry-run -y --yes -b --build -r --release --latest --pre --no-latest --create-repo --public --private --no-lock-repo --prompt -h --help"
             ;;
         update)
             opts="-u --user -s --system --url -y --yes -h --help"
@@ -129,7 +129,7 @@ _taf_complete()
             opts="-u --user -s --system -j --json -h --help"
             ;;
         install)
-            opts="-u --user -s --system -n --dry-run -y --yes -f --force -a --all -k --kind --tools --flows --prune-old -j --json --from --prompt -h --help"
+            opts="-u --user -s --system -n --dry-run -y --yes -f --force --repair --all-installed -a --all -k --kind --tools --flows --prune-old -j --json --from --prompt -h --help"
             ;;
         outdated)
             opts="-u --user -s --system -a --all -k --kind --tools --flows -j --json -h --help"
@@ -150,7 +150,10 @@ _taf_complete()
             opts="-u --user -s --system -j --json -h --help"
             ;;
         doctor)
-            opts="-i --init -u --user -s --system -j --json --verbose --shell -h --help"
+            opts="index hub -i --init -u --user -s --system -j --json --verbose --shell -h --help"
+            case " ${COMP_WORDS[*]} " in
+                *" hub "*|*" index "*) opts="-u --user -s --system -j --json --verbose -h --help" ;;
+            esac
             ;;
         config)
             opts="show path init language en zh auto -u --user -s --system --show --github --china -f --force -h --help"

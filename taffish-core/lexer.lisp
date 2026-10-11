@@ -22,17 +22,17 @@ Supports LF, CRLF and CR. Returns NIL at EOF before reading anything."
   (let ((chars nil))
     (labels ((read-next ()
                (if (han.source:source-eof-p source)
-                   (coerce (nreverse chars) 'string)
+                   (%character-list-string (nreverse chars))
                    (let ((char (han.source:source-next-char source)))
                      (cond
                        ((char= char #\Newline)
-                        (coerce (nreverse chars) 'string))
+                        (%character-list-string (nreverse chars)))
                        ((char= char #\Return)
                         (when (and (not (han.source:source-eof-p source))
                                    (char= (han.source:source-peek-char source)
                                           #\Newline))
                           (han.source:source-next-char source))
-                        (coerce (nreverse chars) 'string))
+                        (%character-list-string (nreverse chars)))
                        (t
                         (push char chars)
                         (read-next)))))))
@@ -109,8 +109,8 @@ BASE-COLUMN is the original column of CONTENT's first character."
     (labels ((emit-text (raw-chars value-chars start-index)
                (when raw-chars
                  (push (make-taf-token
-                        :raw-string (coerce (nreverse raw-chars) 'string)
-                        :value (coerce (nreverse value-chars) 'string)
+                        :raw-string (%character-list-string (nreverse raw-chars))
+                        :value (%character-list-string (nreverse value-chars))
                         :kind :text
                         :line line-number
                         :column (+ base-column start-index))

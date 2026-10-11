@@ -1,5 +1,48 @@
 (in-package :han.host)
 
+(defun %report-cli-error (prefix condition)
+  ;; Reporting must never fail recursively or fall back to protocol stdout.
+  (ignore-errors
+    (format *error-output* "~A ~A~%" prefix condition)
+    (finish-output *error-output*))
+  nil)
+
+(defmacro %with-cli-error-boundary ((prefix) &body body)
+  "Internal boundary for executable entry points, not library operations."
+  `(handler-case
+       (progn ,@body)
+     #+sbcl
+     (sb-sys:interactive-interrupt ()
+       (%report-cli-error ,prefix "Interrupted.")
+       (quit 1))
+     (error (condition)
+       (%report-cli-error ,prefix condition)
+       (quit 1))))
+
+(defun %call-with-character-output-string (function)
+  "Call FUNCTION with an output stream backed by a full CHARACTER string."
+  (let ((buffer (make-array 64
+                            :element-type 'character
+                            :adjustable t
+                            :fill-pointer 0
+                            :initial-element (code-char #x10000))))
+    (with-output-to-string (out buffer)
+      (funcall function out))
+    buffer))
+
+(defmacro with-character-output-to-string ((stream) &body body)
+  "Evaluate BODY with STREAM and return a full CHARACTER output string."
+  `(%call-with-character-output-string
+    (lambda (,stream)
+      ,@body)))
+
+(defun %utf8-line-string (line)
+  "Return LINE followed by one newline as a full CHARACTER string."
+  (check-type line string)
+  (with-character-output-to-string (out)
+    (write-string line out)
+    (write-char #\Newline out)))
+
 (defstruct host-process
   backend
   native-handle
@@ -65,6 +108,28 @@
            :version nil
            :defaults p)))))
 
+(defun %file-parent-directory (path)
+  "Return the directory pathname containing file PATH."
+  (make-pathname :name nil
+                 :type nil
+                 :version nil
+                 :defaults (%->pathname path)))
+
+(defun %ensure-parent-directories-for-file (path)
+  "Ensure PATH's parent exists, tolerating only a concurrent creator."
+  (let* ((file (%->pathname path))
+         (parent (%file-parent-directory file)))
+    (unless (directory-exists-p parent)
+      (handler-case
+          (ensure-directories-exist file)
+        (error (condition)
+          ;; Some implementations report EEXIST when another process creates
+          ;; the same final directory between the probe and mkdir.  Continue
+          ;; only when the requested parent is now demonstrably present.
+          (unless (directory-exists-p parent)
+            (error condition)))))
+    file))
+
 (defun %safe-probe-file (path)
   (ignore-errors
     (probe-file path)))
@@ -120,20 +185,52 @@
            (%safe-directory (%subdirectory-wildcard directory)))
    :test #'equal))
 
+(defun %same-pathname-location-p (left right)
+  (let ((left-path (%->pathname left))
+        (right-path (%->pathname right)))
+    (and (equal (pathname-host left-path) (pathname-host right-path))
+         (equal (pathname-device left-path) (pathname-device right-path))
+         (equal (pathname-directory left-path)
+                (pathname-directory right-path)))))
+
+(defun %direct-file-child-p (directory file)
+  (%same-pathname-location-p
+   (or (directory-exists-p directory) (%directory-pathname directory))
+   (make-pathname :name nil
+                  :type nil
+                  :version nil
+                  :defaults (%->pathname file))))
+
+(defun %direct-directory-child-p (directory child)
+  (let* ((parent (or (directory-exists-p directory)
+                     (%directory-pathname directory)))
+         (child-path (%directory-pathname child))
+         (child-directory (pathname-directory child-path)))
+    (and (cdr child-directory)
+         (%same-pathname-location-p
+          parent
+          (make-pathname :directory (butlast child-directory)
+                         :name nil
+                         :type nil
+                         :version nil
+                         :defaults child-path)))))
+
 (defun directory-files (directory)
   "Return files directly under DIRECTORY."
   (loop for entry in (%directory-entries directory)
         for directory-entry = (directory-exists-p entry)
         for file-entry = (and (not directory-entry)
                               (file-exists-p entry))
-        when file-entry
+        when (and file-entry
+                  (%direct-file-child-p directory file-entry))
           collect file-entry))
 
 (defun subdirectories (directory)
   "Return subdirectories directly under DIRECTORY."
   (loop for entry in (%directory-entries directory)
         for directory-entry = (directory-exists-p entry)
-        when directory-entry
+        when (and directory-entry
+                  (%direct-directory-child-p directory directory-entry))
           collect directory-entry))
 
 (defun copy-file (source target)
@@ -313,7 +410,8 @@
      (let ((path (%host-temp-file "han-host-empty-input" "tmp")))
        (with-open-file (out path :direction :output
                                  :if-exists :supersede
-                                 :if-does-not-exist :create))
+                                 :if-does-not-exist :create)
+         (declare (ignorable out)))
        (values path (cons path temp-files))))
     ((eq input t)
      #+lispworks

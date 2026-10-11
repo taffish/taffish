@@ -7,6 +7,13 @@
 (defparameter *taffish-history-file-name*
   "history.jsonl")
 
+(defvar *history-id-counter* 0)
+
+(defun %history-format-character-string (control &rest arguments)
+  "Format history data into a full CHARACTER string."
+  (with-output-to-string (out nil :element-type 'character)
+    (apply #'format out control arguments)))
+
 (defun %history-file (&key user-home)
   (han.path:join-path (%taffish-user-home user-home)
                       "logs"
@@ -15,14 +22,16 @@
 (defun %history-timestamp ()
   (multiple-value-bind (second minute hour date month year)
       (decode-universal-time (get-universal-time) 0)
-    (format nil "~4,'0D-~2,'0D-~2,'0DT~2,'0D:~2,'0D:~2,'0DZ"
+    (%history-format-character-string "~4,'0D-~2,'0D-~2,'0DT~2,'0D:~2,'0D:~2,'0DZ"
             year month date hour minute second)))
 
 (defun %history-id (&optional (timestamp (%history-timestamp)))
   (let ((compact (remove #\: (remove #\- timestamp))))
-    (format nil "~A-~4,'0X"
-            (subseq compact 0 (min (length compact) 15))
-            (random #x10000))))
+    (%history-format-character-string
+     "~A-~36R-~36R"
+     (subseq compact 0 (min (length compact) 15))
+     (han.host:current-process-id)
+     (incf *history-id-counter*))))
 
 (defun %history-key-string (key)
   (string-downcase
@@ -33,7 +42,7 @@
                  (string key)))))
 
 (defun %history-json-escape (string)
-  (with-output-to-string (out)
+  (with-output-to-string (out nil :element-type 'character)
     (loop for char across (princ-to-string string) do
       (case char
         (#\" (write-string "\\\"" out))
@@ -54,27 +63,27 @@
     ((eql value t) "true")
     ((null value) "null")
     ((stringp value)
-     (format nil "\"~A\"" (%history-json-escape value)))
+     (%history-format-character-string "\"~A\"" (%history-json-escape value)))
     ((or (integerp value) (floatp value))
      (princ-to-string value))
     ((or (keywordp value) (symbolp value))
-     (format nil "\"~A\"" (%history-key-string value)))
+     (%history-format-character-string "\"~A\"" (%history-key-string value)))
     ((%history-plist-p value)
      (%history-json-object value))
     ((listp value)
-     (format nil "[~{~A~^,~}]"
+     (%history-format-character-string "[~{~A~^,~}]"
              (mapcar #'%history-json-value value)))
     (t
-     (format nil "\"~A\"" (%history-json-escape (princ-to-string value))))))
+     (%history-format-character-string "\"~A\"" (%history-json-escape (princ-to-string value))))))
 
 (defun %history-json-object (plist)
   (let ((pairs nil))
     (loop for (key value) on plist by #'cddr do
-      (push (format nil "\"~A\":~A"
+      (push (%history-format-character-string "\"~A\":~A"
                     (%history-key-string key)
                     (%history-json-value value))
             pairs))
-    (format nil "{~{~A~^,~}}" (nreverse pairs))))
+    (%history-format-character-string "{~{~A~^,~}}" (nreverse pairs))))
 
 (defun %history-project-fields (project)
   (when project
@@ -97,11 +106,7 @@
     (nreverse out)))
 
 (defun %history-append-line (file line)
-  (ensure-directories-exist file)
-  (with-open-file (out file :direction :output
-                            :if-exists :append
-                            :if-does-not-exist :create)
-    (format out "~A~%" line)))
+  (han.host:append-utf8-line file line))
 
 (defun system-record-history-event
     (&key event
@@ -155,7 +160,7 @@
       (nthcdr (- (length lines) n) lines)))
 
 (defun %history-json-string-field (line key)
-  (let* ((needle (format nil "\"~A\":" key))
+  (let* ((needle (%history-format-character-string "\"~A\":" key))
          (start (search needle line :test #'char=)))
     (when start
       (let* ((value-start (+ start (length needle)))
@@ -163,7 +168,7 @@
         (cond
           ((and (< value-start len)
                 (char= #\" (char line value-start)))
-           (with-output-to-string (out)
+           (with-output-to-string (out nil :element-type 'character)
              (loop with escaped-p = nil
                    for i from (1+ value-start) below len
                    for char = (char line i)
@@ -196,7 +201,7 @@
          (release (%history-json-string-field line "project_release"))
          (exit-code (%history-json-string-field line "exit_code"))
          (id (%history-json-string-field line "id")))
-    (format nil "~@[~A ~]~@[~A ~]~@[~A~]~@[ ~A~]~@[ v~A~]~@[-r~A~]~@[ exit=~A~]~@[ id=~A~]"
+    (%history-format-character-string "~@[~A ~]~@[~A ~]~@[~A~]~@[ ~A~]~@[ v~A~]~@[-r~A~]~@[ exit=~A~]~@[ id=~A~]"
             time event status project version release exit-code id)))
 
 (defun %print-history-lines (lines file json-p)
@@ -204,12 +209,14 @@
       (dolist (line lines)
         (format t "~A~%" line))
       (progn
-        (format t "[TAF] history~%")
-        (format t "  file : ~A~%" (han.path:->namestring file))
+        (format t "~A~%" (%history-message "header"))
+        (format t "  ~A : ~A~%"
+                (%history-message "label.file")
+                (han.path:->namestring file))
         (if (null lines)
-            (format t "No TAFFISH history yet.~%")
+            (format t "~A~%" (%history-message "empty"))
             (progn
-              (format t "~%Events:~%")
+              (format t "~%~A~%" (%history-message "events"))
               (dolist (line lines)
                 (format t "  ~A~%" (%history-line-summary line))))))))
 
@@ -233,9 +240,14 @@
          (when existed-p
            (delete-file file))
          (when verbose
-           (format t "[TAF] history ~A: ~A~%"
-                   (if existed-p "cleared" "not found")
-                   (han.path:->namestring file)))
+           (format t "~A~%"
+                   (%history-message
+                    "clear.result"
+                    :state (%history-message
+                            (if existed-p
+                                "clear.cleared"
+                                "clear.not-found"))
+                    :path (han.path:->namestring file))))
          (list :file (han.path:->namestring file)
                :cleared-p existed-p)))
       (t

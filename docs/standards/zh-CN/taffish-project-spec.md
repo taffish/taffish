@@ -345,7 +345,12 @@ v<version>-r<release>
 2. `LICENSE` 存在、非空且不是 placeholder。
 3. 如果启用 release，项目根目录必须有 `release.md`。
 4. `release.md` 第一行不能为空，且不能是默认脚手架占位符（`# TODO: release summary`）。
-5. 当前 `latest` 发布必须高于远端最新 tag；pre 发布可以放宽该限制。
+5. tag/commit 与请求的 Release 身份不能和已有发布状态冲突；新身份不受版本排序限制。
+
+使用 `--release` 时，默认/`--latest` 创建正式 GitHub Release 并设为 Latest；
+`--pre` 创建 Pre-release 且不设为 Latest；`--no-latest` 创建正式 Release 但不设为
+Latest。三个渠道选项互斥。未使用 `--release` 时只发布 tag，不设置上述 GitHub 状态。
+重复执行已完成的发布，不会从后续版本抢回 Latest。
 
 TAFFISH 不负责 GitHub 登录。用户应自行配置 SSH key、credential helper 或 `gh auth login`。
 

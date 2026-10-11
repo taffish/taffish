@@ -353,7 +353,14 @@ Before release:
 2. `LICENSE` exists, is non-empty, and is not a placeholder.
 3. If release is enabled, `release.md` exists in the project root.
 4. The first line of `release.md` is non-empty and is not the default scaffold placeholder (`# TODO: release summary`).
-5. A normal `latest` release must be greater than the latest remote tag; pre-releases may relax this rule.
+5. The tag/commit and requested Release identity must not conflict with existing publication state. Version ordering does not restrict a new identity.
+
+With `--release`, default/`--latest` creates a formal GitHub Release and marks it
+Latest; `--pre` creates a Pre-release without setting Latest; `--no-latest`
+creates a formal Release without setting Latest. These channel options are
+mutually exclusive. Without `--release`, publication is tag-only and does not
+set either GitHub status. Repeating a completed publication does not reclaim
+Latest from a subsequently published release.
 
 TAFFISH does not handle GitHub login. Users configure SSH keys, credential helpers, or `gh auth login` themselves.
 

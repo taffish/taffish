@@ -49,7 +49,7 @@
 (defun %hub-read-local-index-file (path)
   (let ((file (han.path:file-exists-p path)))
     (unless file
-      (error "[update] local index file does not exist: ~A" path))
+      (%hub-error "update-local-missing" :path path))
     (han.os:load-string file)))
 
 (defun %hub-curl-command (curl url)
@@ -72,7 +72,7 @@
 (defun %hub-download-index-url (url)
   (let ((curl (han.os:find-executable "curl")))
     (unless curl
-      (error "[update] can't find curl executable for downloading: ~A" url))
+      (%hub-error "update-no-curl" :url url))
     (multiple-value-bind (out err code)
         (han.os:run-program
          (%hub-curl-command curl url)
@@ -80,9 +80,9 @@
          :error-output :string
          :ignore-error-status t)
       (unless (and (integerp code) (= code 0))
-        (error "[update] failed to download index from ~A.~%~A~%This is usually a network/proxy problem when accessing the index URL. You can retry later or use `taf update --url <INDEX-URL>` / TAFFISH_INDEX_URL."
-               url
-               (%hub-trim-string err)))
+        (%hub-error "update-download"
+                    :url url
+                    :detail (%hub-trim-string err)))
       out)))
 
 (defun %hub-read-index-source (source)
@@ -94,8 +94,7 @@
     ((%hub-http-url-p source)
      (%hub-download-index-url source))
     (t
-     (error "[update] index source must be a local file or http(s) URL, but got: ~A"
-            source))))
+     (%hub-error "update-source" :source source))))
 
 (defun %hub-index-current-file (home)
   (han.path:join-path (%taffish-home-dir home "index") "current.json"))
@@ -117,22 +116,21 @@
 
 (defun %hub-validate-index-string (string source)
   (unless (%hub-non-empty-string-p string)
-    (error "[update] downloaded index is empty: ~A" source))
+    (%hub-error "update-empty" :source source))
   ;; Keep v1 deliberately light: later hub commands will parse the JSON strictly.
   (unless (and (search "\"schema_version\"" string :test #'char=)
                (search "taffish.index/v1" string :test #'char=))
-    (error "[update] downloaded file does not look like a TAFFISH index: ~A"
-           source))
+    (%hub-error "update-invalid" :source source))
   string)
 
 (defun %print-hub-update-result (result)
-  (format t "[TAF] updated TAFFISH index~%")
-  (format t "  scope    : ~A~%"
-          (string-downcase (string (getf result :scope))))
-  (format t "  source   : ~A~%" (getf result :source))
-  (format t "  current  : ~A~%" (getf result :current-file))
-  (format t "  snapshot : ~A~%" (getf result :snapshot-file))
-  (format t "  bytes    : ~A~%" (getf result :bytes))
+  (%hub-print-message "update.header")
+  (%print-hub-info-field "scope"
+                         (string-downcase (string (getf result :scope))))
+  (%print-hub-info-field "source" (getf result :source))
+  (%print-hub-info-field "current" (getf result :current-file))
+  (%print-hub-info-field "snapshot" (getf result :snapshot-file))
+  (%print-hub-info-field "bytes" (getf result :bytes))
   nil)
 
 (defun hub-update (&key
@@ -141,6 +139,7 @@
                      user-home
                      system-home
                      (verbose t))
+  (%with-operation-progress (verbose)
   (let* ((normalized-scope (%normalize-taffish-scope scope))
          (user-home-path (%taffish-user-home user-home))
          (system-home-path (%taffish-system-home system-home))
@@ -155,9 +154,12 @@
          (timestamp (%hub-timestamp))
          (current-file (%hub-index-current-file home))
          (snapshot-file (%hub-index-snapshot-file home timestamp))
+         (notice (%operation-stage (if (%hub-http-url-p source) "download" "read-index")))
          (index-string (%hub-validate-index-string
                         (%hub-read-index-source source)
                         source)))
+    (declare (ignore notice))
+    (%operation-stage "save-index")
     (%ensure-directory (%taffish-home-dir home "index"))
     (%ensure-directory (%hub-index-snapshots-dir home))
     (%hub-write-string-to-file snapshot-file index-string)
@@ -170,5 +172,6 @@
                         :timestamp timestamp
                         :bytes (length index-string))))
       (when verbose
+        (%operation-progress-yield)
         (%print-hub-update-result result))
-      result)))
+      result))))

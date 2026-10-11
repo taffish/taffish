@@ -15,7 +15,9 @@
   (with-open-file (out path
                        :direction :output
                        :if-exists :supersede
-                       :if-does-not-exist :create)
+                       :if-does-not-exist :create
+                       :element-type 'character
+                       :external-format :utf-8)
     (write-string content out)))
 
 (defun %i18n-language-entry (id entries)
@@ -366,5 +368,64 @@
              (check-equal (length (getf german :example)) 256)
              (check-equal (%i18n-language-entry "it" entries) nil)
              (check-equal (%i18n-language-entry "fr" entries) nil)))
+      (ignore-errors (han.path:delete-directory-tree user-home))
+      (ignore-errors (han.path:delete-directory-tree system-home)))))
+
+(deftest test-taffish-i18n-message-with-named-bindings ()
+  (taffish.i18n:register-message
+   "test.runtime.binding"
+   "command={command}, value={value}"
+   "命令={command}，值={value}")
+  (taffish.i18n:with-language ("en")
+    (check-equal
+     (taffish.i18n:message-with
+      "test.runtime.binding" :command "taf" "value" 3)
+     "command=taf, value=3"))
+  (taffish.i18n:with-language ("zh")
+    (check-equal
+     (taffish.i18n:message-with
+      "test.runtime.binding" :command "taf" :value 3)
+     "命令=taf，值=3"))
+  (check-error (error)
+    (taffish.i18n:message-with "test.runtime.binding" :command)))
+
+(deftest test-taffish-i18n-sparse-help-only-and-messages-only-packs ()
+  (let ((user-home (%i18n-temp-directory "sparse-user"))
+        (system-home (%i18n-temp-directory "sparse-system")))
+    (unwind-protect
+         (progn
+           (taffish.i18n:register-message
+            "test.runtime.sparse"
+            "English runtime {value}"
+            "中文运行时 {value}")
+           (%i18n-write-file
+            (han.path:join-path user-home "share/locales/ja/help/taf.txt")
+            "CUSTOM HELP")
+           (%i18n-write-file
+            (han.path:join-path user-home "share/locales/de/messages.json")
+            "{\"test.runtime.sparse\":\"DE {value}\"}")
+           (let ((entries
+                   (taffish.i18n:available-languages
+                    :user-home user-home :system-home system-home)))
+             (check-true (%i18n-language-entry "ja" entries))
+             (check-true (%i18n-language-entry "de" entries)))
+           (taffish.i18n:with-language
+               ("ja" :user-home user-home :system-home system-home)
+             (check-equal
+              (taffish.i18n:help-text "taf" nil "EN HELP" "ZH HELP")
+              "CUSTOM HELP")
+             (check-equal
+              (taffish.i18n:message-with
+               "test.runtime.sparse" :value 7)
+              "English runtime 7"))
+           (taffish.i18n:with-language
+               ("de" :user-home user-home :system-home system-home)
+             (check-equal
+              (taffish.i18n:help-text "taf" nil "EN HELP" "ZH HELP")
+              "EN HELP")
+             (check-equal
+              (taffish.i18n:message-with
+               "test.runtime.sparse" :value 7)
+              "DE 7")))
       (ignore-errors (han.path:delete-directory-tree user-home))
       (ignore-errors (han.path:delete-directory-tree system-home)))))

@@ -71,11 +71,11 @@
          ((string-equal clean-backend "podman") :podman)
          ((string-equal clean-backend "docker") :docker)
          (t
-          (error "[compile] container backend must be apptainer, podman or docker, but got: ~S"
-                 backend)))))
+          (%project-error "compile-backend"
+                          :value (%project-repr backend))))))
     (t
-     (error "[compile] container backend must be a string or keyword, but got: ~S"
-            (type-of backend)))))
+     (%project-error "compile-backend-type"
+                     :value (%project-repr (type-of backend))))))
 
 (defun %resolve-container-backend (explicit-backend)
   (%normalize-container-backend
@@ -91,10 +91,10 @@
 
 (defun %parse-project-compile-options (options)
   (unless (evenp (length options))
-    (error "[compile] malformed keyword options: ~S" options))
+    (%project-error "compile-options" :value (%project-repr options)))
   (loop for key in options by #'cddr do
     (unless (member key '(:container-backend) :test #'eql)
-      (error "[compile] unknown option: ~S" key)))
+      (%project-error "compile-option" :value (%project-repr key))))
   (list :container-backend (getf options :container-backend)))
 
 (defun %absolute-directory-namestring (path)
@@ -142,7 +142,8 @@
                           (start-dir (han.os:current-directory))
                         &rest options)
   (unless (listp args)
-    (error "[compile] ARGS must be a list, but got: ~S" (type-of args)))
+    (%project-error "compile-args"
+                    :value (%project-repr (type-of args))))
   (let* ((parsed-options (%parse-project-compile-options options))
          (container-backend (getf parsed-options :container-backend))
          (project (project-check start-dir nil))

@@ -78,10 +78,6 @@
                                        (format nil "Parse error: ~A" c))))))
     (and response (%compact-json response))))
 
-(defun %server-log (format-control &rest args)
-  (apply #'format *error-output* format-control args)
-  (finish-output *error-output*))
-
 (defun %write-response (response)
   (when response
     (write-string (%compact-json response) *standard-output*)
@@ -89,7 +85,6 @@
     (finish-output *standard-output*)))
 
 (defun run-stdio-server ()
-  (%server-log "[TAFFISH-MCP] stdio server started.~%")
   (loop for line = (read-line *standard-input* nil nil)
         while line do
           (unless (string= line "")
@@ -101,5 +96,4 @@
                                   (format nil "Parse error: ~A" c)))
                (error (c)
                  (%json-rpc-error :null -32603
-                                  (format nil "Internal error: ~A" c)))))))
-  (%server-log "[TAFFISH-MCP] stdio server stopped.~%"))
+                                  (format nil "Internal error: ~A" c))))))))

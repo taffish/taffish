@@ -30,6 +30,13 @@
         (if value "yes" "no")
         "<unknown>")))
 
+(defun %hub-json-bool-display-string (object key)
+  (let ((value (%hub-json-bool-string object key)))
+    (cond
+      ((string= value "yes") (%hub-status-display :yes))
+      ((string= value "no") (%hub-status-display :no))
+      (t (%hub-message "value.unknown")))))
+
 (defun %hub-normalize-version-id (version-id)
   (cond
     ((null version-id) nil)
@@ -48,14 +55,16 @@
      (list :query (getf target :query)
            :version-id (getf target :version-id)))
     (t
-     (error "[~A] invalid target: ~S" label target))))
+     (%hub-error "target-invalid"
+                 :command label
+                 :target (%hub-repr target)))))
 
 (defun %hub-normalize-targets (targets label)
   (let ((items (mapcar (lambda (target)
                          (%hub-normalize-target target label))
                        targets)))
     (unless items
-      (error "[~A] app name or command name missing." label))
+      (%hub-error "target-missing" :command label))
     items))
 
 (defun %hub-json-array-from-list (items)
@@ -67,20 +76,20 @@
 (defun %hub-load-index (home &optional (label "info"))
   (let ((file (%hub-index-file home)))
     (unless (han.path:file-exists-p file)
-      (error "[~A] local TAFFISH index does not exist: ~A~%Run `taf update` first."
-             label
-             (han.path:->namestring file)))
+      (%hub-error "index-missing"
+                  :command label
+                  :path (han.path:->namestring file)))
     (let ((index (han.json:read-json-file file)))
       (unless (han.json:json-object-p index)
-        (error "[~A] local TAFFISH index is not a JSON object: ~A"
-               label
-               (han.path:->namestring file)))
+        (%hub-error "index-not-object"
+                    :command label
+                    :path (han.path:->namestring file)))
       (unless (string= (or (%hub-json-string index "schema_version") "")
                        "taffish.index/v1")
-        (error "[~A] unsupported TAFFISH index schema: ~A"
-               label
-               (or (%hub-json-string index "schema_version")
-                   "<missing>")))
+        (%hub-error "index-schema"
+                    :command label
+                    :schema (or (%hub-json-string index "schema_version")
+                                "<missing>")))
       index)))
 
 (defun %hub-object-keys-string (object)
@@ -110,19 +119,9 @@
        (%publish-release-info-from-tag (format nil "v~A" version-id))))
 
 (defun %hub-version-id-newer-p (a b)
-  (let ((a-info (%hub-version-id-info a))
-        (b-info (%hub-version-id-info b)))
-    (cond
-      ((and a-info b-info)
-       (> (%publish-compare-version-release
-           (getf a-info :version)
-           (getf a-info :release)
-           (getf b-info :version)
-           (getf b-info :release))
-          0))
-      (a-info t)
-      (b-info nil)
-      (t (string> a b)))))
+  (let ((order (%compare-version-ids a b)))
+    ;; Tie-breaking is for deterministic display/alias order, not identity.
+    (if (zerop order) (string> a b) (> order 0))))
 
 (defun %hub-package-version-ids (package-entry)
   (let ((versions (%hub-json-ref package-entry "versions")))
@@ -177,14 +176,14 @@
 (defun %hub-resolve-info-target
     (index query requested-version-id &optional (label "info"))
   (unless (%hub-non-empty-string-p query)
-    (error "[~A] app name or command name missing." label))
+    (%hub-error "target-missing" :command label))
   (let* ((packages (%hub-json-ref index "packages"))
          (commands (%hub-json-ref index "commands"))
          (normalized-version-id (%hub-normalize-version-id requested-version-id)))
     (unless (han.json:json-object-p packages)
-      (error "[~A] index is missing object field: packages" label))
+      (%hub-error "index-missing-object" :command label :field "packages"))
     (unless (han.json:json-object-p commands)
-      (error "[~A] index is missing object field: commands" label))
+      (%hub-error "index-missing-object" :command label :field "commands"))
     (multiple-value-bind (package-entry package-present-p)
         (han.json:get-json packages query)
       (let* ((command-entry nil)
@@ -200,7 +199,7 @@
               (han.json:get-json commands query)))
         (when command-present-p
           (unless (han.json:json-object-p command-entry)
-            (error "[~A] command entry is not an object: ~A" label query))
+            (%hub-error "command-entry" :command label :query query))
           (setf query-kind :command
                 package-name (%hub-json-string command-entry "package")
                 default-version-id (%hub-json-string command-entry "version"))
@@ -216,35 +215,45 @@
                     package-present-p t
                     default-version-id (getf artifact :version-id)))))
         (unless package-present-p
-          (error "[~A] can't find TAFFISH app or command in local index: ~A"
-                 label query))
+          (%hub-error "not-found" :command label :query query))
         (unless (han.json:json-object-p package-entry)
-          (error "[~A] package entry is not an object: ~A" label package-name))
+          (%hub-error "package-entry"
+                      :command label
+                      :package package-name))
         (when (and (eq query-kind :artifact)
                    normalized-version-id
                    default-version-id
                    (not (string= normalized-version-id default-version-id)))
-          (error "[~A] exact command ~A already contains version ~A, but VERSION-ID is ~A."
-                 label query default-version-id normalized-version-id))
+          (%hub-error "exact-version-conflict"
+                      :command label
+                      :query query
+                      :exact default-version-id
+                      :requested normalized-version-id))
         (let* ((versions (%hub-json-ref package-entry "versions"))
                (version-id (or normalized-version-id
                                default-version-id
                                (%hub-json-string package-entry "latest"))))
           (unless (han.json:json-object-p versions)
-            (error "[~A] package has no versions object: ~A" label package-name))
+            (%hub-error "package-no-versions"
+                        :command label
+                        :package package-name))
           (unless (%hub-non-empty-string-p version-id)
-            (error "[~A] package has no latest version: ~A" label package-name))
+            (%hub-error "package-no-latest"
+                        :command label
+                        :package package-name))
           (multiple-value-bind (record present-p)
               (han.json:get-json versions version-id)
             (unless present-p
-              (error "[~A] package ~A has no version ~A.~%Available versions: ~A"
-                     label
-                     package-name
-                     version-id
-                     (%hub-object-keys-string versions)))
+              (%hub-error "package-version-missing"
+                          :command label
+                          :package package-name
+                          :version version-id
+                          :available (%hub-object-keys-string versions)))
             (unless (han.json:json-object-p record)
-              (error "[~A] version record is not an object: ~A ~A"
-                     label package-name version-id))
+              (%hub-error "version-record"
+                          :command label
+                          :package package-name
+                          :version version-id))
             (list :query query
                   :query-kind query-kind
                   :package-name package-name
@@ -254,7 +263,8 @@
 
 (defun %print-hub-info-field (label value)
   (when (and value (not (eq value :null)))
-    (format t "  ~15A : ~A~%" label value)))
+    (%print-display-fields (list (list (%hub-label label) (princ-to-string value)))
+                           :min-label-width 15)))
 
 (defun %hub-json-array-string (value)
   (cond
@@ -284,7 +294,7 @@
          (container (%hub-json-ref record "container"))
          (smoke (%hub-json-ref record "smoke"))
          (source (%hub-json-ref record "source")))
-    (format t "[TAF] app info: ~A~%" (getf result :package-name))
+    (%hub-print-message "info.header" :name (getf result :package-name))
     (%print-hub-info-field "scope"
                            (string-downcase (string (getf result :scope))))
     (%print-hub-info-field "query"
@@ -318,9 +328,10 @@
     (when (han.json:json-object-p runtime)
       (%print-hub-info-field
        "runtime"
-       (format nil "pipe=~A, command-mode=~A"
-               (%hub-json-bool-string runtime "pipe")
-               (%hub-json-bool-string runtime "command_mode"))))
+       (%hub-message
+        "info.runtime"
+        :pipe (%hub-json-bool-display-string runtime "pipe")
+        :command-mode (%hub-json-bool-display-string runtime "command_mode"))))
     (when (han.json:json-object-p paths)
       (%print-hub-info-field "main" (%hub-json-string paths "main"))
       (%print-hub-info-field "help" (%hub-json-string paths "help"))
@@ -335,11 +346,14 @@
     (when (han.json:json-object-p smoke)
       (%print-hub-info-field
        "smoke"
-       (format nil "~A, timeout=~A, exist=~A, test=~A"
-               (or (%hub-json-string smoke "backend") "<unknown>")
-               (or (%hub-json-integer-string smoke "timeout") "<unknown>")
-               (%hub-json-array-length (%hub-json-ref smoke "exist"))
-               (%hub-json-array-length (%hub-json-ref smoke "test"))))
+       (%hub-message
+        "info.smoke"
+        :backend (or (%hub-json-string smoke "backend")
+                     (%hub-message "value.unknown"))
+        :timeout (or (%hub-json-integer-string smoke "timeout")
+                     (%hub-message "value.unknown"))
+        :exist (%hub-json-array-length (%hub-json-ref smoke "exist"))
+        :test (%hub-json-array-length (%hub-json-ref smoke "test"))))
       (%print-hub-info-field
        "smoke exist"
        (%hub-json-array-string (%hub-json-ref smoke "exist")))

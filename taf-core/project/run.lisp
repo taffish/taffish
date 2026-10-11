@@ -29,7 +29,7 @@
                          (output t)
                          (error-output t))
   (unless (listp args)
-    (error "[run] ARGS must be a list, but got: ~S" (type-of args)))
+    (%project-error "run-args" :value (%project-repr (type-of args))))
   (let* ((temp-dir (%make-run-temp-dir))
          (shell-file (han.path:join-path temp-dir "run.sh"))
          (shell-string (project-compile

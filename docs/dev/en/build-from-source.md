@@ -81,7 +81,7 @@ Check the generated commands:
 
 These unsuffixed files are local build outputs. Maintainer release payloads are
 renamed/copied to versioned file names such as
-`taf-darwin-arm64-0.10.1` before publishing a release tag.
+`taf-darwin-arm64-0.11.0` before publishing a release tag.
 
 ## Binary Smoke Test
 
@@ -89,7 +89,7 @@ After building or preparing release payloads, run the binary smoke test for the
 current platform:
 
 ```sh
-test/binary-smoke.sh --version 0.10.1
+test/binary-smoke.sh --version 0.11.0
 ```
 
 For unsuffixed local build outputs, pass explicit paths:
@@ -109,11 +109,31 @@ compilation paths without pulling images or running containers.
 For the fuller external test suite, run:
 
 ```sh
-test/run-tests.sh --version 0.10.1
+test/run-tests.sh --version 0.11.0
 ```
 
 This wraps the binary smoke test and adds real `taffish` conformance cases plus
-`taf new/check/compile/build` project workflow checks.
+project, Hub, system, i18n, MCP, publish-recovery, and installer conformance.
+
+Run only the standalone installer cases with:
+
+```sh
+test/run-tests.sh --version 0.11.0 --filter installer/
+```
+
+Run the subset on both macOS and Linux. A normal user run verifies user scope
+and rejection of unauthorized system mutation. The root-only administrator and
+sticky shared-cache branches use temporary paths and can be selected with:
+
+```sh
+sudo test/run-tests.sh \
+  --version 0.11.0 \
+  --filter installer/system-permissions
+```
+
+Installer maintainers must also run `install/generate-installers.sh --check`
+and the syntax/static checks documented in
+[the installer manual](../../../install/README.md).
 
 ## Build Binaries With LispWorks
 

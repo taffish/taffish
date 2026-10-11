@@ -5,13 +5,13 @@
 ;;;; ============================================================
 
 (defparameter *taffish-mcp-version*
-  "taffish-mcp 0.10.1")
+  "taffish-mcp 0.11.0")
 
 (defparameter *mcp-default-protocol-version* "2025-11-25")
 
 (defun help (&optional (stream *standard-output*))
   (let ((text
-          "taffish-mcp 0.10.1
+          "taffish-mcp 0.11.0
 
 Purpose:
   MCP stdio server for TAFFISH. It exposes conservative TAFFISH tools,

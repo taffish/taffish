@@ -224,5 +224,8 @@
       (han.host:quit 1))))
 
 (defun main (&optional (raw-argv (han.host:argv t)))
-  (taffish.i18n:call-with-resolved-language
-   (lambda () (%main raw-argv))))
+  (han.host::%with-cli-error-boundary ("[TAFFISH-ERROR]")
+    (han.host:prepare-runtime-io)
+    (han.host:configure-runtime-io)
+    (taffish.i18n:call-with-resolved-language
+     (lambda () (%main raw-argv)))))

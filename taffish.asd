@@ -2,7 +2,7 @@
   :description "TAFFISH project (core + cli)"
   :author "Kaiyuan Han"
   :license "Apache-2.0"
-  :version "0.10.1"
+  :version "0.11.0"
   :depends-on ("han")
   :serial t
   :components
@@ -65,10 +65,15 @@
     :serial t
     :components
     ((:file "package")
+     (:file "version")
+     (:file "display")
+     (:file "progress")
      (:module "project"
-      :serial t
-      :components
-      ((:file "common")
+     :serial t
+     :components
+      ((:file "i18n")
+       (:file "common")
+       (:file "digest")
        (:file "new")
        (:file "check")
        (:file "compile")
@@ -76,21 +81,25 @@
        (:file "run")
        (:file "publish")))
      (:module "hub"
-      :serial t
-      :components
-      ((:file "update")
+     :serial t
+     :components
+      ((:file "i18n")
+       (:file "update")
        (:file "info")
        (:file "search")
        (:file "install")
        (:file "uninstall")
        (:file "list")
        (:file "which")
+       (:file "diagnostics")
+       (:file "repair")
        (:file "upgrade")))
      (:module "system"
      :serial t
      :components
      ((:file "home")
       (:file "config")
+      (:file "history-i18n")
       (:file "history")
       (:file "doctor-i18n")
       (:file "doctor")))))

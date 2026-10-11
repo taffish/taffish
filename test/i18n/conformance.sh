@@ -12,6 +12,36 @@ print("\n".join(sorted(set(re.findall(pattern, text)))))
 '
 }
 
+_i18n_assert_top_help_layout() {
+  python3 -c '
+import sys
+import unicodedata
+
+app, language = sys.argv[1:]
+text = sys.stdin.read()
+lines = text.splitlines()
+sections = {
+    ("taf", "en"): ["Usage:", "Project commands:", "Hub commands:",
+                    "System commands:", "Getting started:", "Language:", "More information:"],
+    ("taf", "zh"): ["用法：", "项目命令：", "Hub 命令：", "系统命令：", "入门：", "语言：", "更多信息："],
+    ("taffish", "en"): ["Usage:", "Input:", "Container settings:", "Examples:", "Language:", "More information:"],
+    ("taffish", "zh"): ["用法：", "输入：", "容器设置：", "示例：", "语言：", "更多信息："],
+}[app, language]
+positions = [lines.index(section) for section in sections]
+assert positions == sorted(positions), (app, language, positions)
+assert len(lines) <= (60 if app == "taf" else 45), (app, len(lines))
+for line in lines:
+    assert all(ord(c) >= 32 for c in line), repr(line)
+    width = sum(0 if unicodedata.combining(c) else
+                2 if unicodedata.east_asian_width(c) in ("W", "F") else 1
+                for c in line)
+    assert width <= 80, (app, language, width, line)
+for contact in ("https://taffish.com", "https://taffish.github.io/", "support@taffish.com"):
+    assert text.count(contact) == 1, (app, contact)
+assert "auto" in text and ("[default]" if language == "en" else "[默认]") in text
+' "$1" "$2"
+}
+
 _i18n_assert_help_pair() {
   command=$1
   user_home=$2
@@ -71,6 +101,13 @@ _i18n_assert_help_pair() {
   chinese_options=$(printf '%s' "$chinese" | _i18n_option_tokens) || return 1
   assert_eq "$english_options" "$chinese_options" \
     "$label option tokens" || return 1
+  if [ -z "$command" ]; then
+    printf '%s\n' "$english" | _i18n_assert_top_help_layout taf en || return 1
+    printf '%s\n' "$chinese" | _i18n_assert_top_help_layout taf zh || return 1
+  else
+    assert_not_contains "$english" 'support@taffish.com' "$label no footer" || return 1
+    assert_not_contains "$chinese" 'support@taffish.com' "$label no footer" || return 1
+  fi
 }
 
 _i18n_case_builtin_help_and_errors() {
@@ -163,6 +200,16 @@ _i18n_case_builtin_help_and_errors() {
     "taffish English -h/--help" || return 1
   assert_eq "$taffish_zh_short" "$taffish_zh" \
     "taffish Chinese -h/--help" || return 1
+  printf '%s\n' "$taffish_en" | _i18n_assert_top_help_layout taffish en || return 1
+  printf '%s\n' "$taffish_zh" | _i18n_assert_top_help_layout taffish zh || return 1
+  for binary in "$TAF_BIN" "$TAFFISH_BIN"; do
+    version_en=$(env TAFFISH_LANGUAGE=en "$binary" --version) || return 1
+    version_zh=$(env TAFFISH_LANGUAGE=zh "$binary" -v) || return 1
+    assert_eq "$version_en" "$version_zh" 'version aliases and languages' || return 1
+    assert_eq "$(printf '%s\n' "$version_en" | wc -l | tr -d ' ')" 1 \
+      'version remains one line' || return 1
+    assert_not_contains "$version_en" 'https://' 'version has no footer' || return 1
+  done
   assert_eq \
     "$(printf '%s' "$taffish_en" | _i18n_option_tokens)" \
     "$(printf '%s' "$taffish_zh" | _i18n_option_tokens)" \
@@ -186,6 +233,44 @@ _i18n_case_builtin_help_and_errors() {
   assert_contains "$error_zh" "--i18n-unknown" \
     "Chinese error preserves option" || return 1
 
+}
+
+_i18n_case_unicode_stdio_pipes() {
+  dir=$TAFFISH_TEST_TMP_ROOT/i18n-unicode-stdio-pipes
+  user_home=$dir/user-home
+  system_home=$dir/system-home
+  mkdir -p "$user_home" "$system_home"
+
+  env LC_ALL=C LANG=C TAFFISH_LANGUAGE=zh TAFFISH_CONFIG= \
+    TAFFISH_USER_HOME="$user_home" TAFFISH_SYSTEM_HOME="$system_home" \
+    "$TAF_BIN" --help | cat > "$dir/taf-help.txt"
+  assert_contains "$(cat "$dir/taf-help.txt")" "用法：" \
+    "taf Chinese help through stdout pipe" || return 1
+
+  env LC_ALL=C LANG=C TAFFISH_LANGUAGE=zh TAFFISH_CONFIG= \
+    TAFFISH_USER_HOME="$user_home" TAFFISH_SYSTEM_HOME="$system_home" \
+    "$TAFFISH_BIN" --help | cat > "$dir/taffish-help.txt"
+  assert_contains "$(cat "$dir/taffish-help.txt")" "用法：" \
+    "taffish Chinese help through stdout pipe" || return 1
+
+  env LC_ALL=C LANG=C TAFFISH_LANGUAGE=zh TAFFISH_CONFIG= \
+    TAFFISH_USER_HOME="$user_home" TAFFISH_SYSTEM_HOME="$system_home" \
+    "$TAFFISH_MCP_BIN" --help | cat > "$dir/mcp-help.txt"
+  assert_contains "$(cat "$dir/mcp-help.txt")" "用法：" \
+    "taffish-mcp Chinese help through stdout pipe" || return 1
+
+  set +e
+  env LC_ALL=C LANG=C TAFFISH_LANGUAGE=zh TAFFISH_CONFIG= \
+    TAFFISH_USER_HOME="$user_home" TAFFISH_SYSTEM_HOME="$system_home" \
+    "$TAF_BIN" build --unicode-stdio-unknown \
+    > "$dir/error-stdout.txt" 2> "$dir/error-stderr.txt"
+  status=$?
+  set -e
+  [ "$status" -ne 0 ] || harness_fail "localized invalid command succeeded"
+  [ ! -s "$dir/error-stdout.txt" ] || \
+    harness_fail "localized error leaked to stdout"
+  assert_contains "$(cat "$dir/error-stderr.txt")" "未知选项" \
+    "taf Chinese error through stderr descriptor" || return 1
 }
 
 _i18n_case_resolution_priority() {
@@ -490,6 +575,295 @@ EOF_LANGUAGE_CONFIG
     "show path init language" "fish completion exposes language action" || return 1
 }
 
+_i18n_assert_failure_pair() {
+  pair_user_home=$1
+  pair_system_home=$2
+  pair_label=$3
+  pair_stable_token=$4
+  shift 4
+
+  set +e
+  pair_english=$(env TAFFISH_LANGUAGE=en TAFFISH_CONFIG= \
+    TAFFISH_USER_HOME="$pair_user_home" \
+    TAFFISH_SYSTEM_HOME="$pair_system_home" "$@" 2>&1)
+  pair_english_status=$?
+  pair_chinese=$(env TAFFISH_LANGUAGE=zh TAFFISH_CONFIG= \
+    TAFFISH_USER_HOME="$pair_user_home" \
+    TAFFISH_SYSTEM_HOME="$pair_system_home" "$@" 2>&1)
+  pair_chinese_status=$?
+  set -e
+
+  [ "$pair_english_status" -ne 0 ] || \
+    harness_fail "$pair_label English command unexpectedly succeeded"
+  [ "$pair_chinese_status" -ne 0 ] || \
+    harness_fail "$pair_label Chinese command unexpectedly succeeded"
+  assert_eq "$pair_english_status" "$pair_chinese_status" \
+    "$pair_label exit code" || return 1
+  [ "$pair_english" != "$pair_chinese" ] || \
+    harness_fail "$pair_label did not localize its human error"
+  assert_contains "$pair_english" "$pair_stable_token" \
+    "$pair_label English stable token" || return 1
+  assert_contains "$pair_chinese" "$pair_stable_token" \
+    "$pair_label Chinese stable token" || return 1
+}
+
+_i18n_case_runtime_project_and_cli() {
+  dir=$TAFFISH_TEST_TMP_ROOT/i18n-runtime-project
+  user_home=$dir/user-home
+  system_home=$dir/system-home
+  workspace=$dir/workspace
+  empty_dir=$dir/empty
+  mkdir -p "$user_home" "$system_home" "$workspace" "$empty_dir"
+
+  (
+    cd "$workspace" || exit 1
+    new_en=$(env TAFFISH_LANGUAGE=en TAFFISH_CONFIG= \
+      TAFFISH_USER_HOME="$user_home" TAFFISH_SYSTEM_HOME="$system_home" \
+      "$TAF_BIN" new runtime-en --flow) || exit 1
+    new_zh=$(env TAFFISH_LANGUAGE=zh TAFFISH_CONFIG= \
+      TAFFISH_USER_HOME="$user_home" TAFFISH_SYSTEM_HOME="$system_home" \
+      "$TAF_BIN" new runtime-zh --flow) || exit 1
+    assert_contains "$new_en" "created new flow project" \
+      "project new English output" || exit 1
+    assert_contains "$new_zh" "已创建新的 flow 项目" \
+      "project new Chinese output" || exit 1
+
+    cd runtime-en || exit 1
+    check_en=$(env TAFFISH_LANGUAGE=en TAFFISH_CONFIG= \
+      TAFFISH_USER_HOME="$user_home" TAFFISH_SYSTEM_HOME="$system_home" \
+      "$TAF_BIN" check) || exit 1
+    check_zh=$(env TAFFISH_LANGUAGE=zh TAFFISH_CONFIG= \
+      TAFFISH_USER_HOME="$user_home" TAFFISH_SYSTEM_HOME="$system_home" \
+      "$TAF_BIN" check) || exit 1
+    assert_contains "$check_en" "[TAF] project ok: runtime-en" \
+      "project check English output" || exit 1
+    assert_contains "$check_zh" "[TAF] 项目检查通过：runtime-en" \
+      "project check Chinese output" || exit 1
+    assert_contains "$check_en" "runtime-en/" \
+      "project check English stable path" || exit 1
+    assert_contains "$check_zh" "runtime-en/" \
+      "project check Chinese stable path" || exit 1
+
+    compile_en=$(env TAFFISH_LANGUAGE=en TAFFISH_CONFIG= \
+      TAFFISH_USER_HOME="$user_home" TAFFISH_SYSTEM_HOME="$system_home" \
+      "$TAF_BIN" compile) || exit 1
+    compile_zh=$(env TAFFISH_LANGUAGE=zh TAFFISH_CONFIG= \
+      TAFFISH_USER_HOME="$user_home" TAFFISH_SYSTEM_HOME="$system_home" \
+      "$TAF_BIN" compile) || exit 1
+    assert_eq "$compile_en" "$compile_zh" \
+      "project compile shell language invariant" || exit 1
+
+    run_en=$(env TAFFISH_LANGUAGE=en TAFFISH_CONFIG= \
+      TAFFISH_USER_HOME="$user_home" TAFFISH_SYSTEM_HOME="$system_home" \
+      "$TAF_BIN" run) || exit 1
+    run_zh=$(env TAFFISH_LANGUAGE=zh TAFFISH_CONFIG= \
+      TAFFISH_USER_HOME="$user_home" TAFFISH_SYSTEM_HOME="$system_home" \
+      "$TAF_BIN" run) || exit 1
+    assert_eq "$run_en" "$run_zh" \
+      "project app stdout language invariant" || exit 1
+    assert_eq "<flow>[runtime-en: 0.1.0] Hello, World!" "$run_en" \
+      "project app stdout remains raw" || exit 1
+
+    build_en=$(env TAFFISH_LANGUAGE=en TAFFISH_CONFIG= \
+      TAFFISH_USER_HOME="$user_home" TAFFISH_SYSTEM_HOME="$system_home" \
+      "$TAF_BIN" build) || exit 1
+    build_zh=$(env TAFFISH_LANGUAGE=zh TAFFISH_CONFIG= \
+      TAFFISH_USER_HOME="$user_home" TAFFISH_SYSTEM_HOME="$system_home" \
+      "$TAF_BIN" build) || exit 1
+    assert_contains "$build_en" "[TAF] built command:" \
+      "project build English output" || exit 1
+    assert_contains "$build_zh" "[TAF] 命令已是最新：" \
+      "project idempotent build Chinese output" || exit 1
+
+    wrapper=target/taf-runtime-en-v0.1.0-r1
+    assert_executable "$wrapper" || exit 1
+    env TAFFISH_LANGUAGE=en TAFFISH_CONFIG= \
+      TAF_HISTORY_MODE=sync \
+      TAFFISH_USER_HOME="$user_home" TAFFISH_SYSTEM_HOME="$system_home" \
+      "$wrapper" >/dev/null || exit 1
+    history_en=$(env TAFFISH_LANGUAGE=en TAFFISH_CONFIG= \
+      TAFFISH_USER_HOME="$user_home" TAFFISH_SYSTEM_HOME="$system_home" \
+      "$TAF_BIN" history --last 1) || exit 1
+    history_zh=$(env TAFFISH_LANGUAGE=zh TAFFISH_CONFIG= \
+      TAFFISH_USER_HOME="$user_home" TAFFISH_SYSTEM_HOME="$system_home" \
+      "$TAF_BIN" history --last 1) || exit 1
+    assert_contains "$history_en" "[TAF] history" \
+      "history English output" || exit 1
+    assert_contains "$history_zh" "[TAF] 执行历史" \
+      "history Chinese output" || exit 1
+    history_json_en=$(env TAFFISH_LANGUAGE=en TAFFISH_CONFIG= \
+      TAFFISH_USER_HOME="$user_home" TAFFISH_SYSTEM_HOME="$system_home" \
+      "$TAF_BIN" history --last 1 --json) || exit 1
+    history_json_zh=$(env TAFFISH_LANGUAGE=zh TAFFISH_CONFIG= \
+      TAFFISH_USER_HOME="$user_home" TAFFISH_SYSTEM_HOME="$system_home" \
+      "$TAF_BIN" history --last 1 --json) || exit 1
+    assert_eq "$history_json_en" "$history_json_zh" \
+      "history JSON language invariant" || exit 1
+    assert_contains "$history_json_en" "taf-runtime-en-v0.1.0-r1" \
+      "history JSON preserves stable command" || exit 1
+
+    rm src/main.taf
+    _i18n_assert_failure_pair "$user_home" "$system_home" \
+      "project missing main" "runtime-en/src/main.taf" \
+      "$TAF_BIN" check || exit 1
+  ) || return 1
+
+  strict_commands='check build publish update search info install outdated upgrade prune uninstall list which doctor config history'
+  for command in $strict_commands
+  do
+    _i18n_assert_failure_pair "$user_home" "$system_home" \
+      "taf $command parser" "taf $command" \
+      "$TAF_BIN" "$command" --i18n-invalid || return 1
+  done
+  _i18n_assert_failure_pair "$user_home" "$system_home" \
+    "taf new missing name" "taf new" "$TAF_BIN" new || return 1
+  (
+    cd "$empty_dir" || exit 1
+    _i18n_assert_failure_pair "$user_home" "$system_home" \
+      "taf compile missing project" "taffish.toml" \
+      "$TAF_BIN" compile || exit 1
+    _i18n_assert_failure_pair "$user_home" "$system_home" \
+      "taf run missing project" "taffish.toml" \
+      "$TAF_BIN" run || exit 1
+  )
+}
+
+_i18n_case_runtime_hub() {
+  dir=$TAFFISH_TEST_TMP_ROOT/i18n-runtime-hub
+  user_home=$dir/user-home
+  system_home=$dir/system-home
+  mkdir -p "$user_home" "$system_home"
+
+  (
+    export TAFFISH_USER_HOME=$user_home
+    export TAFFISH_SYSTEM_HOME=$system_home
+    _taf_hub_prepare_index_fixture "$dir/fixture" || exit 1
+
+    info_en=$(env TAFFISH_LANGUAGE=en TAFFISH_CONFIG= \
+      "$TAF_BIN" info multi-demo) || exit 1
+    info_zh=$(env TAFFISH_LANGUAGE=zh TAFFISH_CONFIG= \
+      "$TAF_BIN" info multi-demo) || exit 1
+    assert_contains "$info_en" "[TAF] app info: multi-demo" \
+      "Hub info English output" || exit 1
+    assert_contains "$info_zh" "[TAF] 应用信息：multi-demo" \
+      "Hub info Chinese output" || exit 1
+    assert_contains "$info_en" "taf-multi-demo" \
+      "Hub info English stable command" || exit 1
+    assert_contains "$info_zh" "taf-multi-demo" \
+      "Hub info Chinese stable command" || exit 1
+    info_json_en=$(env TAFFISH_LANGUAGE=en TAFFISH_CONFIG= \
+      "$TAF_BIN" info multi-demo --json) || exit 1
+    info_json_zh=$(env TAFFISH_LANGUAGE=zh TAFFISH_CONFIG= \
+      "$TAF_BIN" info multi-demo --json) || exit 1
+    assert_eq "$info_json_en" "$info_json_zh" \
+      "Hub info JSON language invariant" || exit 1
+
+    search_en=$(env TAFFISH_LANGUAGE=en TAFFISH_CONFIG= \
+      "$TAF_BIN" search multi) || exit 1
+    search_zh=$(env TAFFISH_LANGUAGE=zh TAFFISH_CONFIG= \
+      "$TAF_BIN" search multi) || exit 1
+    assert_contains "$search_en" "[TAF] search: multi" \
+      "Hub search English output" || exit 1
+    assert_contains "$search_zh" "[TAF] 搜索：multi" \
+      "Hub search Chinese output" || exit 1
+
+    list_en=$(env TAFFISH_LANGUAGE=en TAFFISH_CONFIG= \
+      "$TAF_BIN" list --online) || exit 1
+    list_zh=$(env TAFFISH_LANGUAGE=zh TAFFISH_CONFIG= \
+      "$TAF_BIN" list --online) || exit 1
+    assert_contains "$list_en" "[TAF] indexed apps" \
+      "Hub list English output" || exit 1
+    assert_contains "$list_zh" "[TAF] 索引中的应用" \
+      "Hub list Chinese output" || exit 1
+
+    _i18n_assert_failure_pair "$user_home" "$system_home" \
+      "Hub missing target" "missing-i18n-app" \
+      "$TAF_BIN" info missing-i18n-app || exit 1
+
+    source_index=$dir/source-index.json
+    cp "$user_home/index/current.json" "$source_index"
+    update_en_home=$dir/update-en-home
+    update_zh_home=$dir/update-zh-home
+    mkdir -p "$update_en_home" "$update_zh_home"
+    update_en=$(env TAFFISH_LANGUAGE=en TAFFISH_CONFIG= \
+      TAFFISH_USER_HOME="$update_en_home" \
+      TAFFISH_SYSTEM_HOME="$system_home" \
+      "$TAF_BIN" update --url "$source_index") || exit 1
+    update_zh=$(env TAFFISH_LANGUAGE=zh TAFFISH_CONFIG= \
+      TAFFISH_USER_HOME="$update_zh_home" \
+      TAFFISH_SYSTEM_HOME="$system_home" \
+      "$TAF_BIN" update --url "$source_index") || exit 1
+    assert_contains "$update_en" "[TAF] updated TAFFISH index" \
+      "Hub update English output" || exit 1
+    assert_contains "$update_zh" "[TAF] 已更新 TAFFISH 索引" \
+      "Hub update Chinese output" || exit 1
+    cmp "$update_en_home/index/current.json" \
+      "$update_zh_home/index/current.json" >/dev/null || {
+      printf 'localized Hub update changed current index bytes\n' >&2
+      exit 1
+    }
+  )
+}
+
+_i18n_case_sparse_runtime_locales() {
+  dir=$TAFFISH_TEST_TMP_ROOT/i18n-sparse-runtime
+  user_home=$dir/user-home
+  system_home=$dir/system-home
+  workspace=$dir/workspace
+  mkdir -p \
+    "$user_home/share/locales/es/help" \
+    "$user_home/share/locales/pt" \
+    "$user_home/share/locales/fr" \
+    "$system_home" "$workspace"
+  printf 'ES HELP ONLY\n' > "$user_home/share/locales/es/help/taf.txt"
+  cat > "$user_home/share/locales/pt/messages.json" <<'EOF_PT_MESSAGES'
+{"taf.project.check.header":"PT PROJECT {name}"}
+EOF_PT_MESSAGES
+  cat > "$user_home/share/locales/fr/messages.json" <<'EOF_FR_MESSAGES'
+{"taf.project.check.header":"BAD {wrong}","taf.project.check.field.root":"RACINE"}
+EOF_FR_MESSAGES
+
+  (
+    cd "$workspace" || exit 1
+    env TAFFISH_LANGUAGE=en TAFFISH_CONFIG= \
+      TAFFISH_USER_HOME="$user_home" TAFFISH_SYSTEM_HOME="$system_home" \
+      "$TAF_BIN" new sparse-flow --flow >/dev/null || exit 1
+    cd sparse-flow || exit 1
+
+    help_only=$(env TAFFISH_LANGUAGE=es TAFFISH_CONFIG= \
+      TAFFISH_USER_HOME="$user_home" TAFFISH_SYSTEM_HOME="$system_home" \
+      "$TAF_BIN" --help) || exit 1
+    help_only_runtime=$(env TAFFISH_LANGUAGE=es TAFFISH_CONFIG= \
+      TAFFISH_USER_HOME="$user_home" TAFFISH_SYSTEM_HOME="$system_home" \
+      "$TAF_BIN" check) || exit 1
+    assert_contains "$help_only" "ES HELP ONLY" \
+      "help-only locale uses custom help" || exit 1
+    assert_contains "$help_only_runtime" "[TAF] project ok: sparse-flow" \
+      "help-only locale runtime falls back to English" || exit 1
+
+    messages_only_help=$(env TAFFISH_LANGUAGE=pt TAFFISH_CONFIG= \
+      TAFFISH_USER_HOME="$user_home" TAFFISH_SYSTEM_HOME="$system_home" \
+      "$TAF_BIN" --help) || exit 1
+    messages_only_runtime=$(env TAFFISH_LANGUAGE=pt TAFFISH_CONFIG= \
+      TAFFISH_USER_HOME="$user_home" TAFFISH_SYSTEM_HOME="$system_home" \
+      "$TAF_BIN" check) || exit 1
+    assert_contains "$messages_only_help" "Usage:" \
+      "messages-only locale help falls back to English" || exit 1
+    assert_contains "$messages_only_runtime" "PT PROJECT sparse-flow" \
+      "messages-only locale uses runtime catalog" || exit 1
+
+    partial=$(env TAFFISH_LANGUAGE=fr TAFFISH_CONFIG= \
+      TAFFISH_USER_HOME="$user_home" TAFFISH_SYSTEM_HOME="$system_home" \
+      "$TAF_BIN" check) || exit 1
+    assert_contains "$partial" "[TAF] project ok: sparse-flow" \
+      "bad runtime placeholder falls back for one key" || exit 1
+    assert_contains "$partial" "RACINE" \
+      "valid sibling runtime key remains active" || exit 1
+    assert_not_contains "$partial" "BAD" \
+      "bad placeholder translation is rejected" || exit 1
+  )
+}
+
 _i18n_case_compiler_invariant() {
   dir=$TAFFISH_TEST_TMP_ROOT/i18n-compiler
   user_home=$dir/user-home
@@ -589,10 +963,14 @@ EOF_FAKE_BACKEND
 
 run_i18n_conformance() {
   run_case "i18n/builtin-help-errors" _i18n_case_builtin_help_and_errors
+  run_case "i18n/unicode-stdio-pipes" _i18n_case_unicode_stdio_pipes
   run_case "i18n/resolution-priority" _i18n_case_resolution_priority
   run_case "i18n/external-locale-safety" _i18n_case_external_locale_safety
   run_case "i18n/human-config-doctor" _i18n_case_human_config_and_doctor
   run_case "i18n/language-management" _i18n_case_language_management
+  run_case "i18n/runtime-project-cli" _i18n_case_runtime_project_and_cli
+  run_case "i18n/runtime-hub" _i18n_case_runtime_hub
+  run_case "i18n/sparse-runtime-locales" _i18n_case_sparse_runtime_locales
   run_case "i18n/compiler-invariant" _i18n_case_compiler_invariant
   run_case "i18n/machine-interfaces-invariant" \
     _i18n_case_machine_interfaces_invariant

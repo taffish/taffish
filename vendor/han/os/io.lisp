@@ -39,7 +39,9 @@
 	         (pathnamep input))
 	     (let ((file (han.host:file-exists-p input)))
 	       (if file
-	           (with-open-file (in file)
+	           (with-open-file (in file
+	                               :element-type 'character
+	                               :external-format :utf-8)
 	             (load-lines in))
            (error "INPUT file does not exist: ~S" input))))
     (t

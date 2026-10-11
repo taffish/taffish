@@ -4,6 +4,17 @@
 ;;;; model.lisp
 ;;;; ============================================================
 
+(defun %format-character-string (control &rest arguments)
+  "Format into a full CHARACTER string on every supported Lisp host."
+  (han.host:with-character-output-to-string (out)
+    (apply #'format out control arguments)))
+
+(defun %character-list-string (characters)
+  "Copy CHARACTERS into a full CHARACTER string without host narrowing."
+  (han.host:with-character-output-to-string (out)
+    (dolist (character characters)
+      (write-char character out))))
+
 (defstruct taf-token
   raw-string  ;; 原始文本，例如 "--threads=8"、"::name::"、"<docker:...>"
   value       ;; 规范化后的值，第一版可先和 raw-string 一致，后续再按 kind 分化

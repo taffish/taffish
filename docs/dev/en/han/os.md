@@ -18,6 +18,10 @@
 
 `load-string` shadows the CL concept of `load-string`, so the package explicitly shadows it.
 
+Path inputs are opened explicitly as UTF-8 so index, config, locale-pack, and
+other text files decode consistently on SBCL and LispWorks. Stream inputs keep
+the external format already chosen by their owner.
+
 ## Environment And Paths
 
 | API | Role |
@@ -52,4 +56,3 @@ When changing `han.os`, check:
 3. curl download in `taf-core/hub/update.lisp`.
 4. executable checks in `taf-core/system/doctor.lisp`.
 5. Do not change the return shape of `run-shell-command` casually.
-

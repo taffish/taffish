@@ -1,5 +1,37 @@
 (in-package :han.test)
 
+(han.test:deftest test-taf-cli-entry-startup-error-boundary ()
+  (dolist (stage '(:io :language))
+    (dolist (broken-stderr '(nil t))
+      (let* ((symbols '(han.host:configure-runtime-io han.host:quit
+                        taffish.i18n:call-with-resolved-language))
+             (originals (mapcar #'symbol-function symbols))
+             (exit-tag (gensym "CLI-EXIT"))
+             (*standard-output* (make-string-output-stream))
+             (*error-output* (if broken-stderr
+                                 (make-string-input-stream "")
+                                 (make-string-output-stream))))
+        (unwind-protect
+             (progn
+               (setf (symbol-function 'han.host:configure-runtime-io)
+                     (lambda ()
+                       (when (eq stage :io) (error "startup test")))
+                     (symbol-function 'taffish.i18n:call-with-resolved-language)
+                     (lambda (function &rest options)
+                       (declare (ignore function options))
+                       (error "startup test"))
+                     (symbol-function 'han.host:quit)
+                     (lambda (&optional (code 0)) (throw exit-tag code)))
+               (han.test:check-equal 1 (catch exit-tag (taf.cli:main '("--help"))))
+               (han.test:check-equal "" (get-output-stream-string *standard-output*))
+               (unless broken-stderr
+                 (han.test:check-true
+                  (search "[TAF-ERROR] startup test"
+                          (get-output-stream-string *error-output*)))))
+          (loop for symbol in symbols for original in originals
+                do (setf (symbol-function symbol) original)))))))
+
+
 ;;;; ============================================================
 ;;;; taf.cli tests
 ;;;; ============================================================
@@ -47,9 +79,9 @@
 (deftest test-taf-cli-version-string-basic ()
   (check-equal (stringp taf.cli:*taf-version*) t)
   (check-equal (%taf-cli-string-contains-p taf.cli:*taf-version* "taf") t)
-  (check-equal (%taf-cli-string-contains-p taf.cli:*taf-version* "0.10.1") t)
+  (check-equal (%taf-cli-string-contains-p taf.cli:*taf-version* "0.11.0") t)
   (check-equal taf.cli:*taf-version*
-               "taf         0.10.1"))
+               "taf         0.11.0"))
 
 (deftest test-taf-cli-help-string-basic ()
   (let ((help-string (taf.cli::%get-taf-help-string)))
@@ -67,11 +99,37 @@
     (check-false (%taf-cli-string-contains-p help-string
                                              "outdated [OPTIONS]"))
     (check-equal (%taf-cli-string-contains-p help-string
-                                             "config language auto")
+                                             "config language zh")
                  t)
     (check-equal (%taf-cli-string-contains-p help-string
                                              "host locale [default]")
                  t)))
+
+(deftest test-taf-cli-top-help-navigation-and-contacts ()
+  (dolist (language '("en" "zh"))
+    (taffish.i18n:with-language (language)
+      (let ((help (taf.cli::%get-taf-help-string)))
+        (dolist (command '("new" "check" "compile" "build" "run" "publish"
+                           "update" "search" "info" "install" "outdated"
+                           "upgrade" "prune" "uninstall" "list" "which"
+                           "doctor" "config" "history"))
+          (check-true (search (format nil "~%  ~A " command) help))
+          (check-false (search "support@taffish.com"
+                               (taf.cli::%get-taf-command-help-string command))))
+        (dolist (text '("taf <COMMAND> [-h | --help]" "taf help [COMMAND]"
+                        "taf update" "taf install fastqc" "taf help install"
+                        "taf config language" "en" "auto"
+                        "https://taffish.com" "https://taffish.github.io/"
+                        "support@taffish.com"))
+          (check-true (search text help)))
+        (check-true (< (search "taf config language" help)
+                       (search "https://taffish.com" help)))
+        (check-true (search (if (string= language "en")
+                               "read-only by default" "默认只读") help))
+        (check-true (search (if (string= language "en")
+                               "without upgrading apps" "不升级应用") help))
+        (check-true (search (if (string= language "en")
+                               "resume an interrupted publish" "继续中断的发布") help))))))
 
 (deftest test-taf-cli-command-help-string-basic ()
   (check-equal
@@ -148,6 +206,95 @@
     (check-true (search "未知选项" chinese :test #'char=))
     (check-true (search "--not-an-option" english :test #'char=))
     (check-true (search "--not-an-option" chinese :test #'char=))))
+
+(deftest test-taf-cli-strict-command-errors-are-localized ()
+  ;; compile and run intentionally forward arbitrary arguments to the TAF
+  ;; program, so they have no equivalent unknown-option parser failure.
+  (dolist
+      (case
+       (list
+        (list "new"
+              (lambda () (taf.cli::run-taf-new nil))
+              "taf new")
+        (list "check"
+              (lambda () (taf.cli::run-taf-check '("--i18n-invalid")))
+              "taf check")
+        (list "build"
+              (lambda ()
+                (taf.cli::%parse-taf-build-args '("--i18n-invalid")))
+              "--i18n-invalid")
+        (list "publish"
+              (lambda ()
+                (taf.cli::%parse-taf-publish-args '("--i18n-invalid")))
+              "--i18n-invalid")
+        (list "update"
+              (lambda ()
+                (taf.cli::%parse-taf-update-args '("--i18n-invalid")))
+              "--i18n-invalid")
+        (list "search"
+              (lambda ()
+                (taf.cli::%parse-taf-search-args '("--i18n-invalid")))
+              "--i18n-invalid")
+        (list "info"
+              (lambda ()
+                (taf.cli::%parse-taf-info-args '("--i18n-invalid")))
+              "--i18n-invalid")
+        (list "install"
+              (lambda ()
+                (taf.cli::%parse-taf-install-args '("--i18n-invalid")))
+              "--i18n-invalid")
+        (list "outdated"
+              (lambda ()
+                (taf.cli::%parse-taf-outdated-args '("--i18n-invalid")))
+              "--i18n-invalid")
+        (list "upgrade"
+              (lambda ()
+                (taf.cli::%parse-taf-upgrade-args '("--i18n-invalid")))
+              "--i18n-invalid")
+        (list "prune"
+              (lambda ()
+                (taf.cli::%parse-taf-prune-args '("--i18n-invalid")))
+              "--i18n-invalid")
+        (list "uninstall"
+              (lambda ()
+                (taf.cli::%parse-taf-uninstall-args '("--i18n-invalid")))
+              "--i18n-invalid")
+        (list "list"
+              (lambda ()
+                (taf.cli::%parse-taf-list-args '("--i18n-invalid")))
+              "--i18n-invalid")
+        (list "which"
+              (lambda ()
+                (taf.cli::%parse-taf-which-args '("--i18n-invalid")))
+              "--i18n-invalid")
+        (list "doctor"
+              (lambda ()
+                (taf.cli::%parse-taf-doctor-args '("--i18n-invalid")))
+              "--i18n-invalid")
+        (list "config"
+              (lambda ()
+                (taf.cli::%parse-taf-config-args '("--i18n-invalid")))
+              "--i18n-invalid")
+        (list "history"
+              (lambda ()
+                (taf.cli::%parse-taf-history-args '("--i18n-invalid")))
+              "--i18n-invalid")))
+    (destructuring-bind (command thunk stable-token) case
+      (let ((english
+              (taffish.i18n:with-language ("en")
+                (%taf-cli-condition-string thunk)))
+            (chinese
+              (taffish.i18n:with-language ("zh")
+                (%taf-cli-condition-string thunk))))
+        (check-true english)
+        (check-true chinese)
+        (check-false (string= english chinese))
+        (check-true (search stable-token english :test #'char=))
+        (check-true (search stable-token chinese :test #'char=))
+        (check-true (search (format nil "taf ~A" command) english
+                            :test #'char=))
+        (check-true (search (format nil "taf ~A" command) chinese
+                            :test #'char=))))))
 
 (deftest test-taf-cli-new-help-string-basic ()
   (let ((help-string (taf.cli::%get-taf-new-help-string)))
@@ -270,6 +417,18 @@
                                              "TAFFISH_CONTAINER_BACKEND")
                  t)))
 
+(deftest test-taf-cli-run-input-uses-host-terminal-state ()
+  (let ((original (symbol-function 'han.host:standard-input-terminal-p)))
+    (unwind-protect
+         (progn
+           (setf (symbol-function 'han.host:standard-input-terminal-p)
+                 (lambda () t))
+           (check-equal (taf.cli::%taf-run-input) nil)
+           (setf (symbol-function 'han.host:standard-input-terminal-p)
+                 (lambda () nil))
+           (check-equal (taf.cli::%taf-run-input) t))
+      (setf (symbol-function 'han.host:standard-input-terminal-p) original))))
+
 (deftest test-taf-cli-parse-taf-run-args-default ()
   (multiple-value-bind (mode args)
       (taf.cli::%parse-taf-run-args nil)
@@ -333,6 +492,12 @@
                                              "already created by")
                  t)
     (check-equal (%taf-cli-string-contains-p help-string
+                                             "valid artifacts are not rewritten")
+                 t)
+    (check-equal (%taf-cli-string-contains-p help-string
+                                             "skips rebuilding")
+                 t)
+    (check-equal (%taf-cli-string-contains-p help-string
                                              "successful no-op")
                  t)
     (check-equal (%taf-cli-string-contains-p help-string "conflicting commits") t)
@@ -345,6 +510,12 @@
                    t)
       (check-equal (%taf-cli-string-contains-p chinese
                                                "已由 --create-repo 创建")
+                   t)
+      (check-equal (%taf-cli-string-contains-p chinese
+                                               "不会重写文件")
+                   t)
+      (check-equal (%taf-cli-string-contains-p chinese
+                                               "跳过重建")
                    t)
       (check-equal (%taf-cli-string-contains-p chinese
                                                "不会重复执行发布修改")
@@ -861,6 +1032,8 @@
 
 (deftest test-taf-cli-prune-help-string-basic ()
   (let ((help-string (taf.cli::%get-taf-prune-help-string)))
+    (check-true (search "index latest" help-string))
+    (check-true (search "unknown-source" help-string))
     (check-equal (%taf-cli-string-contains-p help-string "taf prune") t)
     (check-equal (%taf-cli-string-contains-p help-string "[-a | --all]") t)
     (check-equal (%taf-cli-string-contains-p help-string "--yes") t)
@@ -1131,6 +1304,11 @@
    t))
 
 (deftest test-taf-cli-doctor-help-string-basic ()
+  (taffish.i18n:with-language ("zh")
+    (let ((text (taf.cli::%get-taf-doctor-help-string)))
+      (check-true (search "检查的依据和处理建议" text))
+      (check-equal nil (search "evidence" text))
+      (check-equal nil (search "remediation" text))))
   (let ((help-string (taf.cli::%get-taf-doctor-help-string)))
     (check-equal (%taf-cli-string-contains-p help-string "taf doctor [-h | --help]") t)
     (check-equal (%taf-cli-string-contains-p help-string "-i, --init") t)
@@ -1476,3 +1654,80 @@
        '("--record-exec" "--status" "success" "--command" "taf-demo"
          "--exit-code" "-1"))))
    t))
+
+(deftest test-taf-cli-publish-no-latest-policy ()
+  (multiple-value-bind (mode dry-run build-p channel prompt-p create-repo-p
+                       visibility release-p lock-repo-p)
+      (taf.cli::%parse-taf-publish-args '("--no-latest" "-y" "-b" "-r"))
+    (check-equal :publish mode)
+    (check-false dry-run)
+    (check-true build-p)
+    (check-equal :no-latest channel)
+    (check-false prompt-p)
+    (check-false create-repo-p)
+    (check-equal :public visibility)
+    (check-true release-p)
+    (check-true lock-repo-p))
+  (dolist (args '(("--latest" "--no-latest") ("--no-latest" "--latest")
+                  ("--pre" "--no-latest") ("--no-latest" "--pre")
+                  ("--latest" "--pre") ("--pre" "--latest")))
+    (check-true (%taf-cli-signal-error-p
+                 (lambda () (taf.cli::%parse-taf-publish-args args))))))
+
+(deftest test-taf-cli-publish-policy-help-bilingual ()
+  (dolist (language '("en" "zh"))
+    (taffish.i18n:with-language (language)
+      (let ((help (taf.cli::%get-taf-publish-help-string)))
+        (dolist (option '("--latest" "--pre" "--no-latest" "--release" "--yes"))
+          (check-true (search option help)))
+        (check-false (search "Require a version newer" help))
+        (check-false (search "要求版本比远端最新版本更新" help))))))
+
+(deftest test-taf-cli-doctor-specialized-parsing ()
+  (let ((values (multiple-value-list
+                 (taf.cli::%parse-taf-doctor-args '("hub" "abricate" "--system" "--json")))))
+    (check-equal :system (third values))
+    (check-equal :hub (eighth values))
+    (check-equal '("abricate") (ninth values)))
+  (check-equal :index (nth-value 7 (taf.cli::%parse-taf-doctor-args '("--user" "index"))))
+  (dolist (args '(("hub" "--init") ("index" "--shell" "auto") ("index" "app") ("hub" "--repair")))
+    (check-true (%taf-cli-signal-error-p (lambda () (taf.cli::%parse-taf-doctor-args args))))))
+
+(deftest test-taf-cli-all-installed-repair-options ()
+  (dolist (extra '(nil ("--yes" "--system") ("--json" "--tools")
+                   ("--dry-run" "--flows") ("--kind" "all")))
+    (let ((values (multiple-value-list
+                   (taf.cli::%parse-taf-install-args
+                    (append '("--all-installed" "--repair") extra)))))
+      (check-equal :install-all (first values))
+      (check-false (nth 9 values))
+      (check-true (nth 14 values))
+      (check-true (nth 15 values))))
+  (check-false (nth-value 15 (taf.cli::%parse-taf-install-args '("--all" "--repair"))))
+  (dolist (args '(("--all-installed") ("--all-installed" "--yes")
+                  ("--all-installed" "--repair" "--all")
+                  ("--all-installed" "--repair" "demo")
+                  ("--all-installed" "--repair" "--force")
+                  ("--all-installed" "--repair" "--from" ".")
+                  ("--all-installed" "--repair" "--prune-old")
+                  ("--all-installed" "--repair" "--yes" "--dry-run")))
+    (check-true (%taf-cli-signal-error-p (lambda () (taf.cli::%parse-taf-install-args args)))))
+  (dolist (language '("en" "zh"))
+    (taffish.i18n:with-language (language)
+      (check-true (search "--all-installed" (taf.cli::%get-taf-install-help-string))))))
+
+(deftest test-taf-cli-install-repair-options-and-compatibility ()
+  (dolist (args '(("demo" "--repair") ("--repair" "--all")
+                  ("--all" "--repair" "--yes" "--system")
+                  ("--all" "--tools" "--repair" "--json")
+                  ("demo" "1-r1" "--repair" "--dry-run")))
+    (check-true (nth-value 14 (taf.cli::%parse-taf-install-args args))))
+  (check-false (nth-value 14 (taf.cli::%parse-taf-install-args '("demo"))))
+  (dolist (args '(("demo" "--repair" "--force") ("--repair" "--from" ".")
+                  ("--all" "--repair" "--prune-old") ("demo" "--repair" "--yes")))
+    (check-true (%taf-cli-signal-error-p (lambda () (taf.cli::%parse-taf-install-args args)))))
+  (dolist (language '("en" "zh"))
+    (taffish.i18n:with-language (language)
+      (check-true (search "--repair" (taf.cli::%get-taf-install-help-string)))
+      (check-true (search "index.latest" (taf.cli::%get-taf-install-help-string)))
+      (check-true (search "stderr" (taf.cli::%get-taf-doctor-help-string))))))

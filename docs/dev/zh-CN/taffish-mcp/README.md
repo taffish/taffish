@@ -22,9 +22,23 @@
 MCP tool/resource/prompt 名、description、schema、结构化结果和面向 AI 的 help 始终保持
 稳定英文机器接口。
 
+## 进程错误与中断
+
+server 已处理的请求级失败继续返回 JSON-RPC error 或 tool error result，不会因此自动
+终止 session。逃逸出 server 的致命启动或传输错误使用 `[TAFFISH-MCP-ERROR]` 前缀
+写入 stderr，并以状态码 1 退出。报告无法写出时仍以失败退出，不向 stdout 发送备用文本。
+
+外部中断与请求错误不同。SBCL 的 SIGINT 使用简短 stderr 诊断并退出 1；LispWorks
+保留原生的 `<executable> : Interrupted - quitting` 固定 stdout 提示并退出 1，这是正常
+protocol-only stdout 的已知例外。全局信号处理器和 SIGTERM 行为不变。边界范围及限制见
+[han.host](../han/host.md)。
+
 ## 安全边界
 
-MCP server 暴露的是偏只读和偏编译的能力。它有意不暴露：
+MCP server 包含偏只读和偏编译的能力，但不是全部只读。既有 `taffish_update_index`、
+`taffish_create_project`、`taffish_build_project` 会写本地文件；`taffish_install_app`
+和 `taffish_uninstall_app` 默认 dry-run，但可按请求执行变更。这些既有能力不变。
+它有意不暴露：
 
 1. `taf run`。
 2. `taf publish`。
@@ -42,11 +56,35 @@ backend probe 的 additive diagnostic schema。它的 input schema 明确不包�
 init、fix、force 或 repair 操作，也不会修改配置或权限、启动服务、拉取镜像或
 运行容器。
 
+可选 `check` 为 `environment`（默认）、`index` 或 `hub`。
+`targets: ["APP", "taf-APP-v1.4.0-r1"]` 仅与 `check: "hub"` 搭配使用。
+index/hub 检查完全离线，不探测后端。即使 `exit_code` 为 1，返回诊断结果仍表示
+工具调用成功；应读取 `diagnostic_status`、每项 `inspection.state` 和问题代码，
+不能只检查 `isError`。参数无效仍返回工具错误。不新增工具名或自动修复能力。
+旧 manifest 缺失只是未验证证据，不等于损坏；不安全链接/未知格式保持 unknown。
+人类语言配置不会翻译机器字段。
+`hub_command` 是无版本命令入口的独立警告，不代表对应 `hub_installation`
+的产物损坏。应分别读取两类检查，不把缺少证据解释成正常或损坏。
+
+默认人类 Hub 摘要不限制 MCP 的证据：结构化检查和 issues 完整保留，机器字段与类型稳定。
+共享只读扫描使用批量探测加速，不引入持久验证缓存或减少摘要校验；MCP 不输出人类 TTY/
+日志进度。CLI/core 的 `install --repair` 刻意不暴露给 MCP：不新增 repair tool、参数或
+执行入口，既有 install tool 也不是 repair 入口；这不移除既有 MCP 写操作。
+
 Package 维护工具以 planner 为核心。`taffish_check_outdated`、
 `taffish_plan_install_all`、`taffish_plan_upgrade` 和 `taffish_plan_prune`
 调用的仍然是 CLI 使用的 `taf-core` 维护 API，但在 MCP 中始终保持 dry-run
 语义。它们可以读取本地 index 和 install metadata，但不能安装、升级、清理、
 删除文件或运行容器。
+
+这些 planner 以 index.latest 为在线目标，使用统一版本比较器判断本地优先级，
+包括混合数字后缀；不会自动降级。prune 计划要求同源 latest 已安装且验证有效，
+缺少目标或受到保护的版本不会进入删除列表。工具名称、参数 schema 与 dry-run
+安全边界保持不变。
+
+增量 `validation`/`validations` 字段将文件证据与版本状态分开。
+旧的未验证安装不阻断普通计划；选中安装为 invalid/unknown 时汇总明确的处理建议，
+在写入型计划应用前阻断。prune 保护包含未验证证据的整个包。
 
 对于暴露 `containerBackend` 的 compile 工具，有效 backend 的优先级是：
 
@@ -131,4 +169,13 @@ Resources 是 AI 在选择工具前可以读取的参考材料，应该保持简
 4. 返回 JSON 是否保持数组为数组、对象为对象。
 5. 错误结果是否有足够结构，方便 AI 客户端处理。
 6. resources/prompts 是否说明了推荐安全流程，但不过度占用上下文。
-7. 如果它计划一个有副作用的 CLI 操作，MCP 版本是否仍然只做 dry-run。
+7. 维护 planner 是否仍为 dry-run，既有写工具是否保留显式控制，repair 是否仍未暴露。
+
+## 人类命令状态提示
+
+CLI 阶段提示不进入 MCP stdout 或 stderr。工具保留已有静默 core 调用及结果 schema，
+不新增进度工具或通知。人类显示合同见[命令状态与进度](../taf-core/command-progress.md)。
+
+CLI 的 `taf install --all-installed --repair` 单独预览本地全部已安装版本的修复；
+它不是 MCP 工具或参数，不扩张 AI 写权限。MCP 维护计划继续使用 index.latest 语义。
+doctor 保持只读，人类摘要的调整不裁剪其完整结构化诊断。

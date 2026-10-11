@@ -34,6 +34,7 @@ for the local implementation.
 ## Table of Contents
 
 - [TAFFISH Ecosystem](#taffish-ecosystem)
+- [How TAFFISH Works](#how-taffish-works)
 - [Supported Platforms](#supported-platforms)
 - [Quick Install](#quick-install)
   - [Standard Install](#standard-install)
@@ -46,6 +47,7 @@ for the local implementation.
   - [Linux Dependencies](#linux-dependencies)
 - [Install Paths](#install-paths)
 - [Runtime Config and Mirrors](#runtime-config-and-mirrors)
+  - [Human CLI Language](#human-cli-language)
 - [Installer Options](#installer-options)
 - [Upgrade Or Remove TAFFISH](#upgrade-or-remove-taffish)
 - [Local or Offline Install](#local-or-offline-install)
@@ -91,6 +93,32 @@ stays close to the source code and records implementation notes, specifications,
 architecture decisions, and release engineering details. The separate
 `taffish/taffish-docs` repository is intended for broader public documentation:
 quick starts, tutorials, app-author guides, and user-facing ecosystem material.
+
+## How TAFFISH Works
+
+TAFFISH has three layers that can be used independently:
+
+1. A `.taf` program describes a shell command, its parameter contract, and,
+   when needed, the container image and runtime arguments. `taffish` validates
+   this source and compiles it to POSIX shell; it does not execute the generated
+   shell by itself.
+2. A taf-app packages a `.taf` program with `taffish.toml`, documentation, and
+   a fixed `version` plus `release`. Apps may wrap one command-line tool or
+   compose several apps into a lightweight flow.
+3. `taf` manages app projects and consumes the static Hub index. `taf install`
+   installs app source and a small shell wrapper into user or system scope. A
+   versioned command such as `taf-fastqc-v0.12.1-r1` identifies an exact app
+   release; the unversioned `taf-fastqc` alias selects the newest version
+   installed in that scope.
+
+Installing a containerized app does not immediately download its container
+image. On the first invocation, the generated wrapper selects Docker, Podman,
+or Apptainer and lets that backend obtain the image. Later invocations reuse
+the backend's local image/cache. This keeps package installation lightweight
+while preserving a versioned command interface.
+
+`taffish-mcp` exposes conservative inspection and compilation operations to AI
+clients. It does not expose project execution, image building, or publishing.
 
 ## Supported Platforms
 
@@ -138,6 +166,9 @@ curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/instal
 
 If a shared server uses Apptainer, system-installed apps are visible to all
 users but first-run SIF image caching still needs a writable image directory.
+The ordinary `--system` install keeps the SIF directory administrator-managed;
+it does not make it writable by every user. Add `--shared-sif-cache` only when
+the site intentionally accepts a sticky shared cache on a trusted host.
 See [Apptainer shared SIF cache](#apptainer-shared-sif-cache-for-system-installs)
 before deploying TAFFISH for multiple users.
 
@@ -145,8 +176,13 @@ Pinned version install. The installer may come from `main`, but downloaded
 files are pinned to the selected git tag:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sh -s -- --version 0.10.1 --user
+curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sh -s -- --version 0.11.0 --user
 ```
+
+Official installs default to `--verify auto`: selected binaries must match the
+tag's `SHA256SUMS`, and the signed manifest is also checked when GPG tooling is
+available. Preview resolved paths, policy, and verification without network or
+writes by downloading the installer and running it with `--dry-run`.
 
 ### For Users in China
 
@@ -181,8 +217,11 @@ If the server uses Apptainer, also review
 Pinned version install:
 
 ```sh
-curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffish.gitee.sh | sh -s -- --version 0.10.1 --user
+curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffish.gitee.sh | sh -s -- --version 0.11.0 --user
 ```
+
+The Gitee installer applies the same payload-verification and transactional
+installation rules as the GitHub installer; only provider defaults differ.
 
 To force the installer to replace an existing config with the Gitee/China
 profile, add `--force-config`:
@@ -254,6 +293,13 @@ taf list --user
 taf-fastqc -- --help
 ```
 
+The first four commands update the local package index, find an app, install
+its source/wrapper, and list the resulting installation. In the final command,
+the first `--` ends wrapper-option parsing, so `--help` is forwarded to the
+wrapped application. A containerized app may download its image on this first
+invocation; install at least one supported backend and use
+`taf doctor --user --verbose` if backend selection fails.
+
 Shared-server administrator workflow:
 
 ```sh
@@ -276,7 +322,14 @@ deployments, and Apptainer cache policies.
 The installer needs standard POSIX userland tools:
 
 ```text
-sh, uname, tar, mktemp, cp, chmod, mkdir, find, dirname
+sh, uname, tar, mktemp, cp, mv, rm, chmod, mkdir, find, dirname,
+awk, sed, grep, tr, stat, id
+```
+
+Official payload verification additionally requires one SHA256 implementation:
+
+```text
+sha256sum or shasum
 ```
 
 For online installation it also needs one downloader:
@@ -284,6 +337,9 @@ For online installation it also needs one downloader:
 ```text
 curl or wget
 ```
+
+`gpg` and `gpgv` are optional in default `--verify auto` mode and enable signed
+manifest verification. Both are required when `--verify gpg` is selected.
 
 `taf update` downloads the TAFFISH index from GitHub by default. In networks
 where GitHub raw content is blocked or unstable, installation can still finish,
@@ -403,8 +459,8 @@ curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/instal
 
 ## Runtime Config and Mirrors
 
-Current TAFFISH is `0.10.1`. Runtime config support was introduced in `0.2.0`
-to provide stable mirror/custom source settings. The default config paths are:
+TAFFISH runtime configuration controls package-index locations, source URL
+rewrites, and the preferred human CLI language. The default config paths are:
 
 ```text
 user   = ~/.local/share/taffish/config.toml
@@ -453,7 +509,15 @@ config override. System scope reads the system config but not the user config.
 
 ### Human CLI language
 
-TAFFISH embeds complete English (`en`) and Chinese (`zh`) help catalogs.
+Use `taf --help` for the command overview and `taf help <command>` (or
+`taf <command> -h`) for its options. `taffish --help` explains compilation input,
+container settings, and examples; it does not run the generated shell.
+Both top-level help pages end with the website, Hub, and support contact.
+
+TAFFISH embeds English (`en`) and Chinese (`zh`) catalogs for CLI help and
+`taf` human-readable status, diagnostic, and error output.
+Neither language requires an extra download. The standalone installer uses
+English messages; choosing GitHub or Gitee changes sources, not the CLI language.
 For a new installation with no saved language preference, the human CLI uses
 `auto`: a recognized host locale selects its language, while an unavailable,
 unset, `C`, or `POSIX` locale falls back to English. Inspect the configured
@@ -493,15 +557,25 @@ built-in English fallback. Save `en` or `zh` when deterministic human output
 is required regardless of host locale. External locale packs are an optional
 advanced feature. Valid packs discovered under user/system
 `share/locales/<locale>/` are listed by `taf config language`; an optional
-`example.txt` supplies the one-line sample shown beside a language. Invalid or
-incomplete packs are not selectable and runtime lookup safely falls back to
-English.
+`example.txt` supplies the one-line sample shown beside a language. A pack may
+provide only help files, only `messages.json`, or any subset of either. Missing,
+malformed, or placeholder-incompatible entries fall back independently through
+the exact locale, its base language, and built-in English; one bad entry does
+not disable the rest of the pack. The language is resolved once for each CLI
+invocation, so one command does not switch languages halfway through its
+output.
 
-Localization only affects human-readable CLI help, common top-level errors,
-config output, and doctor diagnostics. This includes `taffish-mcp -h`, but not
-the MCP stdio protocol. Commands/options, generated shell, JSON schemas,
-history/index/config keys, and MCP tools/resources/prompts remain stable
-English machine interfaces. See the
+An external help file replaces that help page as a whole. Its author maintains
+the command descriptions and contact links; built-in help updates are not
+automatically appended to custom pages.
+
+Localization covers human-readable CLI help plus `taf` project, Hub, package,
+config, doctor, and history presentation. This includes parser and business
+diagnostics owned by those commands and `taffish-mcp -h`, but not the MCP stdio
+protocol. Commands/options, generated shell, JSON schemas and values,
+history/index/config data, MCP tools/resources/prompts/results, taf-app output,
+and external process output remain stable machine interfaces. Core `taffish`
+compiler diagnostics may still use the English baseline. See the
 [localization contract](docs/standards/en/localization.md) for locale-pack
 layout and security rules.
 
@@ -545,7 +619,7 @@ and the same TAFFISH index schema.
 --bin-dir DIR             Override executable install directory
 --taffish-home DIR        Override TAFFISH runtime home
 --repo OWNER/REPO         GitHub repository [taffish/taffish]
---version VERSION         Release version [0.10.1]
+--version VERSION         Release version [0.11.0]
 --provider PROVIDER       Raw provider: github or gitee [github]
 --raw-base-url URL        Override raw base URL pointing at a fixed tag
 --os OS                   Override target OS (darwin|macos|linux)
@@ -556,12 +630,43 @@ and the same TAFFISH index schema.
 --share-url URL           Override completion/vim source with tar.gz archive
 --url URL                 Download full bundle tarball from explicit URL
 --archive FILE            Install from local tar.gz archive
+--verify MODE             Verify payload: auto, sha256, gpg, or none
+--checksum-file FILE      Use a local SHA256SUMS manifest
+--checksum-url URL        Download SHA256SUMS from an explicit URL
+--signature-file FILE     Use a local detached checksum signature
+--signature-url URL       Download a detached checksum signature
+--release-key-file FILE   Use a local release public key
+--release-key-url URL     Download a release public key
+--retry COUNT             Retry failed downloads COUNT times [3]
+--connect-timeout SEC     Download connection timeout [15]
 --config-profile PROFILE  Initialize config profile: github, china, or none
 --force-config            Replace existing config during config init
+--force                   Replace an unrecognized core command path
+--sif-cache-policy POLICY Use auto, private, admin, or shared [auto]
+--shared-sif-cache        Alias for --sif-cache-policy shared
+--dry-run                 Resolve the plan without network or writes
 --no-update               Do not run taf update after install
 --no-doctor               Do not run taf doctor --init after install
 -h, --help                Show installer help
 ```
+
+In `auto` verification mode, official GitHub/Gitee payloads must match
+`SHA256SUMS` before any core command is replaced. If `gpg` and `gpgv` are
+available, the signed manifest is also checked against the built-in TAFFISH
+release-key fingerprint. Custom sources without a manifest remain usable in
+`auto` mode but are explicitly reported as unverified; use `--verify sha256`
+or `--verify gpg` to require a specific level.
+
+The installer uses an install lock, candidate `--version` smoke tests, and a
+transactional replacement of the three core binaries. It refuses unrelated
+files unless `--force` is explicit, rolls back an incomplete binary/receipt
+commit, and writes the resulting hashes and verification level to
+`<TAFFISH_HOME>/install-receipt.toml`. Reinstalling the same payload does not
+replace unchanged core binaries; receipt and post-install readiness work may
+still run.
+
+For the complete source selection, verification, transaction, permission, and
+maintainer test contract, see the [installer manual](install/README.md).
 
 Manual platform override example:
 
@@ -602,7 +707,7 @@ index, config, log, or cached image data that should be retained.
 From a downloaded release bundle:
 
 ```sh
-sh install/install-taffish.sh --archive ./taffish-0.10.1-target.tar.gz --user
+sh install/install-taffish.sh --archive ./taffish-0.11.0-target.tar.gz --user
 ```
 
 From an explicit bundle URL:
@@ -640,7 +745,8 @@ See the dedicated source build guide:
 The current official binary payloads are built manually by the maintainer:
 macOS Apple Silicon binaries are built with SBCL, and Linux x86_64 binaries are
 built with LispWorks. `SHA256SUMS`, `SHA256SUMS.asc`, and the public release key
-are kept under `target/` for manual verification.
+are kept under `target/` for automatic installer verification and independent
+manual verification.
 
 Source builds produce unsuffixed local binaries:
 
@@ -838,7 +944,8 @@ Install:
 sudo apt-get install -y squashfuse
 ```
 
-TAFFISH generated scripts use `apptainer --quiet` by default in `v0.1.2` and later builds to keep normal app output clean. Runtime errors are still reported.
+TAFFISH-generated scripts use `apptainer --quiet` by default to keep normal app
+output clean. Runtime errors are still reported.
 
 #### Apptainer Shared SIF Cache For System Installs
 
@@ -851,8 +958,10 @@ ${TAFFISH_SYSTEM_HOME:-/opt/taffish}/images/sif
 ${TAFFISH_USER_HOME:-$HOME/.local/share/taffish}/images/sif
 ```
 
-If no SIF exists, TAFFISH needs one writable directory to pull the image. On a
-shared server, choose one of these policies:
+If no SIF exists, TAFFISH needs one writable directory to pull the image. A
+new system SIF directory is created with administrator-managed `0755`; an
+existing directory keeps its current mode unless shared mode is explicitly
+requested. On a shared server, choose one of these policies:
 
 1. Per-user cache, safest default:
 
@@ -874,19 +983,22 @@ can read the existing SIF without needing write access to the system cache.
 3. Shared writable system cache:
 
 ```sh
-sudo mkdir -p /opt/taffish/images/sif
-sudo chmod 1777 /opt/taffish/images/sif
+curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh \
+  | sudo sh -s -- --system --shared-sif-cache
 ```
 
 `1777` is the sticky-directory mode used by `/tmp`: local users can create SIF
 files there, but cannot delete files owned by other users. Use this only when
 you intentionally want a shared writable cache on a trusted server. If your
 cluster has stricter policy, prefer administrator pre-caching or per-user
-caches instead.
+caches instead. The installer changes and verifies only
+`/opt/taffish/images/sif`; it does not recursively relax the rest of the system
+home. For an existing installation, rerun the same version with
+`--system --shared-sif-cache`.
 
 ## TAF App Smoke Metadata
 
-TAFFISH `0.8.0` adds declarative smoke metadata for containerized taf-apps.
+Containerized taf-apps can declare smoke metadata in `taffish.toml`.
 This is the first local piece of the TAFFISH Hub supply-chain/trust model:
 projects can state the minimal commands that an index automation should verify
 before accepting a container image into the public index.
@@ -960,14 +1072,58 @@ taf doctor --user --shell zsh --json
 
 It checks TAFFISH homes, config, the local index, command paths, shell
 completion, Vim/Neovim files, the Apptainer SIF cache, and bounded readiness
-probes for Docker, Podman, and Apptainer. Default output is concise;
-`--verbose` includes evidence and remediation, while `--json` emits the stable
+probes for Docker, Podman, and Apptainer. Default output includes actionable
+advice for problems; `--verbose` adds detailed evidence and links, while `--json` emits the stable
 `taffish.doctor/v1` schema. Use `--shell auto|bash|zsh|fish` for shell-specific
 completion guidance.
 
 Doctor does not edit shell/editor configuration, change permissions, start
 services, pull images, or run containers. Only explicit `--init` creates
 TAFFISH-owned directories. System-scope initialization still requires root.
+
+For index or installed-app problems, use the offline, read-only checks:
+
+```sh
+taf doctor index --user
+taf doctor hub --user
+taf doctor hub abricate --system --verbose
+taf doctor hub --user --json
+```
+
+`index` checks the cached index format and latest references. `hub` also checks
+selected or all local installations without executing apps or probing backends.
+It reports the app/version, scope, affected paths, reason and safe next step.
+Without targets, `doctor hub` includes historical installed versions. Its text
+separates enumerated totals from affected apps/versions and issue counts; a
+version can have several issues. Incomplete enumeration is reported explicitly.
+To preview repairs over the same installed-version scope, use
+`taf install --all-installed --repair --user` (or `--system`), not `--all --repair`,
+which selects installed index.latest only.
+An older installation missing `.taf-build.json` is **unverified**, not
+automatically damaged. Required files missing or checksums disagreeing are
+**invalid**; unreadable paths or unsupported formats are **unknown**. Verified
+local files are not proof of official authenticity or container readiness.
+These checks never repair or write manifests and do not accept `--init` or
+`--shell`. Their exit code is 1 for invalid/unknown checks, otherwise 0;
+warnings such as missing old manifests remain visible without failing the check.
+Missing or unfamiliar unversioned command shortcuts are reported separately;
+they do not by themselves mean the versioned app is damaged.
+Default Hub output groups repeated issues by type and recovery policy, with
+counts and at most three examples per group. `--verbose` and `--json` retain
+every inspection and its evidence. Read-only batching makes full Hub scans
+faster without skipping checksum checks; a targeted scan avoids unrelated deep
+inspection. Human stderr shows stages/counts in place on a TTY and rate-limited
+lines in logs; JSON/MCP output has no progress text. Shared conservative Unicode
+field layout uses separate lines for long or complex text instead of guessing
+alignment or truncating paths.
+See [diagnostics and recovery](docs/dev/en/taf-core/system-history-doctor.md).
+
+Other slow commands also report their current stage on stderr: index download,
+source retrieval, build/validation, repair, publish confirmation, and removal.
+Batch counts identify the current target, not a time percentage. JSON/MCP
+remain quiet; native Git/container output is retained. These are event-driven
+notices, not a continuously ticking timer. See
+[command status](docs/dev/en/taf-core/command-progress.md).
 
 ## Shell Completion
 
@@ -1105,6 +1261,11 @@ taf install --all --flows --yes
 ```
 
 `taf install --all` is dry-run by default. Use `--yes` to actually install.
+Batch planning checks local installation files before making changes. Slow
+checks show stage/count progress on stderr, in place on a TTY and rate-limited
+in logs; `--json` and MCP remain free of progress text. Checks are batched, but
+large snapshots or slow disks can still take longer. This is local validation,
+not a container download, and checksum verification is not skipped.
 Use `--kind tool|flow|all`, `--tools`, or `--flows` to limit the batch.
 Add `--prune-old` to remove older local versions after a successful batch
 install. `taf uninstall`, `taf upgrade --prune-old`, and `taf prune` only
@@ -1126,13 +1287,78 @@ current local index, so run `taf update` first. Local/private installs made
 with `taf install --from` are treated as private and are skipped by public
 index upgrades.
 
-Remove older local versions while keeping the newest installed version:
+Remove older same-source versions while retaining the valid installed version
+designated by the local index's `latest`:
 
 ```sh
 taf prune
 taf prune --yes
 taf prune --kind flow --yes
 ```
+
+The index chooses the online installation target; TAFFISH does not replace it
+with the numerically greatest version. Mixed versions such as `a.7.10` and
+`a.7.3` use numeric segment ordering, also without an index. Unversioned aliases
+still follow the newest locally installed version. Batch maintenance does not
+automatically downgrade a genuinely newer local installation.
+
+`prune` and `--prune-old` require a valid, same-source installed `latest` before
+deleting anything for that app. Missing/invalid targets, private or unknown
+origins, newer versions and versions that cannot be reliably compared are
+protected. Run `taf update` and inspect `taf prune --json` first. This is not
+dependency-aware garbage collection: review pinned Flow dependencies before
+explicitly removing old versions. Shared container images are not deleted.
+
+Missing old build manifests do not block batch installation: structurally intact
+apps remain installed with an unverified warning. Confirmed damage or an
+unreadable/unknown selected installation is reported before batch writes; use
+`taf doctor hub APP --user --verbose` (or `--system`) to investigate. Do not
+blindly reinstall private apps or overwrite local edits. Automatic pruning
+protects the whole package if any involved installed version lacks verified
+evidence. No historical checksums are invented to make an old install pass.
+
+Explicitly preview repair of existing indexed installations:
+
+```sh
+taf install APP --repair --user --dry-run
+taf install APP1 APP2 --repair --user --dry-run
+taf install APP 1.4.0-r1 --repair --user --dry-run
+taf install --all --repair --kind tool --user
+taf install --all --repair --kind tool --user --yes
+taf install --all-installed --repair --user
+taf install --all-installed --repair --user --yes
+```
+
+Repair has two batch selectors. `--all --repair` checks only installed
+`index.latest` identities; it skips missing latest versions rather than installing
+them. `--all-installed --repair` enumerates every locally installed version,
+including historical versions. It never upgrades, installs missing versions or
+dependencies, or prunes. Both selectors default to preview; add `--yes` to apply.
+`--json`, scope and kind filters work with either selector. The selectors cannot
+be combined with each other or explicit targets. `--all-installed` requires
+`--repair`. For explicit version targets, use `--dry-run` to preview and remove
+it to apply. Verified targets are skipped. Both selectors use `--user` by default;
+use `--system` to inspect or repair system installations instead.
+
+`--kind all` is the default: include both tools and flows. It can be omitted;
+it does not select additional versions or request an upgrade. Use `--tools`
+or `--flows` to restrict the app type within the selected version scope.
+
+Unreadable/malformed installation records and versions absent from the index
+remain visible as blocked targets, not silently skipped. An unknown app kind
+cannot safely be excluded by a kind filter. Private sources are not replaced
+from the public index. Repair rejects `--force`, `--from` and `--prune-old`.
+
+The complete read-only preflight must pass before any batch writes. Rebuilding
+requires matching source/identity, safe paths and a fixed commit; unknown formats,
+private sources and custom launchers are rejected, and manifests are never
+fabricated. Repairs use staging, validation, backups and rollback on failure.
+Interrupted runs retain a journal and block blind retries. This is not a
+whole-batch atomic transaction, crash-durability, automatic crash-recovery or
+zero-downtime guarantee. Repair and normal install/uninstall/prune share home/bin
+cooperative write locks without changing deletion policy; older clients cannot
+be assumed to respect these locks. Review the
+[repair policy](docs/dev/en/taf-core/hub-maintenance.md#explicit-repair) before applying.
 
 Install a private/local app project without publishing it to the public Hub:
 
@@ -1171,6 +1397,10 @@ taf build
 ./target/taf-my-flow-v0.1.0-r1
 ```
 
+Repeated `taf build` is idempotent for the versioned command wrapper and frozen
+source snapshot: unchanged valid artifacts are verified and not rewritten.
+Explicit container image builds remain separate operations.
+
 Publish with release notes:
 
 ```sh
@@ -1183,11 +1413,20 @@ the first line of `release.md` becomes the publish message, and the whole file
 becomes the GitHub Release notes. Replace the default
 `# TODO: release summary` first line before publishing.
 
+New GitHub Releases are formal and explicitly marked Latest by default. Add
+`--pre` for a Pre-release, or `--no-latest` for a formal maintenance release that
+does not replace Latest. These options and `--latest` are mutually exclusive.
+Version numbers need not increase, but an existing tag cannot be reused for
+different content. Without `--release`, publish remains tag-only and does not
+set GitHub Latest or Pre-release status.
+
 Publication is resumable: if a matching publish is interrupted after creating
 a repository, pushing a branch/tag, or creating a GitHub Release, restore
 connectivity and run the same `taf publish --yes ...` command again. TAFFISH
 re-inspects Git/GitHub, skips matching completed phases, and stops rather than
 overwriting any conflicting immutable object.
+Use the same channel options and release notes on retry. Repeating a completed
+publication does not reclaim Latest from a subsequently published release.
 
 ## MCP / AI Integration
 
@@ -1195,7 +1434,10 @@ overwriting any conflicting immutable object.
 surface includes read-only TAF validation, compilation and summarization;
 taf-app and project inspection; safe app-invocation compilation; smoke/trust
 metadata inspection; and non-executing package-maintenance planners. The
-current tool set includes:
+server is not entirely read-only: existing index update, app install/uninstall
+(dry-run by default), project creation and wrapper-build tools can write files.
+These capabilities are unchanged. `install --repair` adds no MCP repair tool,
+parameter or execution entry point. The current tool set includes:
 
 - `taffish_get_version` / `taffish_get_help`
 - `taffish_validate_source` / `taffish_validate_file`
@@ -1315,12 +1557,13 @@ sudo taf-APP-vVERSION-rRELEASE -- --help
 or intentionally allow a shared writable system SIF cache:
 
 ```sh
-sudo mkdir -p /opt/taffish/images/sif
-sudo chmod 1777 /opt/taffish/images/sif
+curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh \
+  | sudo sh -s -- --system --shared-sif-cache
 ```
 
 Only use the `1777` option when you accept a shared cache writable by local
-users. See [Apptainer shared SIF cache](#apptainer-shared-sif-cache-for-system-installs).
+users. The installer applies it only to the exact SIF directory. See
+[Apptainer shared SIF cache](#apptainer-shared-sif-cache-for-system-installs).
 
 ### Apptainer prints `Converting SIF file to temporary sandbox...` every run
 
@@ -1371,14 +1614,21 @@ target/SHA256SUMS.asc
 target/TAFFISH-RELEASE-KEY.asc
 ```
 
-The copyable GitHub release note draft is kept at
-[docs/releases/v0.10.1.md](docs/releases/v0.10.1.md).
+Version-specific changes, compatibility notes, validation results, and binary
+checksums are in the [v0.11.0 release notes](docs/releases/v0.11.0.md).
 
-The raw installers primarily download and install versioned files; they do not
-currently verify `SHA256SUMS` or the GPG signature automatically. For
-high-security installation, download the tag contents or release bundle first,
-verify the checksum manifest and signature manually, then install from the
-verified local files.
+The v0.11.0 raw installers verify every selected official binary against
+`SHA256SUMS` before installation. In default `auto` mode they also verify the
+signed manifest against the built-in release-key fingerprint when `gpg` and
+`gpgv` are available; use `--verify gpg` to require this step or
+`--verify sha256` to require checksums without GPG.
+
+This payload check does not independently authenticate an installer script
+fetched through `curl | sh`. For a high-security bootstrap, first obtain and
+inspect the fixed-tag installer or release bundle through an independently
+trusted channel, manually verify the manifest and signature below, and then
+run the local installer. Custom URL/mirror payloads without a manifest are
+reported as unverified in `auto` mode rather than treated as official.
 
 Verify checksums:
 

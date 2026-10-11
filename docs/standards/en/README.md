@@ -43,7 +43,7 @@ TAFFISH currently uses four governance layers:
 | --- | --- | --- | --- |
 | 1 | Developer docs | established | Explain code structure, module responsibilities, public APIs. |
 | 2 | Specification draft | current focus | Define language, project, Hub, install, config, and runtime contracts. |
-| 3 | Conformance tests | partially established | External compiler, project, and Hub tests exist; full written-contract coverage remains future work. |
+| 3 | Conformance tests | partially established | External binary, compiler, project, Hub, system, i18n, installer, and CLI error-boundary suites exist; full written-contract coverage remains future work. |
 | 4 | Formal standard | not started | Consider when multiple implementations or external governance require it. |
 
 This directory starts as a specification draft rather than a formal standard. Drafts can evolve, but they must not drift casually.
@@ -71,7 +71,7 @@ If a paragraph is not explicitly marked but contains schema names, file paths, n
 | config/home/history | Draft v0.2 stable | Persistent paths and schemas exist; future work mostly extends fields. |
 | runtime/container | Draft v0.2 semi-stable | Backend selection and basic mounts are stable; advanced parameters may evolve. |
 | MCP interface | Draft v0.2 stable core | Conservative tools/resources/prompts exist; execution and publish remain out of scope. |
-| conformance tests | partially automated | External compiler/project/Hub suites exist; the written checklist remains broader. |
+| conformance tests | partially automated | External binary/compiler/project/Hub/system/i18n/installer/CLI error-boundary suites exist; the written checklist remains broader. |
 
 ## Writing Principles
 

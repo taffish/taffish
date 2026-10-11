@@ -149,6 +149,11 @@ Core API:
 (han.host:getenv "HOME")
 (han.host:cwd)
 (han.host:quit 0)
+(han.host:configure-runtime-io)
+(han.host:standard-input-terminal-p)
+(han.host:standard-error-terminal-p)
+(han.host:current-process-id)
+(han.host:append-utf8-line path line)
 (han.host:file-exists-p path)
 (han.host:directory-exists-p path)
 (han.host:run-program-sync command)
@@ -165,6 +170,12 @@ SBCL, LispWorks
 ```
 
 Unsupported implementations signal `unsupported-host-function`.
+
+`standard-error-terminal-p` is a side-effect-free fd 2 TTY query, independent of
+the dynamic Lisp `*error-output*` binding. Closed or non-TTY stderr returns false
+on supported hosts. It does not test terminal size or cursor capabilities;
+renderers must also check their actual stream and `TERM=dumb`, and keep human
+progress out of JSON/MCP. See [host terminal detection](../han/host.md#runtime-io-and-terminal-detection).
 
 ## han.source
 
@@ -211,4 +222,3 @@ Positioning: a small self-hosted test framework, not a full testing platform.
 3. `han.host` changes must consider both SBCL and LispWorks.
 4. `han.json` `:null` and the two return values of `get-json` must not change casually.
 5. The return shape of `han.os:run-shell-command` must not change casually.
-

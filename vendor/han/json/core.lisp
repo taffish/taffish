@@ -139,7 +139,7 @@ from a missing key."
                (char= (char string pos) #\"))
     (%json-error "expected JSON string at position ~D" pos))
   (incf pos)
-  (let ((out (make-string-output-stream)))
+  (let ((out (make-string-output-stream :element-type 'character)))
     (loop
       (when (>= pos (length string))
         (%json-error "unterminated JSON string"))
@@ -385,8 +385,10 @@ JSON null   => :NULL."
       value)))
 
 (defun %read-file-string (path)
-  (with-open-file (in path :direction :input)
-    (let ((out (make-string-output-stream)))
+  (with-open-file (in path :direction :input
+                           :element-type 'character
+                           :external-format :utf-8)
+    (let ((out (make-string-output-stream :element-type 'character)))
       (loop for char = (read-char in nil nil)
             while char
             do (write-char char out))
@@ -503,7 +505,7 @@ Set INDENT to NIL for compact output."
 (defun encode-json (value &key (indent 2))
   "Return VALUE encoded as a JSON string.
 Set INDENT to NIL for compact output."
-  (with-output-to-string (out)
+  (with-output-to-string (out nil :element-type 'character)
     (write-json value out :indent indent)))
 
 (defun write-json-file (path value &key (indent 2))
@@ -511,6 +513,8 @@ Set INDENT to NIL for compact output."
   (with-open-file (out path
                        :direction :output
                        :if-exists :supersede
-                       :if-does-not-exist :create)
+                       :if-does-not-exist :create
+                       :element-type 'character
+                       :external-format :utf-8)
     (write-json value out :indent indent))
   path)

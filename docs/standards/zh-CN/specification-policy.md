@@ -11,7 +11,8 @@ TAFFISH 现在仍以一个参考实现为中心。语言、项目格式、hub in
 
 1. 参考实现定义当前事实行为。
 2. 规范草案把这些事实行为提升为可讨论、可维护、可兼容演进的契约。
-3. 当前外部一致性测试已经覆盖编译器、项目和 Hub 核心工作流；后续测试可以继续覆盖更多书面契约。
+3. 当前外部一致性测试已经覆盖 delivered binary、编译器、项目、Hub、system 与本地化
+   工作流；后续测试可以继续覆盖更多书面契约。
 4. 当生态成熟后，再考虑正式标准化、治理委员会或 TEP 流程。
 
 ## 与正式标准的区别
@@ -33,7 +34,7 @@ TAFFISH 现在仍以一个参考实现为中心。语言、项目格式、hub in
 | 版本 | 含义 |
 | --- | --- |
 | `Draft v0.1` | 历史草案，与 TAFFISH 0.3.x 参考实现对齐。 |
-| `Draft v0.2` | 当前草案，与 TAFFISH 0.10.x 参考实现以及已经运行的公开 Hub/index 生态对齐。 |
+| `Draft v0.2` | 当前草案，与 TAFFISH 0.11.x 参考实现以及已经运行的公开 Hub/index 生态对齐。 |
 | `v1.0` | 当语言、项目格式、hub index 和安装格式经过实际生态验证后再考虑。 |
 
 schema 字段使用独立版本，例如 `taffish.index/v1`、`taffish.install/v1`、`taffish.config/v1`。schema 版本不必与 TAFFISH 程序版本完全一致。
@@ -81,10 +82,12 @@ taf-app 反复使用时，可以单独标记为 Stable。Draft v0.2 并不意味
 
 当前参考实现是本仓库中的 Common Lisp 实现，包括：
 
-1. `taffish-core`：TAF 语言到 shell 的编译核心。
-2. `taf-core`：项目、hub、安装、配置、history 和诊断工具。
-3. `taffish-cli` 与 `taf-cli`：命令行入口。
-4. `vendor/han`：TAFFISH 使用的基础库。
+1. `taffish-i18n`：共享人类语言表现与回退层。
+2. `taffish-core`：TAF 语言到 shell 的编译核心。
+3. `taf-core`：项目、hub、安装、配置、history 和诊断工具。
+4. `taffish-cli` 与 `taf-cli`：命令行入口。
+5. `taffish-mcp`：面向 MCP 兼容 AI 客户端的保守结构化接口。
+6. `vendor/han`：TAFFISH 使用的基础库。
 
 当规范草案与代码冲突时，短期以内以当前代码作为事实行为；长期应该修正文档或代码，使二者重新一致。
 

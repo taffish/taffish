@@ -76,12 +76,65 @@
            ("config.language.source.system-config" "system config" "系统配置")
            ("config.language.source.locale-environment" "host locale environment" "主机 locale 环境")
            ("config.language.source.default" "built-in default" "内置默认值")
+           ("config.error.file-missing"
+            "[config] {source} config file does not exist: {path}"
+            "[config] {source} 配置文件不存在：{path}")
+           ("config.error.toml-value"
+            "[config] invalid TOML value in {path} line {line}: {detail}"
+            "[config] {path} 第 {line} 行的 TOML 值无效：{detail}")
+           ("config.error.toml-line"
+            "[config] invalid TOML line in {path} line {line}: {text}"
+            "[config] {path} 第 {line} 行不是有效的 TOML：{text}")
+           ("config.error.toml-key-empty"
+            "[config] empty TOML key in {path} line {line}"
+            "[config] {path} 第 {line} 行的 TOML key 为空")
+           ("config.error.string"
+            "[config] {field} in {path} must be a non-empty string, but got: {value}"
+            "[config] {path} 中的 {field} 必须是非空字符串，实际收到：{value}")
+           ("config.error.boolean"
+            "[config] {field} in {path} must be true or false, but got: {value}"
+            "[config] {path} 中的 {field} 必须是 true 或 false，实际收到：{value}")
+           ("config.error.section"
+            "[config] unsupported section in {path} line {line}: {section}"
+            "[config] {path} 第 {line} 行包含不支持的 section：{section}")
+           ("config.error.top-key"
+            "[config] unsupported top-level key in {path} line {line}: {key}"
+            "[config] {path} 第 {line} 行包含不支持的顶层 key：{key}")
+           ("config.error.index-key"
+            "[config] unsupported [index] key in {path} line {line}: {key}"
+            "[config] {path} 第 {line} 行包含不支持的 [index] key：{key}")
+           ("config.error.rewrite-key"
+            "[config] unsupported [[source.rewrite]] key in {path} line {line}: {key}"
+            "[config] {path} 第 {line} 行包含不支持的 [[source.rewrite]] key：{key}")
+           ("config.error.schema-version"
+            "[config] unsupported schema_version in {path}: {value}"
+            "[config] {path} 中的 schema_version 不受支持：{value}")
+           ("config.error.profile"
+            "[config] profile must be github or china, but got: {value}"
+            "[config] profile 必须是 github 或 china，实际收到：{value}")
+           ("config.error.exists"
+            "[config] config file already exists: {path}
+Use --force to replace it."
+            "[config] 配置文件已存在：{path}
+请使用 --force 替换。")
+           ("config.error.init-system-root"
+            "[config] init --system requires root permission."
+            "[config] init --system 需要 root 权限。")
            ("config.language.error.unknown" "[config] unavailable language: {language}. Run `taf config language --show` to list valid choices." "[config] 语言不可用：{language}。请运行 `taf config language --show` 查看有效选项。")
            ("config.language.error.system-root" "[config] language --system requires root permission." "[config] language --system 需要 root 权限。")))
   (apply #'taffish.i18n:register-message entry))
 
 (defun %config-human-text (key)
   (taffish.i18n:message key))
+
+(defun %config-message (key &rest bindings)
+  (apply #'taffish.i18n:message-with key bindings))
+
+(defun %config-error (suffix &rest bindings)
+  (error "~A"
+         (apply #'%config-message
+                (format nil "config.error.~A" suffix)
+                bindings)))
 
 (defun %config-print-human-field (key value &optional (width 22))
   (format t "  ~VA : ~A~%" width (%config-human-text key) value))
@@ -117,11 +170,11 @@
 
 (defun %config-existing-file-or-error (path source)
   (or (%config-existing-file path)
-      (error "[config] ~A config file does not exist: ~A" source path)))
+      (%config-error "file-missing" :source source :path path)))
 
 (defun %plist-has-key-p (plist key)
-  (loop for (k v) on plist by #'cddr
-        thereis (eql k key)))
+  (loop for tail on plist by #'cddr
+        thereis (eql (car tail) key)))
 
 (defun %copy-plist (plist)
   (copy-list plist))
@@ -138,40 +191,40 @@
   (handler-case
       (%parse-toml-value raw-value)
     (error (c)
-      (error "[config] invalid TOML value in ~A line ~A: ~A"
-             (%config-file-namestring path)
-             line-number
-             c))))
+      (%config-error "toml-value"
+                     :path (%config-file-namestring path)
+                     :line line-number
+                     :detail c))))
 
 (defun %config-parse-key-value (line path line-number)
   (multiple-value-bind (raw-key raw-value)
       (%split-once line #\=)
     (unless raw-value
-      (error "[config] invalid TOML line in ~A line ~A: ~A"
-             (%config-file-namestring path)
-             line-number
-             line))
+      (%config-error "toml-line"
+                     :path (%config-file-namestring path)
+                     :line line-number
+                     :text line))
     (let ((key (%trim-string raw-key)))
       (when (%blank-string-p key)
-        (error "[config] empty TOML key in ~A line ~A"
-               (%config-file-namestring path)
-               line-number))
+        (%config-error "toml-key-empty"
+                       :path (%config-file-namestring path)
+                       :line line-number))
       (values key (%config-parse-value raw-value path line-number)))))
 
 (defun %config-ensure-string (value field path)
   (unless (%config-non-empty-string-p value)
-    (error "[config] ~A in ~A must be a non-empty string, but got: ~S"
-           field
-           (%config-file-namestring path)
-           value))
+    (%config-error "string"
+                   :field field
+                   :path (%config-file-namestring path)
+                   :value (prin1-to-string value)))
   value)
 
 (defun %config-ensure-boolean (value field path)
   (unless (or (eql value t) (eql value nil))
-    (error "[config] ~A in ~A must be true or false, but got: ~S"
-           field
-           (%config-file-namestring path)
-           value))
+    (%config-error "boolean"
+                   :field field
+                   :path (%config-file-namestring path)
+                   :value (prin1-to-string value)))
   value)
 
 (defun %config-finalize-source-rewrite-rule (rule path)
@@ -220,10 +273,10 @@
                    current-rule nil))
             ((and (> (length clean) 0)
                   (char= #\[ (char clean 0)))
-             (error "[config] unsupported section in ~A line ~A: ~A"
-                    (%config-file-namestring existing)
-                    line-number
-                    clean))
+             (%config-error "section"
+                            :path (%config-file-namestring existing)
+                            :line line-number
+                            :section clean))
             (t
              (multiple-value-bind (key value)
                  (%config-parse-key-value clean existing line-number)
@@ -240,20 +293,20 @@
                      (setf (getf config :language)
                            (%config-ensure-string value "language" existing)))
                     (t
-                     (error "[config] unsupported top-level key in ~A line ~A: ~A"
-                            (%config-file-namestring existing)
-                            line-number
-                            key))))
+                     (%config-error "top-key"
+                                    :path (%config-file-namestring existing)
+                                    :line line-number
+                                    :key key))))
                  (:index
                   (cond
                     ((string= key "url")
                      (setf (getf config :index-url)
                            (%config-ensure-string value "[index].url" existing)))
                     (t
-                     (error "[config] unsupported [index] key in ~A line ~A: ~A"
-                            (%config-file-namestring existing)
-                            line-number
-                            key))))
+                     (%config-error "index-key"
+                                    :path (%config-file-namestring existing)
+                                    :line line-number
+                                    :key key))))
                  (:source-rewrite
                   (cond
                     ((string= key "from")
@@ -275,17 +328,17 @@
                             "[[source.rewrite]].enabled"
                             existing)))
                     (t
-                     (error "[config] unsupported [[source.rewrite]] key in ~A line ~A: ~A"
-                            (%config-file-namestring existing)
-                            line-number
-                            key))))))))))
+                     (%config-error "rewrite-key"
+                                    :path (%config-file-namestring existing)
+                                    :line line-number
+                                    :key key))))))))))
       (finish-rule))
     (when (and (%plist-has-key-p config :schema-version)
                (not (string= (getf config :schema-version)
                              *taffish-config-schema-version*)))
-      (error "[config] unsupported schema_version in ~A: ~A"
-             (%config-file-namestring existing)
-             (getf config :schema-version)))
+      (%config-error "schema-version"
+                     :path (%config-file-namestring existing)
+                     :value (getf config :schema-version)))
     (when saw-rules-p
       (setf (getf config :source-rewrite-rules) (nreverse rules)))
     (setf (getf config :config-files)
@@ -470,7 +523,7 @@
          (and (stringp profile) (string-equal profile "china")))
      :china)
     (t
-     (error "[config] profile must be github or china, but got: ~S" profile))))
+     (%config-error "profile" :value (prin1-to-string profile)))))
 
 (defun %taffish-config-template (profile)
   (case (%normalize-taffish-config-profile profile)
@@ -480,13 +533,14 @@
 (defun %write-taffish-config-file (path content force-p)
   (let ((existing (%config-existing-file path)))
     (when (and existing (not force-p))
-      (error "[config] config file already exists: ~A~%Use --force to replace it."
-             (%config-file-namestring existing))))
+      (%config-error "exists" :path (%config-file-namestring existing))))
   (ensure-directories-exist path)
   (with-open-file (out path
                        :direction :output
                        :if-exists :supersede
-                       :if-does-not-exist :create)
+                       :if-does-not-exist :create
+                       :element-type 'character
+                       :external-format :utf-8)
     (write-string content out)))
 
 (defun %config-inline-comment-position (line)
@@ -578,7 +632,9 @@
     (with-open-file (out path
                          :direction :output
                          :if-exists :supersede
-                         :if-does-not-exist :create)
+                         :if-does-not-exist :create
+                         :element-type 'character
+                         :external-format :utf-8)
       (dolist (line (%rewrite-config-language-lines lines language))
         (write-line line out)))))
 
@@ -732,7 +788,7 @@ preserved; external locale selection is restricted to valid discovered packs."
          (file (%taffish-config-file home)))
     (when (and (eql normalized-scope :system)
                (not (%root-user-p)))
-      (error "[config] init --system requires root permission."))
+      (%config-error "init-system-root"))
     (%write-taffish-config-file file
                                 (%taffish-config-template normalized-profile)
                                 force-p)

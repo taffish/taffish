@@ -1,6 +1,6 @@
 # ASDF 系统与模块地图
 
-TAFFISH 使用 ASDF 描述 Common Lisp 系统。当前主系统是 `taffish`，版本为 `0.10.1`，依赖内置基础库 `han`。ASDF 文件不仅是构建配置，也是一份非常重要的架构地图。
+TAFFISH 使用 ASDF 描述 Common Lisp 系统。当前主系统是 `taffish`，版本为 `0.11.0`，依赖内置基础库 `han`。ASDF 文件不仅是构建配置，也是一份非常重要的架构地图。
 
 ## 主系统加载顺序
 
@@ -40,13 +40,19 @@ taffish-cli
 
 taf-core
   package
+  version
+  display
+  progress
+  project/i18n
   project/common
+  project/digest
   project/new
   project/check
   project/compile
   project/build
   project/run
   project/publish
+  hub/i18n
   hub/update
   hub/info
   hub/search
@@ -54,9 +60,12 @@ taf-core
   hub/uninstall
   hub/list
   hub/which
+  hub/diagnostics
+  hub/repair
   hub/upgrade
   system/home
   system/config
+  system/history-i18n
   system/history
   system/doctor-i18n
   system/doctor
@@ -70,12 +79,28 @@ taf-cli
 taffish-mcp
   package
   protocol
+  i18n
+  compiler
+  app
+  project
   tools
   resources
   prompts
   server
   main
 ```
+
+## 开发系统
+
+`taffish.dev.asd` 镜像生产系统的模块与文件顺序，然后在 `taffish-i18n`、`taffish-core`、
+两个 CLI 模块、`taf-core` 的每个子系统和 `taffish-mcp` 后追加对应 `test.lisp`。因此开发
+加载会验证与 delivery 相同的依赖顺序，同时不把测试定义带入 release binary。
+
+共享的 `display` 和 `progress` helper 也有仅开发系统加载的测试文件。
+`progress` 依赖已有显示宽度 helper，必须在需要报告人类状态的 project、Hub 命令实现之前加载。
+
+生产 component 新增、删除或调整顺序时，必须同步修改 `taffish.asd` 与 `taffish.dev.asd`。
+开发系统可以追加测试，但不能悄悄定义只在测试加载后才存在的业务行为。
 
 ## 加载顺序背后的意义
 
@@ -119,7 +144,7 @@ TAFFISH 的包边界大体和系统边界一致：
 
 ## 修改 ASDF 的检查点
 
-修改 `taffish.asd` 或 `vendor/han/han.asd` 前，应检查：
+修改 `taffish.asd`、`taffish.dev.asd` 或 `vendor/han/han.asd` 前，应检查：
 
 1. 新文件是否真的需要公开给系统加载。
 2. 它依赖的结构、函数、宏是否已经在它之前加载。

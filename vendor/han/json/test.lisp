@@ -50,6 +50,28 @@
     (check-equal (format nil "a~%~C\\\"/A" #\Tab)
                  (han.json:get-json json "s"))))
 
+(deftest test-han-json-unicode-string-and-file-roundtrip ()
+  (let* ((text (make-array 2
+                           :element-type 'character
+                           :initial-contents
+                           (list (code-char #x4F60) (code-char #x597D))))
+         (escaped (han.json:parse-json "{\"text\":\"\\u4F60\\u597D\"}"))
+         (root (han.path:directory-pathname
+                (merge-pathnames
+                 (format nil "han-json-unicode-test-~A/" (gensym))
+                 (han.host:temporary-directory))))
+         (file (han.path:join-path root "data.json")))
+    (unwind-protect
+         (progn
+           (check-equal text (han.json:get-json escaped "text"))
+           (han.json:write-json-file
+            file (han.json:json-object (cons "text" text)) :indent nil)
+           (check-equal
+            text
+            (han.json:get-json (han.json:read-json-file file) "text")))
+      (ignore-errors
+        (han.host:delete-directory-tree root :validate t)))))
+
 (deftest test-han-json-encode-compact-sorted ()
   (let ((json (han.json:json-object
                (cons "b" 2)
@@ -72,7 +94,7 @@
   (let* ((root (han.path:directory-pathname
                 (merge-pathnames
                  (format nil "han-json-test-~A/" (gensym))
-                 (uiop:temporary-directory))))
+                 (han.host:temporary-directory))))
          (file (han.path:join-path root "data.json")))
     (unwind-protect
          (progn
@@ -85,7 +107,8 @@
            (let ((json (han.json:read-json-file file)))
              (check-equal "taf" (han.json:get-json json "name"))
              (check-equal 3 (han.json:get-json json "count"))))
-      (ignore-errors (uiop:delete-directory-tree root :validate t)))))
+      (ignore-errors
+        (han.host:delete-directory-tree root :validate t)))))
 
 (deftest test-han-json-errors ()
   (check-error (han.json:json-error)

@@ -18,6 +18,9 @@
 
 `load-string` shadow 了 CL 自带 `load-string` 概念，因此 package 中显式 shadow。
 
+path 输入会显式按 UTF-8 打开，使 index、config、locale pack 等文本在 SBCL 与 LispWorks
+上保持一致解码；stream 输入则保留其拥有者已经选择的 external format。
+
 ## 环境与路径
 
 | API | 作用 |

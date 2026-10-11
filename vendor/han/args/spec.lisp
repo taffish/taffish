@@ -105,7 +105,7 @@ Escapes in default expression:
                (member char (list #\@ #\\ #\{ #\}) :test #'char=))
              (emit-text (chars)
                (when chars
-                 (push (coerce (nreverse chars) 'string) parts)))
+                 (push (%character-list-string (nreverse chars)) parts)))
              (read-braced-name (index)
                (labels ((rbn (i chars)
                           (cond
@@ -113,7 +113,7 @@ Escapes in default expression:
                              (error "Unclosed @{...} in default expression: ~A"
                                     string))
                             ((char= (char string i) #\})
-                             (let ((name (coerce (nreverse chars) 'string)))
+                             (let ((name (%character-list-string (nreverse chars))))
                                (when (string= name "")
                                  (error "Empty name in @{...}: ~A" string))
                                (when (find-if-not #'arg-name-char-p name)
@@ -130,7 +130,7 @@ Escapes in default expression:
                                    (arg-name-char-p (char string i)))
                               (rpn (1+ i)
                                    (cons (char string i) chars))
-                              (let ((name (coerce (nreverse chars) 'string)))
+                              (let ((name (%character-list-string (nreverse chars))))
                                 (when (string= name "")
                                   (error "Empty @name in default expression: ~A"
                                          string))

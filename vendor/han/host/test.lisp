@@ -57,6 +57,9 @@
   (let ((help-string (han.host:help nil)))
     (check-true (stringp help-string))
     (check-true (search "han.host" help-string))
+    (check-true (search "standard-error-terminal-p" help-string))
+    (check-true (search "fd 2" help-string))
+    (check-true (search "closed stderr returns NIL" help-string))
     (check-true (search "run-program" help-string)))
   (check-equal "0.1.0" (han.host:version nil)))
 
@@ -67,6 +70,125 @@
     (check-equal
      (every #'stringp argv)
      t)))
+
+(deftest test-host-configure-runtime-io ()
+  (check-true (han.host:prepare-runtime-io))
+  (check-true (han.host:configure-runtime-io)))
+
+(define-condition %host-test-unprintable-error (error) ()
+  (:report (lambda (condition stream)
+             (declare (ignore condition stream))
+             (error "report failed"))))
+
+(deftest test-host-cli-boundary-preserves-values ()
+  (check-equal '(42 :second)
+               (multiple-value-list
+                (han.host::%with-cli-error-boundary ("[TEST]")
+                  (values 42 :second)))))
+
+(deftest test-host-cli-boundary-reports-error ()
+  (let ((*standard-output* (make-string-output-stream))
+        (*error-output* (make-string-output-stream)))
+    (flet ((han.host:quit (&optional (code 0)) (throw 'cli-exit code)))
+      (check-equal 1
+                   (catch 'cli-exit
+                     (han.host::%with-cli-error-boundary ("[TEST]")
+                       (error "expected failure")))))
+    (check-equal (format nil "[TEST] expected failure~%")
+                 (get-output-stream-string *error-output*))
+    (check-equal "" (get-output-stream-string *standard-output*))))
+
+(deftest test-host-cli-boundary-tolerates-report-failure ()
+  (let ((*standard-output* (make-string-output-stream))
+        (*error-output* (make-string-output-stream)))
+    (flet ((han.host:quit (&optional (code 0)) (throw 'cli-exit code)))
+      (check-equal 1
+                   (catch 'cli-exit
+                     (han.host::%with-cli-error-boundary ("[TEST]")
+                       (error '%host-test-unprintable-error)))))
+    (check-equal "" (get-output-stream-string *standard-output*))))
+
+(deftest test-host-cli-boundary-tolerates-unwritable-stderr ()
+  (let ((*standard-output* (make-string-output-stream))
+        (*error-output* (make-string-input-stream "")))
+    (flet ((han.host:quit (&optional (code 0)) (throw 'cli-exit code)))
+      (check-equal 1
+                   (catch 'cli-exit
+                     (han.host::%with-cli-error-boundary ("[TEST]")
+                       (error "expected failure")))))
+    (check-equal "" (get-output-stream-string *standard-output*))))
+
+(deftest test-host-cli-boundary-preserves-warnings-and-conditions ()
+  (let ((warnings 0) (conditions 0))
+    (handler-bind
+        ((warning (lambda (condition)
+                    (incf warnings)
+                    (muffle-warning condition)))
+         (simple-condition (lambda (condition)
+                             (unless (typep condition 'warning)
+                               (incf conditions)))))
+      (check-equal :continued
+                   (han.host::%with-cli-error-boundary ("[TEST]")
+                     (warn "expected warning")
+                     (signal 'simple-condition :format-control "notice")
+                     :continued)))
+    (check-equal 1 warnings)
+    (check-equal 1 conditions)))
+
+#+sbcl
+(deftest test-host-cli-boundary-interrupt-exits-without-debugger ()
+  (let ((*error-output* (make-string-output-stream)))
+    (flet ((han.host:quit (&optional (code 0)) (throw 'cli-exit code)))
+      (check-equal 1
+                   (catch 'cli-exit
+                     (han.host::%with-cli-error-boundary ("[TEST]")
+                       (signal 'sb-sys:interactive-interrupt)))))
+    (check-equal (format nil "[TEST] Interrupted.~%")
+                 (get-output-stream-string *error-output*))))
+
+(deftest test-host-full-character-output-string ()
+  (let* ((character (code-char #x9879))
+         (string
+           (han.host:with-character-output-to-string (out)
+             (write-string "probe-" out)
+             (write-char character out))))
+    (check-equal (char string (1- (length string))) character)
+    (check-true (typep string 'string))))
+
+(deftest test-host-standard-input-terminal-p-returns-boolean ()
+  (check-true
+   (member (han.host:standard-input-terminal-p) '(nil t))))
+
+(deftest test-host-standard-error-terminal-p-returns-boolean ()
+  (check-true
+   (member (han.host:standard-error-terminal-p) '(nil t)))
+  (check-equal :external
+               (nth-value 1 (find-symbol "STANDARD-ERROR-TERMINAL-P" :han.host))))
+
+(deftest test-host-standard-error-terminal-p-has-no-stream-effects ()
+  (with-input-from-string (*standard-input* "unread")
+    (let ((*standard-output* (make-string-output-stream))
+          (*error-output* (make-string-output-stream)))
+      (check-true (member (han.host:standard-error-terminal-p) '(nil t)))
+      (check-equal "" (get-output-stream-string *standard-output*))
+      (check-equal "" (get-output-stream-string *error-output*))
+      (close *error-output*)
+      (check-true (member (han.host:standard-error-terminal-p) '(nil t)))
+      (check-equal "unread" (read-line *standard-input*)))))
+
+#+lispworks
+(deftest test-host-runtime-output-interactivity-follows-descriptor ()
+  (let ((stream (han.host::%lispworks-runtime-output 2)))
+    (check-equal (han.host:standard-error-terminal-p)
+                 (not (null (interactive-stream-p stream))))
+    (check-equal 0 (han.host::%lispworks-output-line-column stream)))
+  (let ((stream (han.host::%lispworks-runtime-output -1)))
+    (check-false (interactive-stream-p stream))
+    (close stream)
+    (check-false (interactive-stream-p stream)))
+  (let ((*error-output* (make-string-output-stream)))
+    (check-false (interactive-stream-p *error-output*))
+    (check-equal "" (get-output-stream-string *error-output*))))
 
 (deftest test-host-run-program-basic ()
   (let ((process (han.host:run-program "/bin/sh"
@@ -201,6 +323,61 @@
               names)))
     (check-true (%unique-string-list-p names))))
 
+(deftest test-host-current-process-id ()
+  (let ((pid (han.host:current-process-id)))
+    (check-true (integerp pid))
+    (check-true (> pid 0))))
+
+(deftest test-host-append-utf8-line ()
+  (let* ((root (%han-host-test-directory))
+         (file (merge-pathnames "logs/history.jsonl" root))
+         (unicode-line
+           (han.host:with-character-output-to-string (out)
+             (write-string "unicode-" out)
+             (write-char (code-char #x9879) out))))
+    (unwind-protect
+         (progn
+           (han.host:append-utf8-line file "first")
+           (han.host:append-utf8-line file unicode-line)
+           (with-open-file (in file
+                               :direction :input
+                               :element-type 'character
+                               :external-format :utf-8)
+             (check-equal (read-line in nil nil) "first")
+             (check-equal (read-line in nil nil) unicode-line)
+             (check-equal (read-line in nil :eof) :eof)))
+      (ignore-errors
+        (when (han.host:directory-exists-p root)
+          (han.host:delete-directory-tree root))))))
+
+(deftest test-host-run-program-sync-unicode-path-argument ()
+  (let* ((root (%han-host-test-directory))
+         (leaf (with-output-to-string (out nil :element-type 'character)
+                 (write-string "probe-" out)
+                 (write-char (code-char #x9879) out)))
+         (file (merge-pathnames leaf root)))
+    (unwind-protect
+         (progn
+           (ensure-directories-exist file)
+           (with-open-file (out file
+                                :direction :output
+                                :if-exists :supersede
+                                :if-does-not-exist :create
+                                :element-type '(unsigned-byte 8))
+             (write-byte 120 out))
+           (multiple-value-bind (stdout stderr code)
+               (han.host:run-program-sync
+                (list "/bin/chmod" "+x" (namestring file))
+                :output :string
+                :error-output :string
+                :ignore-error-status t)
+             (check-equal stdout "")
+             (check-equal stderr "")
+             (check-equal code 0)))
+      (ignore-errors
+        (when (han.host:directory-exists-p root)
+          (han.host:delete-directory-tree root))))))
+
 (deftest test-host-file-directory-helpers-without-uiop ()
   (let* ((root (%han-host-test-directory))
          (file (merge-pathnames "a.txt" root))
@@ -227,6 +404,15 @@
                   (mapcar #'file-namestring
                           (han.host:directory-files root))
                   :test #'equal))
+           (check-false
+            (find "b"
+                  (mapcar #'file-namestring
+                          (han.host:directory-files root))
+                  :test #'equal))
+           (check-equal
+            (mapcar #'file-namestring
+                    (han.host:directory-files subdir))
+            '("b"))
            (check-true
             (find "sub"
                   (mapcar (lambda (path)

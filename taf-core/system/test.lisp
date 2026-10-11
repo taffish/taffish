@@ -11,6 +11,12 @@
         nil)
     (error () t)))
 
+(defun %taf-system-error-string (thunk)
+  (handler-case
+      (progn (funcall thunk) nil)
+    (error (condition)
+      (princ-to-string condition))))
+
 (defun %taf-system-temp-dir ()
   (let ((name (format nil "taf-system-test-~A/" (gensym "DIR"))))
     (merge-pathnames name (uiop:temporary-directory))))
@@ -35,7 +41,9 @@
   (ensure-directories-exist path)
   (with-open-file (out path :direction :output
                             :if-exists :supersede
-                            :if-does-not-exist :create)
+                            :if-does-not-exist :create
+                            :element-type 'character
+                            :external-format :utf-8)
     (write-string string out)))
 
 (deftest test-taf-system-path-env-contains-dir-normalizes-slash ()
@@ -252,6 +260,23 @@ enabled = true
            (content (han.os:load-string (getf result :file))))
       (check-equal (getf result :profile) :github)
       (check-true (search "language = \"auto\"" content :test #'char=)))))
+
+(deftest test-taf-system-config-existing-file-message-is-multiline ()
+  (let ((message
+          (taffish.i18n:with-language ("en")
+            (taf.core::%config-message
+             "config.error.exists"
+             :path "/tmp/config.toml"))))
+    (check-true
+     (search
+      (format nil
+              "config file already exists: /tmp/config.toml~%Use --force")
+      message
+      :test #'char=))
+    (check-equal (search "config.tomlnUse --force"
+                         message
+                         :test #'char=)
+                 nil)))
 
 (deftest test-taf-system-config-language-query-is-read-only ()
   (with-taf-system-temp-dir (root)
@@ -720,14 +745,14 @@ url = \"file:///index.json\"
           (system-home (han.path:join-path root "system/")))
       (with-taf-system-doctor-stubs
         (let ((summary
-                (with-output-to-string (out)
+                (with-output-to-string (out nil :element-type 'character)
                   (let ((*standard-output* out))
                     (taf.core:system-doctor
                      :scope :user
                      :user-home user-home
                      :system-home system-home))))
               (detail
-                (with-output-to-string (out)
+                (with-output-to-string (out nil :element-type 'character)
                   (let ((*standard-output* out))
                     (taf.core:system-doctor
                      :scope :user
@@ -735,15 +760,15 @@ url = \"file:///index.json\"
                      :system-home system-home
                      :detail-p t))))
               (json
-                (with-output-to-string (out)
+                (with-output-to-string (out nil :element-type 'character)
                   (let ((*standard-output* out))
                     (taf.core:system-doctor
                      :scope :user
                      :user-home user-home
                      :system-home system-home
                      :json-p t)))))
-          (check-false (search "evidence    :" summary))
-          (check-true (search "evidence    :" detail))
+          (check-false (search "evidence:" summary))
+          (check-true (search "evidence:" detail))
           (let ((parsed (han.json:parse-json json)))
             (check-equal (han.json:get-json parsed "schema_version")
                          "taffish.doctor/v1")
@@ -772,13 +797,13 @@ url = \"file:///index.json\"
           (system-home (han.path:join-path root "system/")))
       (let ((english
               (taffish.i18n:with-language ("en")
-                (with-output-to-string (out)
+                (with-output-to-string (out nil :element-type 'character)
                   (let ((*standard-output* out))
                     (taf.core:system-config
                      :user-home user-home :system-home system-home)))))
             (chinese
               (taffish.i18n:with-language ("zh")
-                (with-output-to-string (out)
+                (with-output-to-string (out nil :element-type 'character)
                   (let ((*standard-output* out))
                     (taf.core:system-config
                      :user-home user-home :system-home system-home))))))
@@ -805,7 +830,7 @@ url = \"file:///index.json\"
                   :system-home system-home
                   :verbose nil))
                (doctor-text ()
-                 (with-output-to-string (out)
+                 (with-output-to-string (out nil :element-type 'character)
                    (let ((*standard-output* out))
                      (taf.core:system-doctor
                       :scope :user
@@ -950,9 +975,189 @@ url = \"file:///index.json\"
         (check-equal (getf clear-result :cleared-p) t)
         (check-equal (probe-file file) nil)))))
 
+(deftest test-taf-system-history-human-output-localized-json-invariant ()
+  (with-taf-system-temp-dir (user-home)
+    (taf.core:system-record-history-event
+     :event "run"
+     :status "success"
+     :command "taf-i18n-demo"
+     :args '("--sample" "A")
+     :exit-code 0
+     :user-home user-home
+     :safe nil)
+    (flet ((render (language json-p)
+             (taffish.i18n:with-language (language)
+               (with-output-to-string
+                   (*standard-output* nil :element-type 'character)
+                 (taf.core:system-history
+                  :last 1
+                  :json-p json-p
+                  :user-home user-home)))))
+      (let ((english (render "en" nil))
+            (chinese (render "zh" nil))
+            (english-json (render "en" t))
+            (chinese-json (render "zh" t)))
+        (check-true (search "[TAF] history" english :test #'char=))
+        (check-true (search "[TAF] 执行历史" chinese :test #'char=))
+        (check-true (search "taf-i18n-demo" english-json :test #'char=))
+        (check-equal chinese-json english-json)))))
+
+(deftest test-taf-system-history-id-survives-repeated-image-state ()
+  (let* ((timestamp "2026-08-30T12:34:56Z")
+         (seed (make-random-state t))
+         (first (let ((*random-state* (make-random-state seed)))
+                  (taf.core::%history-id timestamp)))
+         (second (let ((*random-state* (make-random-state seed)))
+                   (taf.core::%history-id timestamp))))
+    (check-false (string= first second))))
+
+(deftest test-taf-system-history-record-preserves-unicode ()
+  (with-taf-system-temp-dir (user-home)
+    (let* ((record
+             (taf.core:system-record-history-event
+              :event "build"
+              :status "success"
+              :project (list :name "unicode-flow"
+                             :kind "flow"
+                             :version "0.1.0"
+                             :release "1"
+                             :command-name "taf-unicode-flow"
+                             :root-dir "/tmp/项目目录/"
+                             :main-path "src/主程序.taf")
+              :user-home user-home
+              :safe nil))
+           (object (han.json:parse-json (getf record :line))))
+      (check-equal "/tmp/项目目录/"
+                   (han.json:get-json object "project_root"))
+      (check-equal "src/主程序.taf"
+                   (han.json:get-json object "project_main")))))
+
+(deftest test-taf-system-config-error-localized-and-doctor-evidence-invariant ()
+  (with-taf-system-temp-dir (root)
+    (let* ((user-home (han.path:join-path root "user"))
+           (system-home (han.path:join-path root "system"))
+           (config-file (han.path:join-path user-home "config.toml")))
+      (%taf-system-write-string
+       config-file
+       (format nil "schema_version = \"\"~%"))
+      (flet ((config-error (language)
+               (taffish.i18n:with-language (language)
+                 (%taf-system-error-string
+                  (lambda ()
+                    (taf.core:system-config
+                     :scope :user
+                     :user-home user-home
+                     :system-home system-home
+                     :verbose nil)))))
+             (doctor-json (language)
+               (taffish.i18n:with-language (language)
+                 (han.json:encode-json
+                  (taf.core::%doctor-result-json
+                   (taf.core:system-doctor
+                    :scope :user
+                    :user-home user-home
+                    :system-home system-home
+                    :verbose nil))))))
+        (let ((english (config-error "en"))
+              (chinese (config-error "zh")))
+          (check-true (search "must be a non-empty string" english
+                              :test #'char=))
+          (check-true (search "必须是非空字符串" chinese :test #'char=))
+          (check-true (search "schema_version" english :test #'char=))
+          (check-true (search "schema_version" chinese :test #'char=)))
+        (check-equal (doctor-json "zh") (doctor-json "en"))))))
+
 (deftest test-taf-system-normalize-scope-error ()
   (check-equal
    (%taf-system-signal-error-p
     (lambda ()
       (taf.core::%normalize-taffish-scope :bad)))
    t))
+
+(deftest test-taf-system-doctor-index-validation ()
+  (with-taf-system-temp-dir (home)
+    (flet ((inspect-index ()
+             (taf.core:system-doctor :check :index :user-home home :system-home home :verbose nil)))
+      (check-equal :warning (getf (inspect-index) :diagnostic-status))
+      (check-equal 0 (getf (inspect-index) :exit-code))
+      (dolist (case '(("{" :error)
+                      ("{\"schema_version\":\"future/v2\"}" :unknown)
+                      ("{\"schema_version\":\"taffish.index/v1\",\"packages\":[]}" :error)
+                      ("{\"schema_version\":\"taffish.index/v1\",\"packages\":{}}" :ok)
+                      ("{\"schema_version\":\"taffish.index/v1\",\"packages\":{\"x\":{\"latest\":\"1-r1\",\"versions\":{}}}}" :error)))
+        (%taf-system-write-string (han.path:join-path home "index/current.json") (first case))
+        (check-equal (second case) (getf (inspect-index) :diagnostic-status))))))
+
+(deftest test-taf-system-doctor-hub-legacy-corrupt-and-targets ()
+  (with-taf-hub-temp-dir (root)
+    (multiple-value-bind (home index package) (%taf-hub-order-fixture root)
+      (declare (ignore index package))
+      (%taf-hub-order-install home "2.0.0-a.7.10-r1")
+      (let* ((entry (first (taf.core::%hub-uninstall-installed-entries home)))
+             (manifest (%taf-hub-diagnostic-manifest entry))
+             (bad (han.path:join-path home "apps/broken/1-r1/install.json")))
+        (delete-file manifest)
+        (%taf-system-write-string bad "{")
+        (delete-file (taf.core::%hub-index-file home))
+        (let ((result (taf.core:system-doctor :check :hub :user-home home :system-home home :verbose nil)))
+          (check-equal 1 (getf result :exit-code))
+          (check-equal 3 (length (getf result :diagnostics))))
+        (let ((result (taf.core:system-doctor :check :hub :targets '("order-demo")
+                                             :user-home home :system-home home :verbose nil)))
+          (check-equal 0 (getf result :exit-code))
+          (check-equal :warning (getf result :diagnostic-status))
+          (check-equal 2 (length (getf result :diagnostics))))
+        (let ((result (taf.core:system-doctor :check :hub :targets '("absent")
+                                             :user-home home :system-home home :verbose nil)))
+          (check-equal 1 (getf result :exit-code)))
+        (check-equal nil (han.path:file-exists-p manifest))))))
+
+(deftest test-taf-system-doctor-specialized-read-only-and-i18n ()
+  (with-taf-system-temp-dir (root)
+    (let* ((home (han.path:join-path root "absent/"))
+           (taf.core::*taffish-doctor-backend-probe-function*
+             (lambda (&rest args) (declare (ignore args)) (error "must not probe backend"))))
+      (flet ((result () (taf.core:system-doctor :check :hub :user-home home :system-home home :verbose nil)))
+        (check-equal (han.json:encode-json (taf.core::%doctor-result-json (taffish.i18n:with-language ("en") (result))))
+                     (han.json:encode-json (taf.core::%doctor-result-json (taffish.i18n:with-language ("zh") (result)))))
+        (check-equal nil (han.path:directory-exists-p home)))
+      (dolist (language '("en" "zh"))
+        (let ((text (with-output-to-string (*standard-output*)
+                      (taffish.i18n:with-language (language)
+                        (taf.core:system-doctor :check :index :user-home home :system-home home)))))
+          (check-true (search "taf update --user" text))
+          (check-true (search "index-missing" text))))
+      (dolist (options '((:check :hub :init-p t) (:check :index :targets ("x"))
+                         (:check :hub :shell :bash) (:check :other)))
+        (check-true (%taf-system-signal-error-p
+                     (lambda () (apply #'taf.core:system-doctor :user-home home :verbose nil options))))))))
+
+(deftest test-taf-system-progress-phases-and-closed-stream ()
+  (dolist (language '("en" "zh"))
+    (taffish.i18n:with-language (language)
+      (let* ((*error-output* (make-string-output-stream))
+             (callback (taf.core::%hub-make-diagnostic-progress t (lambda () 0))))
+        (funcall callback 0 0 :enumerate)
+        (funcall callback 0 2 :validate)
+        (funcall callback 2 2 :aliases)
+        (funcall callback 2 2 :done)
+        (let ((text (get-output-stream-string *error-output*)))
+          (check-equal 4 (count #\Newline text))
+          (check-false (find #\Return text))
+          (check-false (find (code-char 27) text)))
+        (close *error-output*)
+        (check-equal nil (funcall callback 0 2 :enumerate))
+        (check-equal nil (funcall callback 2 2 :done))))))
+
+(deftest test-taf-system-doctor-path-fields-align-both-languages ()
+  (dolist (language '("en" "zh"))
+    (taffish.i18n:with-language (language)
+      (let* ((text (with-output-to-string (*standard-output*)
+                     (taf.core::%doctor-print-paths :user #p"/tmp/user/" #p"/tmp/system/")))
+             (lines (with-input-from-string (in text)
+                      (loop for line = (read-line in nil nil) while line collect line)))
+             (columns (mapcar (lambda (line)
+                                (taf.core::%display-width (subseq line 0 (position #\: line))))
+                              (rest lines))))
+        (check-equal 3 (length columns))
+        (check-true (apply #'= columns))))))

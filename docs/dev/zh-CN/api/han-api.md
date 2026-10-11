@@ -149,6 +149,11 @@ host 是低层适配 API。普通 TAFFISH 代码优先用 `han.os`。
 (han.host:getenv "HOME")
 (han.host:cwd)
 (han.host:quit 0)
+(han.host:configure-runtime-io)
+(han.host:standard-input-terminal-p)
+(han.host:standard-error-terminal-p)
+(han.host:current-process-id)
+(han.host:append-utf8-line path line)
 (han.host:file-exists-p path)
 (han.host:directory-exists-p path)
 (han.host:run-program-sync command)
@@ -165,6 +170,11 @@ SBCL, LispWorks
 ```
 
 不支持实现会抛 `unsupported-host-function`。
+
+`standard-error-terminal-p` 是无副作用的 fd 2 TTY 查询，不跟随 Lisp `*error-output*`
+动态绑定。支持的宿主对关闭或非 TTY stderr 返回假。它不检测终端尺寸或光标能力；
+renderer 还须检查实际输出流与 `TERM=dumb`，并禁止在 JSON/MCP 中输出人类进度。
+详见 [host 终端检测](../han/host.md#runtime-io-与终端检测)。
 
 ## han.source
 

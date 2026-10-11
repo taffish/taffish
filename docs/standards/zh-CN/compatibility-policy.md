@@ -94,7 +94,8 @@ TAFFISH 当前使用字符串 schema 版本：
 
 ## 一致性测试方向
 
-当前外部测试已经覆盖真实的编译器、项目和 Hub/package 工作流。后续应继续扩展到：
+当前外部测试已经覆盖 delivered binary 启动、编译器、项目、Hub/package、system/doctor
+与本地化工作流。后续应继续扩展到：
 
 1. TAF lexer/parser/binder/compiler 的黄金输出。
 2. `taffish.toml` schema 验证。
@@ -102,5 +103,7 @@ TAFFISH 当前使用字符串 schema 版本：
 4. install metadata 的读写和 uninstall 兼容。
 5. config merge、index URL 解析、source rewrite。
 6. container backend 选择与生成 shell 的关键片段。
+7. 人类语言回退，同时保持 JSON、shell、history 与 MCP 机器接口不变。
+8. macOS/SBCL 与 Linux/LispWorks 两侧的 host/process/path 行为。
 
 在考虑规范 `v1.0` 之前，仍需要更完整的契约导向一致性测试覆盖。

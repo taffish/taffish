@@ -125,11 +125,18 @@ Side effects:
 4. May rewrite `[dependencies]` for flow projects.
 5. Runs Docker or Podman build when `:image-p t`.
 
+Command-wrapper output is content-addressed through a private build manifest.
+An unchanged valid wrapper/snapshot returns without rewriting either artifact;
+rebuild replacement is staged and rolls back to the last valid pair on failure.
+
 Return:
 
 ```lisp
 (:project project :command command-result :image image-result)
 ```
+
+The command plist preserves its existing fields and additively reports
+`:status`, `:source-sha256`, `:wrapper-sha256`, and `:manifest-file`.
 
 ### `taf.core:project-publish`
 
@@ -154,6 +161,12 @@ Role: publish a project to GitHub.
 
 Default `dry-run t` means no publication is performed.
 
+Publication is version-order-independent: it does not require the current
+version to exceed an earlier one. With `:release-p t`, `:channel :latest`
+(the default) creates a formal GitHub Release marked Latest; `:pre` creates a
+GitHub prerelease without setting Latest; `:no-latest` creates a formal Release
+without setting Latest. With `:release-p nil`, publication remains tag-only.
+
 Non-dry-run side effects:
 
 1. `git init`.
@@ -169,7 +182,14 @@ Publication uses an inspect/ensure state machine. Repeating the same call after
 an interruption resumes matching partial state, while conflicting commit, tag,
 repository, policy, or Release identities fail without overwrite. The result
 keeps the legacy fields and additionally reports `:outcome`, `:phases`,
-`:resumed-p`, `:complete-p`, `:journal-file`, and `:warnings`.
+`:resumed-p`, `:complete-p`, `:journal-file`, `:warnings`, and `:build-status`.
+With `:build-p t`, build is ensured before commit and is skipped after a
+matching release commit/tag identity is established.
+
+Retry with the same channel and release intent. A matching existing Release is
+not edited and does not reclaim Latest from a later publication. The legacy
+`:remote-latest` result is only a remote-tag sorting diagnostic, not the GitHub
+Latest designation, and is not used to allow or reject publication.
 
 ## Hub API
 
@@ -218,6 +238,19 @@ Side effects:
 
 Supports `dry-run-p`. Dry-run should not write files.
 
+Optional `:repair-p` defaults to `nil`. With `t`, these APIs preflight the whole
+selected set read-only and rebuild only existing indexed identities whose
+source, identity, managed paths and fixed source commit pass repair checks.
+Verified targets are skipped. Any blocked target prevents batch writes; absent
+explicit targets, unknown schemas, private sources and custom launchers are
+blocked. Repair does not recursively install dependencies and rejects `:force-p`;
+the single-target API also rejects caller-supplied `:record` in repair mode.
+Use `:dry-run-p t` to preview; explicit single/multiple repair otherwise applies.
+The opt-in result is `taffish.repair-plan/v1`; ordinary-call results are unchanged.
+See [repair policy](../taf-core/hub-maintenance.md#explicit-repair) for staging,
+backups, validation, rollback and interrupted-journal limits. No MCP repair
+parameter or execution entry is added.
+
 Safety note: source URLs are resolved through system config rewrite rules. Installation runs git and build logic.
 
 ### `taf.core:hub-install-all`
@@ -231,6 +264,22 @@ Side effects: same as `hub-install` for each package when `yes-p` is true.
 Supports `dry-run-p`; dry-run is the expected default at the CLI and MCP
 planner layers. Optional `prune-old-p` removes older local versions only after
 successful non-dry-run installation.
+
+By default, `:repair-p t` selects only already-installed index.latest identities
+within `:kind` and `:scope`. Truly absent identities are counted and skipped;
+existing roots with damaged metadata are blocked. It neither upgrades other
+versions nor installs missing apps/dependencies. Use an explicit `hub-install`
+target with `:version-id` for one older identity, or `:all-installed-p t` for
+all installed versions. Repair rejects `:force-p` and
+`:prune-old-p`; it previews unless `:yes-p t` and `:dry-run-p nil`. It uses the
+same all-target preflight and `taffish.repair-plan/v1` result as above.
+
+`:all-installed-p` defaults to `nil` and requires `:repair-p t`. With `t`, targets
+come from all installed local versions rather than index.latest. Missing or
+unresolvable records remain blocked. Kind/scope filtering, preview/yes, and the
+existing safety preflight still apply. The repair result adds `selection` with
+`index-latest`, `installed-all-versions`, or `explicit`; existing fields and
+ordinary-install results are unchanged.
 
 ### `taf.core:hub-outdated`
 
@@ -256,7 +305,9 @@ Supports `dry-run-p`; dry-run should not write files.
 
 Stability: stable.
 
-Role: remove older local app versions while keeping the newest local version.
+Role: remove reliably older same-source versions while retaining a valid installed
+index.latest. Missing or invalid targets are skipped; private/unknown/conflicting
+origins and newer or ambiguously ordered identities are protected.
 
 Side effects:
 
@@ -269,10 +320,21 @@ Apptainer caches, or SIF files.
 
 ### Package Maintenance Output
 
-`hub-install-all`, `hub-outdated`, `hub-upgrade`, and `hub-prune` return or print
+Ordinary `hub-install-all` (without repair), `hub-outdated`, `hub-upgrade`, and `hub-prune` return or print
 the same package-plan structure. JSON output preserves every item. Default text
-output is optimized for humans and may suppress `skip` items; if every item is
-skipped, it reports `no changes`.
+output suppresses healthy unchanged items, but still shows validation warnings
+and missing-target/source blockers. A version can be current while its integrity
+is unverified. With no changes, warnings or blockers, it reports `no changes`.
+
+Repeated diagnostics are grouped by issue type/state and policy within the scope,
+with counts and at most three examples per group; repeated skip rows are omitted.
+The complete structured evidence remains available. Human stderr progress uses
+TTY in-place stages/counts and rate-limited log lines. `:verbose nil`, JSON and
+MCP suppress progress; probe caches are local to a read-only scan, not mutations.
+
+Online targets follow index.latest, never a locally recomputed maximum.
+An exact valid target is current even when a newer local version also exists;
+maintenance does not automatically downgrade. See the [Hub version policy](../taf-core/hub-system.md#version-selection-and-safe-pruning).
 
 ### `taf.core:hub-uninstall` / `hub-uninstall-many`
 
@@ -344,7 +406,7 @@ Profiles:
 
 ### `taf.core:system-config-language`
 
-Stability: additive in v0.11.0.
+Stability: additive public API.
 
 Role: inspect configured/displayed language details and available built-in or
 external locale packs, or update the selected scope's top-level `language`
@@ -368,11 +430,26 @@ Additive controls:
 :shell :auto|:bash|:zsh|:fish
 :detail-p boolean
 :json-p boolean
+:check :environment|:index|:hub
+:targets list-of-strings
 ```
 
 The result preserves `:status`, `:directories`, `:executables`, and `:paths`,
 and adds `:diagnostic-status` and `:diagnostics`. Rendering is controlled by
 `:verbose`; JSON uses schema `taffish.doctor/v1`.
+
+Default Hub text uses bounded issue/policy summaries (at most three examples per
+group); `:detail-p t` corresponds to CLI `--verbose` and retains full inspections.
+`:verbose` controls rendering, not evidence completeness. Returned plists and
+JSON retain all diagnostics. Hub scans batch read-only probes; human progress is
+stderr-only, TTY in-place or rate-limited for logs, and absent from JSON/MCP.
+
+`:check` defaults to `:environment`. `:index` and `:hub` are offline, read-only
+checks with additive `:check` / `:exit-code` and per-item `:inspection` evidence.
+Only `:hub` accepts `:targets` (app or command names); specialized checks reject
+init and non-default shell selection. Exit code 1 means invalid/unknown checks,
+0 includes warnings. Returned legacy fields remain present; skipped default
+environment groups have empty lists. See [doctor contract](../taf-core/system-history-doctor.md).
 
 Side effects: none by default. It creates missing TAFFISH-owned directories
 only when `init-p t`. System-scope init requires root. It never edits shell or

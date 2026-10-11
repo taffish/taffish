@@ -13,13 +13,19 @@
             (%hub-uninstall-installed-entries home))))
     (cond
       ((null matches)
-       (error "[which] local TAFFISH command is not installed: ~A~@[ ~A~]"
-              query
-              normalized-version-id))
+       (%hub-error "installed-missing"
+                   :command "which"
+                   :query query
+                   :version (if normalized-version-id
+                                (format nil " ~A" normalized-version-id)
+                                "")))
       ((> (length matches) 1)
-       (error "[which] multiple installed versions match ~A. Specify VERSION-ID.~%Candidates: ~{~A~^; ~}"
-              query
-              (mapcar #'%hub-uninstall-candidate-string matches)))
+       (%hub-error "installed-multiple"
+                   :command "which"
+                   :query query
+                   :candidates
+                   (format nil "~{~A~^; ~}"
+                           (mapcar #'%hub-uninstall-candidate-string matches))))
       (t
        (first matches)))))
 
@@ -107,10 +113,10 @@
    (cons "bin_in_path" (getf result :bin-in-path-p))))
 
 (defun %hub-which-status-string (exists-p)
-  (if exists-p "yes" "no"))
+  (%hub-status-display (if exists-p :yes :no)))
 
 (defun %hub-which-print-result (result)
-  (format t "[TAF] which: ~A~%" (getf result :artifact-name))
+  (%hub-print-message "which.header" :artifact (getf result :artifact-name))
   (%print-hub-info-field "scope"
                          (string-downcase (string (getf result :scope))))
   (%print-hub-info-field "name" (getf result :package-name))
@@ -128,14 +134,17 @@
   (%print-hub-info-field "bin" (getf result :bin-dir))
   (%print-hub-info-field
    "path"
-   (if (getf result :bin-in-path-p) "ok" "not in PATH"))
+   (if (getf result :bin-in-path-p)
+       (%hub-message "value.ok")
+       (%hub-message "value.not-in-path")))
   (%print-hub-info-field
    "exists"
-   (format nil "launcher=~A, command=~A, app=~A, source=~A"
-           (%hub-which-status-string (getf result :launcher-exists-p))
-           (%hub-which-status-string (getf result :command-exists-p))
-           (%hub-which-status-string (getf result :install-root-exists-p))
-           (%hub-which-status-string (getf result :source-dir-exists-p))))
+   (%hub-message
+    "which.exists"
+    :launcher (%hub-which-status-string (getf result :launcher-exists-p))
+    :command (%hub-which-status-string (getf result :command-exists-p))
+    :app (%hub-which-status-string (getf result :install-root-exists-p))
+    :source (%hub-which-status-string (getf result :source-dir-exists-p))))
   nil)
 
 (defun hub-which (&key
@@ -153,7 +162,7 @@
                               :user-home user-home-path
                               :system-home system-home-path)))
     (unless (%hub-non-empty-string-p query)
-      (error "[which] app name or command name missing."))
+      (%hub-error "target-missing" :command "which"))
     (let* ((entry (%hub-which-find-installed home query version-id))
            (result (%hub-which-result entry
                                       normalized-scope

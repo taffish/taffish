@@ -86,10 +86,13 @@ choose an explicit policy:
 | --- | --- |
 | per-user cache | Users run `taf doctor --init --user`; SIF files go under their own user home. |
 | administrator pre-cache | Root runs common apps once so SIF files exist in system home before users run them. |
-| shared writable cache | Administrator sets sticky permissions such as `chmod 1777 /opt/taffish/images/sif`. |
+| shared writable cache | Administrator explicitly installs with `--system --shared-sif-cache` (or applies equivalent sticky `1777` policy to the exact SIF directory). |
 
 The shared writable cache is a site policy decision. It is convenient for
-shared servers, but should not be silently applied by the installer.
+shared servers, but is never selected silently. Ordinary system installation
+creates a missing SIF directory with administrator-managed `0755` and preserves
+the mode of an existing directory. The explicit shared policy changes and
+verifies only `<system-home>/images/sif/` as `1777`.
 
 ## Hub Index Files
 

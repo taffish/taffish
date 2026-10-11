@@ -19,7 +19,7 @@ _taf_system_case_doctor_read_only_and_output() {
     output=$($TAF_BIN doctor --user --shell bash) || exit 1
     assert_contains "$output" "Diagnostics:" "doctor concise diagnostics" || exit 1
     assert_contains "$output" "shell-completion" "doctor reports completion issue" || exit 1
-    assert_not_contains "$output" "evidence    :" "doctor concise output hides evidence" || exit 1
+    assert_not_contains "$output" "evidence:" "doctor concise output hides evidence" || exit 1
     [ ! -e "$TAFFISH_USER_HOME" ] || {
       printf 'read-only doctor unexpectedly created user home\n' >&2
       exit 1
@@ -30,7 +30,7 @@ _taf_system_case_doctor_read_only_and_output() {
       "doctor keeps vimrc" || exit 1
 
     verbose=$($TAF_BIN doctor --user --shell bash --verbose) || exit 1
-    assert_contains "$verbose" "evidence    :" "doctor verbose evidence" || exit 1
+    assert_contains "$verbose" "evidence:" "doctor verbose evidence" || exit 1
     assert_contains "$verbose" "remediation :" "doctor verbose remediation" || exit 1
 
     json=$($TAF_BIN doctor --user --shell bash --json) || exit 1
@@ -220,6 +220,184 @@ assert isinstance(structured["diagnostics"], list) and structured["diagnostics"]
   )
 }
 
+_taf_system_mcp_session_requests() {
+  cat <<'EOF_MCP_SESSION'
+{"jsonrpc":"2.0","id":101,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"external-conformance","version":"0"}}}
+{"jsonrpc":"2.0","method":"notifications/initialized","params":{}}
+{"jsonrpc":"2.0","id":102,"method":"tools/list","params":{}}
+{"jsonrpc":"2.0","id":103,"method":"resources/list","params":{}}
+{"jsonrpc":"2.0","id":104,"method":"prompts/list","params":{}}
+{"jsonrpc":"2.0","id":105,"method":"tools/call","params":{"name":"taffish_get_version","arguments":{}}}
+{"jsonrpc":"2.0","id":106,"method":"tools/call","params":{"name":"taffish_get_config","arguments":{}}}
+{"jsonrpc":"2.0","id":107,"method":"tools/call","params":{"name":"taffish_get_help","arguments":{"topic":"safety"}}}
+EOF_MCP_SESSION
+}
+
+_taf_system_case_mcp_long_stdio_session() {
+  dir=$TAFFISH_TEST_TMP_ROOT/taf-system-mcp-session
+  mkdir -p "$dir/user-home" "$dir/system-home"
+
+  _taf_system_mcp_session_requests |
+    env TAFFISH_LANGUAGE=zh TAFFISH_CONFIG= \
+      TAFFISH_USER_HOME="$dir/user-home" \
+      TAFFISH_SYSTEM_HOME="$dir/system-home" \
+      "$TAFFISH_MCP_BIN" >"$dir/responses.jsonl" 2>"$dir/stderr.log" || {
+        printf 'MCP long stdio session process failed\n' >&2
+        sed 's/^/  /' "$dir/stderr.log" >&2
+        return 1
+      }
+
+  python3 - "$dir/responses.jsonl" <<'PY'
+import json
+import sys
+
+path = sys.argv[1]
+with open(path, "r", encoding="utf-8") as handle:
+    lines = [line.rstrip("\n") for line in handle if line.strip()]
+
+responses = []
+for number, line in enumerate(lines, 1):
+    try:
+        responses.append(json.loads(line))
+    except json.JSONDecodeError as error:
+        raise AssertionError(f"response line {number} is not JSON: {line!r}") from error
+
+expected_ids = {101, 102, 103, 104, 105, 106, 107}
+actual_ids = {response.get("id") for response in responses}
+assert actual_ids == expected_ids, (actual_ids, expected_ids, responses)
+assert len(responses) == len(expected_ids), responses
+by_id = {response["id"]: response for response in responses}
+assert all(response.get("jsonrpc") == "2.0" for response in responses)
+assert all("error" not in response for response in responses), responses
+
+assert "protocolVersion" in by_id[101]["result"]
+tools = by_id[102]["result"]["tools"]
+tool_names = {tool["name"] for tool in tools}
+assert {"taffish_get_version", "taffish_get_config", "taffish_get_help"} <= tool_names
+assert isinstance(by_id[103]["result"]["resources"], list)
+assert isinstance(by_id[104]["result"]["prompts"], list)
+
+for response_id in (105, 106, 107):
+    result = by_id[response_id]["result"]
+    assert result.get("isError") in {False, None}, result
+    assert "structuredContent" in result, result
+
+assert "taffish_mcp" in by_id[105]["result"]["structuredContent"]
+assert by_id[106]["result"]["structuredContent"]["schema_version"] == "taffish.config/v1"
+assert "language" in by_id[106]["result"]["structuredContent"]
+assert by_id[107]["result"]["structuredContent"]["topic"] == "safety"
+PY
+}
+
+_taf_system_case_error_stream_and_history_identity() {
+  dir=$TAFFISH_TEST_TMP_ROOT/taf-system-stream-history
+  user_home=$dir/user-home
+  mkdir -p "$user_home"
+
+  set +e
+  "$TAF_BIN" definitely-not-a-command >"$dir/stdout.log" 2>"$dir/stderr.log"
+  status=$?
+  set -e
+  [ "$status" -ne 0 ] || harness_fail "unknown taf command unexpectedly succeeded"
+  [ ! -s "$dir/stdout.log" ] || {
+    printf 'taf user error leaked to stdout:\n' >&2
+    sed 's/^/  /' "$dir/stdout.log" >&2
+    return 1
+  }
+  stderr=$(cat "$dir/stderr.log")
+  assert_contains "$stderr" "[TAF-ERROR]" \
+    "taf user error is written to stderr" || return 1
+
+  pids=
+  for worker in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 \
+                17 18 19 20 21 22 23 24
+  do
+    env TAFFISH_USER_HOME="$user_home" "$TAF_BIN" history --record-exec \
+      --status success --command "taf-history-$worker" --exit-code 0 \
+      -- "$worker" >"$dir/record-$worker.out" 2>"$dir/record-$worker.err" &
+    pids="$pids $!"
+  done
+  failed=0
+  for pid in $pids
+  do
+    wait "$pid" || failed=1
+  done
+  [ "$failed" -eq 0 ] || harness_fail "one or more history record workers failed"
+
+  python3 - "$user_home/logs/history.jsonl" <<'PY'
+import json
+import sys
+
+path = sys.argv[1]
+with open(path, "r", encoding="utf-8") as handle:
+    lines = [line.rstrip("\n") for line in handle if line.strip()]
+assert len(lines) == 24, (len(lines), lines)
+records = [json.loads(line) for line in lines]
+ids = [record.get("id") for record in records]
+commands = [record.get("command") for record in records]
+assert all(ids), ids
+assert len(set(ids)) == len(ids), ids
+assert set(commands) == {f"taf-history-{worker}" for worker in range(1, 25)}, commands
+PY
+}
+
+_taf_system_case_mcp_unicode_compile() {
+  dir=$TAFFISH_TEST_TMP_ROOT/taf-system-mcp-unicode
+  mkdir -p "$dir/user-home" "$dir/system-home"
+
+  python3 - <<'PY' |
+import json
+
+requests = [
+    {
+        "jsonrpc": "2.0",
+        "id": 201,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2025-06-18",
+            "capabilities": {},
+            "clientInfo": {"name": "unicode-conformance", "version": "0"},
+        },
+    },
+    {"jsonrpc": "2.0", "method": "notifications/initialized", "params": {}},
+    {
+        "jsonrpc": "2.0",
+        "id": 202,
+        "method": "tools/call",
+        "params": {
+            "name": "taffish_compile_source",
+            "arguments": {"source": "<shell>\nprintf '%s\\n' '你好，MCP'"},
+        },
+    },
+]
+for request in requests:
+    print(json.dumps(request, ensure_ascii=False, separators=(",", ":")))
+PY
+    env LC_ALL="$TAFFISH_TEST_UTF8_LOCALE" LANG="$TAFFISH_TEST_UTF8_LOCALE" \
+      TAFFISH_LANGUAGE=en TAFFISH_CONFIG= \
+      TAFFISH_USER_HOME="$dir/user-home" TAFFISH_SYSTEM_HOME="$dir/system-home" \
+      "$TAFFISH_MCP_BIN" >"$dir/responses.jsonl" 2>"$dir/stderr.log" || {
+        printf 'MCP Unicode compile session failed\n' >&2
+        sed 's/^/  /' "$dir/stderr.log" >&2
+        return 1
+      }
+
+  python3 - "$dir/responses.jsonl" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], "r", encoding="utf-8") as handle:
+    responses = [json.loads(line) for line in handle if line.strip()]
+by_id = {response.get("id"): response for response in responses}
+assert set(by_id) == {201, 202}, responses
+result = by_id[202]["result"]
+assert result.get("isError") in {False, None}, result
+structured = result["structuredContent"]
+assert structured.get("ok") is True, structured
+assert "你好，MCP" in structured.get("shell", ""), structured
+PY
+}
+
 run_taf_system_conformance() {
   run_case "taf-system/doctor-read-only-and-output" \
     _taf_system_case_doctor_read_only_and_output
@@ -229,4 +407,18 @@ run_taf_system_conformance() {
     _taf_system_case_doctor_sif_and_backend_policies
   run_case "taf-system/mcp-environment-read-only" \
     _taf_system_case_mcp_environment_is_read_only
+  run_case "taf-system/mcp-long-stdio-session" \
+    _taf_system_case_mcp_long_stdio_session
+  run_case "taf-system/error-stream-and-history-identity" \
+    _taf_system_case_error_stream_and_history_identity
+  run_case "taf-system/mcp-unicode-compile" \
+    _taf_system_case_mcp_unicode_compile
+  run_case "taf-system/display-layout" \
+    python3 "$TAFFISH_TEST_REPO_ROOT/test/taf-system/display.py" layout
+  run_case "taf-system/display-progress-streams" \
+    python3 "$TAFFISH_TEST_REPO_ROOT/test/taf-system/display.py" progress
+  run_case "taf-system/command-progress-update" \
+    python3 "$TAFFISH_TEST_REPO_ROOT/test/taf-system/command-progress.py" update
+  run_case "taf-system/command-progress-hub" \
+    python3 "$TAFFISH_TEST_REPO_ROOT/test/taf-system/command-progress.py" hub
 }

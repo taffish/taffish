@@ -15,7 +15,7 @@
                                  :test #'string-equal))
      :online)
     (t
-     (error "[list] mode must be :local or :online, but got: ~S" mode))))
+     (%hub-error "list-mode" :value (%hub-repr mode)))))
 
 (defun %hub-list-limit-items (items limit)
   (cond
@@ -119,7 +119,9 @@
 (defun %hub-list-online-items (index)
   (let ((packages (%hub-json-ref index "packages")))
     (unless (han.json:json-object-p packages)
-      (error "[list] index is missing object field: packages"))
+      (%hub-error "index-missing-object"
+                  :command "list"
+                  :field "packages"))
     (sort
      (remove nil
              (mapcar (lambda (package-name)
@@ -233,8 +235,9 @@
 (defun %hub-list-print-result (result)
   (let ((mode (getf result :mode))
         (items (getf result :items)))
-    (format t "[TAF] ~A apps~%"
-            (if (eq mode :online) "indexed" "installed"))
+    (%hub-print-message (if (eq mode :online)
+                            "list.header.indexed"
+                            "list.header.installed"))
     (%print-hub-info-field "scope"
                            (string-downcase (string (getf result :scope))))
     (%print-hub-info-field "home" (getf result :home))
@@ -247,7 +250,7 @@
                 (if (eq mode :online)
                     (%hub-list-print-online-item item i)
                     (%hub-list-print-local-item item i)))
-        (format t "  no apps~%")))
+        (%hub-print-message "list.no-apps")))
   nil)
 
 (defun hub-list (&key
@@ -266,7 +269,7 @@
                               :user-home user-home-path
                               :system-home system-home-path)))
     (when (and limit (not (and (integerp limit) (> limit 0))))
-      (error "[list] limit must be a positive integer, but got: ~S" limit))
+      (%hub-error "list-limit" :value (%hub-repr limit)))
     (let* ((index-file (and (eq normalized-mode :online)
                             (%hub-index-file home)))
            (all-items

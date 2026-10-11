@@ -92,7 +92,9 @@ human output. `TAFFISH_LANGUAGE` is the highest-priority one-command override.
 Optional external packs live under `share/locales/<locale>/` in user or
 system home. They are not required directories and `doctor --init` does not
 create or download them. Built-in English and Chinese remain available when
-the entire external locale tree is absent.
+the entire external locale tree is absent. Help files and `messages.json` are
+independent sparse components; missing or invalid entries fall back per key
+without disabling valid siblings.
 
 `taf config language` is the read-only discovery/status entry point;
 `taf config language <LANGUAGE>` updates user scope and adding `--system`

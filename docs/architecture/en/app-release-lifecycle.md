@@ -173,7 +173,11 @@ target/taf-<app>-v<version>-r<release>
 target/.taf-<app>-v<version>-r<release>/
 ```
 
-The built command uses a frozen source snapshot instead of reading the current `src/` live. This makes local verification closer to what users will install.
+The built command uses a frozen source snapshot instead of reading the current
+`src/` live. A private `.taf-build.json` records exact source/wrapper identities.
+Repeating `taf build` with unchanged, valid artifacts is write-free; changed,
+missing, corrupt, or extra snapshot content causes a transactional exact rebuild.
+This makes local verification closer to what users will install.
 
 For a containerized app that needs a local image test:
 
@@ -187,7 +191,11 @@ or build command and image together:
 taf build --all --backend docker
 ```
 
-Important: `taf publish --release --yes --build` currently builds the command wrapper before publishing. It does not build and push the GHCR image. Remote image publishing is handed off to the app repository's GitHub Actions workflow.
+Important: `taf publish --release --yes --build` idempotently ensures the command
+wrapper before the release commit. Rerunning the same interrupted publish after
+the release identity is established verifies that identity and skips rebuilding.
+It does not build or push the GHCR image. Remote image publishing is handed off
+to the app repository's GitHub Actions workflow.
 
 ## Phase 5: Pre-Publish Dry Run
 
@@ -204,7 +212,7 @@ The dry run should confirm:
 1. Target repository is correct.
 2. Target tag is `v<version>-r<release>`.
 3. Existing local/remote objects either match the intended release or are reported as conflicts.
-4. The latest-release policy allows the current version.
+4. The requested Release channel is correct: default/`--latest`, `--pre`, or `--no-latest`; version ordering is not a publication gate.
 5. GitHub Release will be created if requested.
 6. Planned git/gh commands are expected.
 

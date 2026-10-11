@@ -44,7 +44,7 @@
     (values (cdr entry) (not (null entry)))))
 
 (defun %render-template (template bindings)
-  (with-output-to-string (out)
+  (han.host:with-character-output-to-string (out)
     (let ((position 0)
           (length (length template)))
       (loop while (< position length) do

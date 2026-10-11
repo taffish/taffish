@@ -57,5 +57,19 @@ Current tagged TAFFISH releases publish manually built binary payloads under
 `TAFFISH-RELEASE-KEY.asc`. This provides signed checksum verification, but it
 is not a reproducible-build or GitHub Actions provenance guarantee.
 
+The current raw installers require every selected official GitHub/Gitee binary
+to match `SHA256SUMS` before replacing a command. In default `auto` mode they
+also verify the signed manifest against the fixed TAFFISH release-key
+fingerprint when `gpg` and `gpgv` are available; strict `sha256` and `gpg`
+modes are available. Custom sources without verification material remain
+explicitly marked unverified in compatible `auto` mode.
+
+Payload verification does not independently authenticate an installer script
+obtained through `curl | sh`. High-security deployments should obtain and
+inspect a fixed-tag installer through an independently trusted channel before
+running it. Installation itself uses a per-home lock, candidate binary smoke
+tests, transactional replacement, rollback, and a non-secret install receipt.
+Shared writable Apptainer cache permissions are never enabled silently.
+
 TAFFISH Hub package trust uses index metadata such as source commit, container
 digest/platforms, and smoke-test results where those fields are available.

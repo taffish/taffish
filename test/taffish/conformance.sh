@@ -416,6 +416,100 @@ TAF
   assert_contains "$output" "Missing right match" "unclosed embedded taf error" || return 1
 }
 
+_taffish_case_concurrent_compile_isolated() {
+  dir=$TAFFISH_TEST_TMP_ROOT/taffish-concurrent-compile
+  mkdir -p "$dir"
+  file=$dir/concurrent.taf
+  cat > "$file" <<'TAF'
+ARGS
+<!(--/-n)name>
+RUN
+<shell>
+printf '%s\n' "worker=::name::"
+TAF
+
+  pids=
+  for worker in 1 2 3 4 5 6 7 8
+  do
+    (
+      shell=$("$TAFFISH_BIN" "$file" --name "$worker") || exit 1
+      output=$(printf '%s\n' "$shell" | sh) || exit 1
+      assert_eq "worker=$worker" "$output" \
+        "concurrent compiler worker $worker" || exit 1
+    ) >"$dir/worker-$worker.log" 2>&1 &
+    pids="$pids $!"
+  done
+
+  failed=0
+  for pid in $pids
+  do
+    if ! wait "$pid"; then
+      failed=1
+    fi
+  done
+  if [ "$failed" -ne 0 ]; then
+    printf 'one or more concurrent taffish compiler workers failed\n' >&2
+    for worker_log in "$dir"/worker-*.log
+    do
+      printf '%s:\n' "$worker_log" >&2
+      sed 's/^/  /' "$worker_log" >&2
+    done
+    return 1
+  fi
+}
+
+_taffish_case_unicode_compile_file_and_stdin() {
+  dir=$TAFFISH_TEST_TMP_ROOT/taffish-unicode-compile
+  mkdir -p "$dir/源码"
+  file=$dir/源码/主程序.taf
+  cat > "$file" <<'TAF'
+<shell>
+printf '%s\n' '你好，世界'
+TAF
+
+  file_shell=$(env LC_ALL="$TAFFISH_TEST_UTF8_LOCALE" \
+    LANG="$TAFFISH_TEST_UTF8_LOCALE" "$TAFFISH_BIN" "$file") || return 1
+  file_output=$(printf '%s\n' "$file_shell" | \
+    env LC_ALL="$TAFFISH_TEST_UTF8_LOCALE" LANG="$TAFFISH_TEST_UTF8_LOCALE" sh) || return 1
+  assert_eq "你好，世界" "$file_output" "Unicode file compile and run" || return 1
+
+  stdin_shell=$(env LC_ALL="$TAFFISH_TEST_UTF8_LOCALE" \
+    LANG="$TAFFISH_TEST_UTF8_LOCALE" "$TAFFISH_BIN" < "$file") || return 1
+  stdin_output=$(printf '%s\n' "$stdin_shell" | \
+    env LC_ALL="$TAFFISH_TEST_UTF8_LOCALE" LANG="$TAFFISH_TEST_UTF8_LOCALE" sh) || return 1
+  assert_eq "你好，世界" "$stdin_output" "Unicode stdin compile and run" || return 1
+
+  container_file=$dir/源码/容器参数.taf
+  cat > "$container_file" <<'TAF'
+<docker:alpine:latest$@[docker: --label note=你好]>
+echo unicode container args
+TAF
+  container_shell=$(env LC_ALL="$TAFFISH_TEST_UTF8_LOCALE" \
+    LANG="$TAFFISH_TEST_UTF8_LOCALE" "$TAFFISH_BIN" "$container_file") || return 1
+  assert_contains "$container_shell" "--label note=你好" \
+    "Unicode structured container args" || return 1
+}
+
+_taffish_case_error_stream_contract() {
+  dir=$TAFFISH_TEST_TMP_ROOT/taffish-error-stream
+  mkdir -p "$dir"
+  : > "$dir/empty.taf"
+
+  set +e
+  "$TAFFISH_BIN" "$dir/empty.taf" >"$dir/stdout.log" 2>"$dir/stderr.log"
+  status=$?
+  set -e
+  [ "$status" -ne 0 ] || harness_fail "invalid TAF unexpectedly compiled"
+  [ ! -s "$dir/stdout.log" ] || {
+    printf 'taffish user error leaked to stdout:\n' >&2
+    sed 's/^/  /' "$dir/stdout.log" >&2
+    return 1
+  }
+  stderr=$(cat "$dir/stderr.log")
+  assert_contains "$stderr" "[TAFFISH-ERROR]" \
+    "taffish user error is written to stderr" || return 1
+}
+
 run_taffish_conformance() {
   run_case "taffish/file-args-and-defaults" _taffish_case_file_args_and_defaults
   run_case "taffish/stdin-args" _taffish_case_stdin_args
@@ -435,4 +529,10 @@ run_taffish_conformance() {
   run_case "taffish/container-structured-generic-backend-selection" _taffish_case_structured_generic_backend_selection
   run_case "taffish/container-invalid-structured-args-error" _taffish_case_invalid_structured_container_args_error
   run_case "taffish/syntax-errors" _taffish_case_syntax_errors
+  run_case "taffish/concurrent-compile-isolated" \
+    _taffish_case_concurrent_compile_isolated
+  run_case "taffish/unicode-compile-file-and-stdin" \
+    _taffish_case_unicode_compile_file_and_stdin
+  run_case "taffish/error-stream-contract" \
+    _taffish_case_error_stream_contract
 }

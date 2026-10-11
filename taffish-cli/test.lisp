@@ -1,5 +1,37 @@
 (in-package :han.test)
 
+(han.test:deftest test-taffish-cli-entry-startup-error-boundary ()
+  (dolist (stage '(:io :language))
+    (dolist (broken-stderr '(nil t))
+      (let* ((symbols '(han.host:configure-runtime-io han.host:quit
+                        taffish.i18n:call-with-resolved-language))
+             (originals (mapcar #'symbol-function symbols))
+             (exit-tag (gensym "CLI-EXIT"))
+             (*standard-output* (make-string-output-stream))
+             (*error-output* (if broken-stderr
+                                 (make-string-input-stream "")
+                                 (make-string-output-stream))))
+        (unwind-protect
+             (progn
+               (setf (symbol-function 'han.host:configure-runtime-io)
+                     (lambda ()
+                       (when (eq stage :io) (error "startup test")))
+                     (symbol-function 'taffish.i18n:call-with-resolved-language)
+                     (lambda (function &rest options)
+                       (declare (ignore function options))
+                       (error "startup test"))
+                     (symbol-function 'han.host:quit)
+                     (lambda (&optional (code 0)) (throw exit-tag code)))
+               (han.test:check-equal 1 (catch exit-tag (taffish.cli:main '("taffish" "--help"))))
+               (han.test:check-equal "" (get-output-stream-string *standard-output*))
+               (unless broken-stderr
+                 (han.test:check-true
+                  (search "[TAFFISH-ERROR] startup test"
+                          (get-output-stream-string *error-output*)))))
+          (loop for symbol in symbols for original in originals
+                do (setf (symbol-function symbol) original)))))))
+
+
 ;;;; ============================================================
 ;;;; taffish.cli tests
 ;;;; ============================================================
@@ -62,9 +94,9 @@
 (deftest test-taffish-cli-version-string-basic ()
   (check-equal (stringp taffish.cli:*taffish-version*) t)
   (check-equal (%taffish-cli-string-contains-p taffish.cli:*taffish-version* "taffish") t)
-  (check-equal (%taffish-cli-string-contains-p taffish.cli:*taffish-version* "0.10.1") t)
+  (check-equal (%taffish-cli-string-contains-p taffish.cli:*taffish-version* "0.11.0") t)
   (check-equal taffish.cli:*taffish-version*
-               "taffish     0.10.1"))
+               "taffish     0.11.0"))
 
 (deftest test-taffish-cli-help-string-basic ()
   (let ((help-string (taffish.cli::%get-taffish-help-string)))
@@ -86,6 +118,32 @@
     (dolist (option '("-h" "--help" "-v" "--version" "--"))
       (check-true (search option english :test #'char=))
       (check-true (search option chinese :test #'char=)))))
+
+(deftest test-taffish-cli-top-help-input-backends-and-contacts ()
+  (dolist (language '("en" "zh"))
+    (taffish.i18n:with-language (language)
+      (let ((help (taffish.cli::%get-taffish-help-string)))
+        (dolist (text '("TAFFISH_CONTAINER_BACKEND" "apptainer" "podman" "docker"
+                        "<container:...>" "TAFFISH_DOCKER_RUN_ARGS"
+                        "TAFFISH_PODMAN_RUN_ARGS" "TAFFISH_APPTAINER_RUN_ARGS"
+                        "taffish -- < example.taf > example.sh"
+                        "TAFFISH_CONTAINER_BACKEND=podman taffish example.taf > example.sh"
+                        "taf config language" "en" "auto"
+                        "https://taffish.com" "https://taffish.github.io/"
+                        "support@taffish.com"))
+          (check-true (search text help)))
+        (check-true (< (search "TAFFISH_APPTAINER_RUN_ARGS" help)
+                       (search "taffish example.taf > example.sh" help)
+                       (search "taf config language" help)
+                       (search "https://taffish.com" help)))
+        (dolist (pair '(("without executing" "不执行")
+                        ("nonexistent filename" "文件名不存在")
+                        ("A leading --" "开头的 --")
+                        ("unset: choose an available backend" "未设置时自动选择可用后端")
+                        ("not tags that explicitly name a backend" "不覆盖显式指定后端的标签")
+                        ("host locale [default]" "跟随系统 [默认]")))
+          (check-true (search (if (string= language "en") (first pair) (second pair))
+                              help)))))))
 
 (deftest test-taffish-cli-command-missing-is-localized ()
   (let ((english (taffish.i18n:with-language ("en")

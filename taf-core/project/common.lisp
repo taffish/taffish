@@ -4,12 +4,18 @@
 ;;;; project / common.lisp
 ;;;; ============================================================
 
+(defun %project-format-character-string (control &rest arguments)
+  "Format project metadata and paths into a full CHARACTER string."
+  (han.host:with-character-output-to-string (out)
+    (apply #'format out control arguments)))
+
 ;;;; defaults
 (defparameter *default-github-host* "github.com")
 (defparameter *default-github-owner* "taffish")
 (defparameter *default-container-registry* "ghcr.io")
 (defparameter *default-docker-base-image* "debian:12-slim")
 (defparameter *default-index-repository* "taffish-index")
+(defparameter *default-smoke-timeout* 60)
 (defparameter *default-index-branch* "main")
 
 ;;;; name
@@ -45,8 +51,9 @@
   (let ((n (ignore-errors
             (parse-integer string :junk-allowed nil))))
     (unless (and n (> n 0))
-      (error "[new] ~A must be a positive integer, but got: ~S"
-             field-name string))
+      (%project-error "positive-integer"
+                      :field field-name
+                      :value (%project-repr string)))
     n))
 
 ;;;; image
@@ -131,20 +138,22 @@
 
 (defun %ensure-repository-url (url field-name)
   (unless (%repository-url-p url)
-    (error "~A must be a repository URL, but got: ~S"
-           field-name url))
+    (%project-error "repository-url"
+                    :field field-name
+                    :value (%project-repr url)))
   url)
 
 (defun %ensure-github-repository-url (url field-name)
   (unless (%github-repository-url-p url)
-    (error "~A must be a GitHub repository URL, but got: ~S"
-           field-name url))
+    (%project-error "github-repository-url"
+                    :field field-name
+                    :value (%project-repr url)))
   url)
 
 ;;;; kind: tool or flow
 (defun %tool-or-flow (tool-p flow-p)
   (cond ((and tool-p flow-p)
-         (error "[new] taf-app can't be tool and flow, must be one of them."))
+         (%project-error "kind-conflict"))
         (tool-p :tool)
         (flow-p :flow)
         (t :flow)))
@@ -184,15 +193,15 @@
 ;;;; %find-project-root
 (defun %find-project-root (&optional (start-dir (han.os:current-directory)))
   (unless start-dir
-    (error "[project] can't get current directory."))
+    (%project-error "current-directory"))
   (labels ((scan (dir)
              (let ((toml (han.path:join-path dir "taffish.toml")))
                (cond
                  ((%project-file-exists-p toml)
                   (han.path:directory-pathname dir))
                  ((%parent-directory dir)
-                  (scan (%parent-directory dir)))
+                 (scan (%parent-directory dir)))
                  (t
-                  (error "[project] can't find taffish.toml from current directory upward."))))))
+                  (%project-error "project-root"))))))
     (scan (han.path:directory-pathname
            (han.path:absolute-pathname start-dir)))))

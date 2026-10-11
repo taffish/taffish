@@ -17,10 +17,30 @@ Help is part of the public CLI surface. `taf --help` should stay concise,
 while `taf help <command>` and `taf <command> --help` should route users to the
 same command-specific help text.
 
-`main.lisp` establishes the human language through `taffish.i18n` before
-dispatch. `i18n.lisp` owns complete built-in English/Chinese help and common
-top-level diagnostics. Command and option tokens stay identical in both
-languages; lower-level business errors may still use English fallback.
+The top-level page groups project, Hub, and system commands, followed by
+getting-started examples, language selection, and website/Hub/support links.
+Descriptions distinguish refreshing the index from upgrading apps and mark
+doctor as read-only by default. Contact links belong only to the top-level
+page, not every subcommand or machine-readable output. `--version` stays a
+single line containing the command name and version.
+
+`main.lisp` establishes the resolved human-language context once before
+dispatch. `i18n.lisp` owns complete built-in English/Chinese help and parser
+diagnostics; `taf-core` human renderers own project, Hub, package, config,
+doctor, and history messages. Command/option tokens and machine interfaces
+must remain identical in every language.
+
+## Error Handling
+
+The executable entry point establishes an internal error boundary before
+TAFFISH runtime I/O and language initialization. Errors escaping the command
+handler are reported with `[TAF-ERROR]` on stderr and exit status 1. If reporting
+also fails, the process still exits unsuccessfully rather than writing a fallback
+message to stdout. Normal command results and existing nonzero exit semantics
+remain unchanged.
+
+This does not change `taf-core` library condition handling. Host-specific signal
+behavior and its limits are documented in [han.host](../han/host.md).
 
 ## System Position
 
@@ -37,7 +57,7 @@ user
 | File | Role |
 | --- | --- |
 | `package.lisp` | Define CLI package. |
-| `i18n.lisp` | Own localized help and common human CLI diagnostics. |
+| `i18n.lisp` | Own localized help and parser-level human diagnostics. |
 | `run.lisp` | Implement subcommand dispatch and execution. |
 | `main.lisp` | Provide entry function. |
 
@@ -62,6 +82,9 @@ The package-maintenance command surface follows a conservative CLI pattern:
 | Command | Default behavior |
 | --- | --- |
 | `taf install --all` | Dry-run plan for all indexed apps selected by `--kind`, `--tools`, or `--flows`. |
+| `taf install TARGET... --repair` | Explicit repair of existing identities; add `--dry-run` to preview instead of applying. |
+| `taf install --all --repair` | Preview repair of already-installed index.latest identities; `--yes` applies. Kind and scope filters remain available. |
+| `taf install --all-installed --repair` | Preview repair of all locally installed versions, including historical versions; `--yes` applies. No versions or dependencies are added. |
 | `taf outdated` | Read-only comparison between local install metadata and the local index. |
 | `taf upgrade` | Dry-run upgrade plan; requires `--yes` to install newer indexed versions. |
 | `taf prune` | Dry-run cleanup plan; requires `--yes` to remove older local app versions. |
@@ -74,6 +97,42 @@ Default text output is change-oriented. When every item is already current or
 otherwise skipped, the command should print a short `no changes` message
 instead of listing every unchanged app. JSON output remains the full
 machine-readable plan and keeps current/skipped items for automation.
+Unverified/invalid/unknown installation diagnostics are deliberately still
+visible, even on otherwise unchanged items, grouped by issue type/state and
+recovery policy with at most three examples per group instead of repeated skip
+rows. Detailed doctor output (`--verbose`) and JSON retain full evidence.
+
+Repair has two batch selectors. `--all --repair` checks only installed
+`index.latest` identities; it skips missing latest versions rather than installing
+them. `--all-installed --repair` enumerates every locally installed version,
+including historical versions. It never upgrades, installs missing versions or
+dependencies, or prunes. Both selectors default to preview; add `--yes` to apply.
+`--json`, scope and kind filters work with either selector. The selectors cannot
+be combined with each other or explicit targets. `--all-installed` requires
+`--repair`. For explicit version targets, use `--dry-run` to preview and remove
+it to apply. Verified targets are skipped.
+
+Unreadable/malformed installation records and versions absent from the index
+remain visible as blocked targets, not silently skipped. An unknown app kind
+cannot safely be excluded by a kind filter. Private sources are not replaced
+from the public index. Repair rejects `--force`, `--from` and `--prune-old`.
+
+
+## Doctor Routing
+
+`taf doctor` retains its lightweight environment checks. `taf doctor index`
+checks the cached index; `taf doctor hub [APP|COMMAND...]` additionally checks
+local installation evidence. Both specialized modes accept user/system,
+json/verbose but reject init/shell. The core result's `:exit-code` becomes the
+CLI exit status without adding an error line to JSON stdout. Error/unknown
+findings exit 1; warnings alone exit 0. Default doctor's old exit behavior is
+unchanged. See [diagnostics and recovery](../taf-core/system-history-doctor.md).
+
+Doctor and maintenance human progress goes to stderr only: TTY stage/count
+updates are in place, log counts are rate-limited, and JSON/MCP have no progress
+text. Field alignment uses shared conservative Unicode widths; long or complex
+fields use separate lines. These presentation changes do not alter machine
+fields, safety classification or exit codes.
 
 ## Language Management
 
@@ -100,3 +159,10 @@ When changing `taf-cli`, check:
 6. Whether JSON and MCP projections remain stable English machine interfaces.
 
 Long-term, `taf-cli` command design directly affects TAFFISH user experience. It should stay stable, concise, and easy to debug.
+
+## Operation Status
+
+Slow human-facing operations report their current target and stage on stderr.
+TTY updates, log throttling, target-count semantics, quiet/JSON behavior and
+limits are described in [command status](../taf-core/command-progress.md). These notices do not change
+validation, mutation, retry or exit-code rules.

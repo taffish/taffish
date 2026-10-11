@@ -80,14 +80,14 @@ target/taffish-mcp
 ```
 
 这些不带后缀的文件是本地构建输出。维护者发布 release tag 前，会把它们重命名/复制为
-`taf-darwin-arm64-0.10.1` 这类版本化文件名。
+`taf-darwin-arm64-0.11.0` 这类版本化文件名。
 
 ## 二进制冒烟测试
 
 构建完成或准备 release 载荷后，可以对当前平台运行二进制冒烟测试：
 
 ```sh
-test/binary-smoke.sh --version 0.10.1
+test/binary-smoke.sh --version 0.11.0
 ```
 
 如果测试的是不带后缀的本地构建输出，可以显式传入路径：
@@ -107,11 +107,30 @@ test/binary-smoke.sh \
 如果要运行更完整的外部测试套件：
 
 ```sh
-test/run-tests.sh --version 0.10.1
+test/run-tests.sh --version 0.11.0
 ```
 
 这个入口会包含 binary smoke test，并额外运行真实 `taffish` conformance case
-以及 `taf new/check/compile/build` project workflow 检查。
+以及 project、Hub、system、i18n、MCP、publish 恢复和 installer conformance。
+
+只运行 standalone installer 测试子集：
+
+```sh
+test/run-tests.sh --version 0.11.0 --filter installer/
+```
+
+这个子集需要在 macOS 和 Linux 都运行。普通用户运行会验证 user scope 和未授权 system
+写入拒绝；管理员模式与 sticky shared-cache 的 root-only 分支只使用测试临时路径，可以
+通过以下命令选择：
+
+```sh
+sudo test/run-tests.sh \
+  --version 0.11.0 \
+  --filter installer/system-permissions
+```
+
+修改 installer 时还必须运行 `install/generate-installers.sh --check`，以及
+[安装器手册](../../../install/README-CN.md)列出的语法和静态检查。
 
 ## 用 LispWorks 构建二进制
 

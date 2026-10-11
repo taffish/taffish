@@ -3,8 +3,8 @@
 This page is the broader manual checklist for deciding whether a `.taf` file,
 a taf-app project, a Hub index, or a local installation conforms to TAFFISH
 Specification Draft v0.2. The repository already has external conformance
-tests for compiler, project, and Hub workflows, but they do not yet encode
-every item on this page.
+tests for delivered binaries, compiler, project, Hub, system, and localization
+workflows, but they do not yet encode every item on this page.
 
 ## Result Classes
 
@@ -175,6 +175,8 @@ notes:
 - If `[index].url` exists, it is a non-empty string.
 - `[[source.rewrite]].from` and `[[source.rewrite]].to` are non-empty strings.
 - If `[[source.rewrite]].enabled` exists, it is a boolean.
+- If top-level `language` exists, it resolves to `auto`, a built-in language,
+  or a currently valid external locale pack.
 - The active home resolves to either user scope or system scope.
 - Before install or update, the active home has the required directories or can create them through `taf doctor --init`.
 
@@ -190,6 +192,36 @@ notes:
 - `TAFFISH_CONFIG` points to a file that overrides source rewrite without documenting why.
 - System scope is initialized in a non-root environment.
 - The command bin is not in `PATH`.
+
+## Localization Checks
+
+### Required
+
+- Built-in `en` and `zh` remain available without external locale files.
+- `auto` follows a recognized host locale and falls back deterministically to
+  English when no supported locale can be resolved.
+- The CLI resolves language once per invocation; lower renderers do not
+  independently re-read config or locale environment variables.
+- Command and option tokens, exit codes, JSON keys and enum values, generated
+  shell, persisted history, and MCP protocol schemas remain language-invariant.
+- Missing or invalid external translations fall back by key or help file and do
+  not disable valid sibling entries.
+- Raw output owned by taf-apps or external processes is passed through rather
+  than translated.
+
+### Recommended
+
+- External locale directories use canonical locale IDs and UTF-8 text.
+- User locale packs shadow system packs deterministically without overriding
+  the built-in English or Chinese catalogs.
+- Translation placeholders exactly match the English baseline.
+
+### Warnings
+
+- A script parses human CLI text instead of requesting JSON or another machine
+  interface.
+- A language pack depends on replacing command names, option names, schema
+  fields, or semantic status values.
 
 ## Runtime/Container Checks
 
@@ -249,19 +281,40 @@ Before releasing a taf-app, at least run:
 4. Hub index record checks if the app will enter the Hub.
 5. Install metadata checks if installation is being verified.
 
-Before releasing TAFFISH itself or taffish-hub, at least run:
+Before releasing TAFFISH itself, at least run:
 
-1. Schema version checks.
-2. Compatibility policy checks.
-3. Source rewrite checks.
-4. Old install metadata read checks.
-5. Install, run, and uninstall checks for key example apps.
+1. The complete Common Lisp unit suite.
+2. `test/run-tests.sh` against the final three binaries on each release
+   platform.
+3. Schema version and compatibility-policy checks.
+4. Source rewrite and old install metadata read checks.
+5. Install, run, and uninstall checks for key example apps when release scope
+   affects those paths.
+
+The taffish-hub repositories have their own build, smoke, index, and publication
+gates; this local checklist does not replace them.
 
 ## From Checklist To Automated Conformance Tests
 
-Current external suites live under `test/taffish`, `test/taf-project`, and
-`test/taf-hub`. A future dedicated interface may expose more of this checklist
-as commands such as:
+`test/run-tests.sh` is the entry point for the current external suites:
+
+1. `test/binary-smoke.sh`.
+2. `test/taffish`.
+3. `test/taf-project`.
+4. `test/taf-hub`.
+5. `test/taf-system`.
+6. `test/i18n`.
+7. `test/installer`.
+8. `test/cli-boundary`.
+
+See the [External Test Guide](../../../test/README.md) for prerequisites,
+filters, the GPG verification gate and explicit skips, root-only installer checks, and CLI
+error-boundary probes. A passing aggregate count does not prove that every
+conditional branch ran or replace independent release-manifest verification.
+
+These suites deliberately remain narrower than the full written contract. A
+future dedicated interface may expose more of this checklist as commands such
+as:
 
 1. `taf conformance taf <file>`: check a single `.taf` file.
 2. `taf conformance project <dir>`: check a taf-app project.

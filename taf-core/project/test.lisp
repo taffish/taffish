@@ -1,5 +1,52 @@
 (in-package :han.test)
 
+(deftest test-taf-project-publish-progress-keeps-query-policy ()
+  (let ((original (symbol-function 'taf.core::%publish-run-program))
+        (calls 0)
+        (taf.core::*publish-query-attempts* 3)
+        (taf.core::*publish-query-delay-seconds* 0))
+    (unwind-protect
+         (progn
+           (setf (symbol-function 'taf.core::%publish-run-program)
+                 (lambda (&rest args)
+                   (declare (ignore args))
+                   (incf calls)
+                   (if (< calls 3) (values "" "connection reset" 128)
+                       (values "result" "" 0))))
+           (let ((text (%operation-test-display
+                        (lambda ()
+                          (check-equal '("result" "" 0)
+                                       (multiple-value-list
+                                        (taf.core::%publish-query-run-program "git" '("status"))))))))
+             (check-true (search "2/3" text))
+             (check-true (search "3/3" text))
+             (check-equal 2 (count #\Newline text)))
+           (check-equal 3 calls))
+      (setf (symbol-function 'taf.core::%publish-run-program) original))))
+
+(deftest test-taf-project-publish-progress-keeps-reconciliation-policy ()
+  (let ((original (symbol-function 'taf.core::%publish-operation))
+        (calls 0)
+        (taf.core::*publish-repository-readiness-delays* '(0 0)))
+    (unwind-protect
+         (progn
+           (setf (symbol-function 'taf.core::%publish-operation)
+                 (lambda (operation context)
+                   (check-equal :inspect-repository operation)
+                   (check-equal "v1.0.0-r1" (getf context :tag))
+                   (incf calls)
+                   (list :state (if (< calls 3) :missing :matching))))
+           (check-true
+            (search "Confirming remote result"
+                    (%operation-test-display
+                     (lambda ()
+                       (check-equal :matching
+                                    (getf (taf.core::%publish-reconcile-inspection
+                                           (list :tag "v1.0.0-r1") :inspect-repository :create-repository)
+                                          :state))))))
+           (check-equal 3 calls))
+      (setf (symbol-function 'taf.core::%publish-operation) original))))
+
 ;;;; ============================================================
 ;;;; taf.core project tests
 ;;;; ============================================================
@@ -24,6 +71,26 @@
                  (subseq string 0 pos)
                  new
                  (subseq string (+ pos (length old))))))
+
+(defun %taf-project-set-version (project-name version)
+  (let* ((path (%taf-project-path project-name "taffish.toml"))
+         (toml (han.os:load-string path)))
+    (%taf-project-write-string
+     path
+     (%taf-project-replace-substring
+      toml
+      "version = \"0.1.0\""
+      (format nil "version = \"~A\"" version)))))
+
+(defun %taf-project-build-residue-p (target-dir)
+  (some (lambda (path)
+          (let ((name (han.path:->namestring path)))
+            (or (%taf-project-string-contains-p name "build-tmp-")
+                (%taf-project-string-contains-p name "wrapper-tmp-")
+                (%taf-project-string-contains-p name "build-backup-")
+                (%taf-project-string-contains-p name "wrapper-backup-"))))
+        (append (han.path:directory-files target-dir)
+                (han.path:subdirectories target-dir))))
 
 (defun %taf-project-realize-smoke (project-name)
   (let* ((path (%taf-project-path project-name "taffish.toml"))
@@ -78,12 +145,14 @@
 
 (defun %taf-project-publish-fake-state ()
   (list :repository-p nil
+        :repository-readiness-misses 0
         :policy-p nil
         :commit nil
         :branch nil
         :local-tag nil
         :remote-tag nil
         :release-intent nil
+        :latest-tag nil
         :operations nil
         :outage-operation nil))
 
@@ -126,9 +195,15 @@
            :unavailable "injected remote inspection outage")
           (case operation
         (:inspect-repository
-         (if (getf state :repository-p)
-             (%taf-project-publish-fake-result :matching "repository exists")
-             (%taf-project-publish-fake-result :missing "repository missing")))
+         (cond
+           ((not (getf state :repository-p))
+            (%taf-project-publish-fake-result :missing "repository missing"))
+           ((plusp (getf state :repository-readiness-misses))
+            (decf (getf state :repository-readiness-misses))
+            (%taf-project-publish-fake-result
+             :missing "repository creation is still propagating"))
+           (t
+            (%taf-project-publish-fake-result :matching "repository exists"))))
         (:create-repository
          (setf (getf state :repository-p) t)
          (interrupt operation :inspect-repository)
@@ -177,7 +252,8 @@
             (%taf-project-publish-fake-result :missing "GitHub Release missing"))
            ((equal (getf state :release-intent)
                    (list (getf context :release-title)
-                         (getf context :release-notes-sha256)))
+                         (getf context :release-notes-sha256)
+                         (eql (getf context :channel) :pre)))
             (%taf-project-publish-fake-result :matching "GitHub Release matches"))
            (t
             (%taf-project-publish-fake-result
@@ -185,7 +261,10 @@
         (:create-release
          (setf (getf state :release-intent)
                (list (getf context :release-title)
-                     (getf context :release-notes-sha256)))
+                     (getf context :release-notes-sha256)
+                     (eql (getf context :channel) :pre)))
+         (when (eql (getf context :channel) :latest)
+           (setf (getf state :latest-tag) (getf context :tag)))
          (interrupt operation :inspect-release)
          nil)
             (otherwise
@@ -230,6 +309,30 @@
                             :if-exists :supersede
                             :if-does-not-exist :create)
     (format out "~A" string)))
+
+(defun %taf-project-publish-init-git-repository (root)
+  (taf.core::%publish-run-git/checked root '("init"))
+  (taf.core::%publish-run-git/checked
+   root '("config" "user.name" "TAFFISH Test"))
+  (taf.core::%publish-run-git/checked
+   root '("config" "user.email" "taffish-test@example.invalid"))
+  (%taf-project-write-string
+   (han.path:join-path root "tracked.txt") "tracked\n")
+  (taf.core::%publish-run-git/checked root '("add" "tracked.txt"))
+  (taf.core::%publish-run-git/checked root '("commit" "-m" "initial"))
+  (taf.core::%publish-head-commit root))
+
+(defun %taf-project-write-bytes (path bytes)
+  (with-open-file (out path :direction :output
+                            :if-exists :supersede
+                            :if-does-not-exist :create
+                            :element-type '(unsigned-byte 8))
+    (write-sequence bytes out)))
+
+(defun %taf-project-publish-phase (result id)
+  (find id (getf result :phases)
+        :key (lambda (phase) (getf phase :id))
+        :test #'eql))
 
 (defun %taf-project-chmod-executable (path)
   (multiple-value-bind (out err code)
@@ -544,7 +647,57 @@
        (%taf-project-signal-error-p
         (lambda ()
           (taf.core:project-check (han.os:current-directory) nil)))
+       t)
+      (let* ((path "taffish.toml")
+             (toml (han.os:load-string path)))
+        (%taf-project-write-string
+         path
+         (%taf-project-replace-substring toml
+                                         "exist = [\"TODO\"]"
+                                         "exist = [\"sh\"]")))
+      (check-equal
+       (%taf-project-signal-error-p
+        (lambda ()
+          (taf.core:project-check (han.os:current-directory) nil)))
        t))))
+
+(deftest test-taf-project-check-smoke-todo-substring-allowed ()
+  (with-taf-project-temp-dir (dir)
+    (taf.core:project-new "autodock4" '("--tool" "--docker"))
+    (let* ((path (%taf-project-path "autodock4" "taffish.toml"))
+           (toml (han.os:load-string path)))
+      (%taf-project-write-string
+       path
+       (%taf-project-replace-substring
+        (%taf-project-replace-substring toml
+                                        "exist = [\"TODO\"]"
+                                        "exist = [\"autodock4\"]")
+        "test = [\"TODO --help\"]"
+        "test = [\"autodock4 --help\"]")))
+    (uiop:with-current-directory ((%taf-project-dir "autodock4"))
+      (let ((smoke (getf (taf.core:project-check
+                          (han.os:current-directory) nil)
+                         :smoke)))
+        (check-equal (getf smoke :exist) '("autodock4"))
+        (check-equal (getf smoke :test) '("autodock4 --help"))))))
+
+(deftest test-taf-project-check-smoke-placeholder-message-is-multiline ()
+  (let ((message
+          (taffish.i18n:with-language ("en")
+            (taf.core::%project-message
+             "error.check-smoke-placeholder"
+             :field "[smoke].exist"
+             :value "\"TODO\""))))
+    (check-true
+     (search
+      (format nil
+              "contains TODO placeholder: \"TODO\".~%  Replace default smoke checks")
+      message
+      :test #'char=))
+    (check-equal (search ".n  Replace default smoke checks"
+                         message
+                         :test #'char=)
+                 nil)))
 
 (deftest test-taf-project-check-container-requires-smoke ()
   (with-taf-project-temp-dir (dir)
@@ -1026,6 +1179,216 @@ echo changed")
                         "version: 0.1.0-r1")
                        t))))))
 
+(deftest test-taf-project-build-sha256-binary-file-known-vector ()
+  (with-taf-project-temp-dir (dir)
+    (let ((file (%taf-project-path "sha256.bin")))
+      (%taf-project-write-bytes file #(0 1 2 3 254 255))
+      (check-equal
+       "7ea646958715ed687aa9ac2f5d785feb1a93411f4f25fdd6c7fcc6ab07fdf0e3"
+       (taf.core::%project-sha256-file file)))))
+
+(deftest test-taf-project-build-is-idempotent-and-cleans-numbered-residue ()
+  (with-taf-project-temp-dir (dir)
+    (taf.core:project-new "demo-build-idempotent" nil)
+    (%taf-project-set-version "demo-build-idempotent" "492")
+    (uiop:with-current-directory ((%taf-project-dir "demo-build-idempotent"))
+      (let* ((first (taf.core:project-build
+                     :start-dir (han.os:current-directory)
+                     :verbose nil))
+             (first-command (getf first :command))
+             (artifact (getf first-command :artifact-name))
+             (command-file (getf first-command :command-file))
+             (snapshot-dir (getf first-command :snapshot-dir))
+             (manifest-file (getf first-command :manifest-file))
+             (target-dir (%taf-project-dir "target"))
+             (legacy-tmp
+               (han.path:join-path
+                target-dir (format nil "~A.wrapper-tmp-legacy" artifact)))
+             (legacy-backup
+               (han.path:join-path
+                target-dir (format nil "~A.wrapper-backup-legacy" artifact)))
+             (wrapper-digest (taf.core::%project-sha256-file command-file))
+             (snapshot-digest (taf.core::%build-snapshot-digest snapshot-dir))
+             (checkpoints 0))
+        (check-equal (getf first-command :status) :rebuilt)
+        (check-equal artifact "taf-demo-build-idempotent-v492-r1")
+        (check-equal (file-namestring command-file) artifact)
+        (check-false (pathname-type (pathname command-file)))
+        (check-false (%taf-project-build-residue-p target-dir))
+        (check-true (han.path:file-exists-p manifest-file))
+        (check-equal (taf.core::%project-sha256-file command-file)
+                     wrapper-digest)
+        (check-equal (taf.core::%build-snapshot-digest snapshot-dir)
+                     snapshot-digest)
+        (%taf-project-write-string legacy-tmp "legacy tmp")
+        (%taf-project-write-string legacy-backup "legacy backup")
+        (let* ((taf.core::*build-transaction-test-hook*
+                 (lambda (stage)
+                   (declare (ignore stage))
+                   (incf checkpoints)))
+               (second (taf.core:project-build
+                        :start-dir (han.os:current-directory)
+                        :verbose nil)))
+          (check-equal (getf (getf second :command) :status) :up-to-date))
+        (check-equal checkpoints 0)
+        (check-false (han.path:file-exists-p legacy-tmp))
+        (check-false (han.path:file-exists-p legacy-backup))
+        (check-false (%taf-project-build-residue-p target-dir))
+        (rename-file command-file legacy-backup)
+        (let ((restored (taf.core:project-build
+                         :start-dir (han.os:current-directory)
+                         :verbose nil)))
+          (check-equal (getf (getf restored :command) :status) :up-to-date))
+        (check-true (han.path:file-exists-p command-file))
+        (check-false (han.path:file-exists-p legacy-backup))
+        (check-false (%taf-project-build-residue-p target-dir))
+        (%taf-project-write-string
+         (han.path:join-path snapshot-dir "help2.md") "residue")
+        (ensure-directories-exist
+         (han.path:join-path snapshot-dir "docs2" "nested" "placeholder"))
+        (ensure-directories-exist
+         (han.path:join-path snapshot-dir "src2" "placeholder"))
+        (let ((third (taf.core:project-build
+                      :start-dir (han.os:current-directory)
+                      :verbose nil)))
+          (check-equal (getf (getf third :command) :status) :rebuilt)
+          (check-false (han.path:file-exists-p
+                        (han.path:join-path snapshot-dir "help2.md")))
+          (check-false (han.path:directory-exists-p
+                        (han.path:join-path snapshot-dir "docs2")))
+          (check-false (han.path:directory-exists-p
+                        (han.path:join-path snapshot-dir "src2"))))))))
+
+(deftest test-taf-project-build-rebuilds-source-and-invalid-manifest ()
+  (with-taf-project-temp-dir (dir)
+    (taf.core:project-new "demo-build-refresh" nil)
+    (uiop:with-current-directory ((%taf-project-dir "demo-build-refresh"))
+      (let* ((first (taf.core:project-build
+                     :start-dir (han.os:current-directory)
+                     :verbose nil))
+             (command (getf first :command))
+             (snapshot-dir (getf command :snapshot-dir))
+             (manifest-file (getf command :manifest-file)))
+        (%taf-project-write-string
+         (%taf-project-path "src" "main.taf")
+         "<taffish>\necho source-v2")
+        (let ((second (taf.core:project-build
+                       :start-dir (han.os:current-directory)
+                       :verbose nil)))
+          (check-equal (getf (getf second :command) :status) :rebuilt)
+          (check-true
+           (%taf-project-string-contains-p
+            (han.os:load-string
+             (han.path:join-path snapshot-dir "src" "main.taf"))
+            "source-v2")))
+        (%taf-project-write-string
+         (%taf-project-path "docs" "help.md")
+         "# refreshed help")
+        (check-equal
+         (getf (getf (taf.core:project-build
+                      :start-dir (han.os:current-directory)
+                      :verbose nil)
+                     :command)
+               :status)
+         :rebuilt)
+        (%taf-project-write-string
+         (%taf-project-path "taffish.toml")
+         (format nil "~A~%# build digest refresh~%"
+                 (han.os:load-string (%taf-project-path "taffish.toml"))))
+        (check-equal
+         (getf (getf (taf.core:project-build
+                      :start-dir (han.os:current-directory)
+                      :verbose nil)
+                     :command)
+               :status)
+         :rebuilt)
+        (%taf-project-write-string manifest-file "{")
+        (check-equal
+         (getf (getf (taf.core:project-build
+                      :start-dir (han.os:current-directory)
+                      :verbose nil)
+                     :command)
+               :status)
+         :rebuilt)
+        (delete-file manifest-file)
+        (check-equal
+         (getf (getf (taf.core:project-build
+                      :start-dir (han.os:current-directory)
+                      :verbose nil)
+                     :command)
+               :status)
+         :rebuilt)
+        (han.path:delete-directory-tree
+         (han.path:directory-pathname snapshot-dir)
+         :validate t
+         :if-does-not-exist :ignore)
+        (check-equal
+         (getf (getf (taf.core:project-build
+                      :start-dir (han.os:current-directory)
+                      :verbose nil)
+                     :command)
+               :status)
+         :rebuilt)
+        (delete-file (getf command :command-file))
+        (check-equal
+         (getf (getf (taf.core:project-build
+                      :start-dir (han.os:current-directory)
+                      :verbose nil)
+                     :command)
+               :status)
+         :rebuilt)))))
+
+(deftest test-taf-project-build-transaction-rolls-back-and-cleans-stale-files ()
+  (with-taf-project-temp-dir (dir)
+    (taf.core:project-new "demo-build-rollback" nil)
+    (%taf-project-set-version "demo-build-rollback" "492")
+    (uiop:with-current-directory ((%taf-project-dir "demo-build-rollback"))
+      (let* ((first (taf.core:project-build
+                     :start-dir (han.os:current-directory)
+                     :verbose nil))
+             (command (getf first :command))
+             (artifact (getf command :artifact-name))
+             (target (%taf-project-dir "target"))
+             (command-file (getf command :command-file))
+             (snapshot-dir (getf command :snapshot-dir))
+             (old-wrapper (taf.core::%project-sha256-file command-file))
+             (old-snapshot (taf.core::%build-snapshot-digest snapshot-dir))
+             (other-file (han.path:join-path target "taf-other-v9-r9")))
+        (check-equal artifact "taf-demo-build-rollback-v492-r1")
+        (check-equal (file-namestring command-file) artifact)
+        (check-false (pathname-type (pathname command-file)))
+        (%taf-project-write-string other-file "keep")
+        (%taf-project-write-string
+         (han.path:join-path target
+                             (format nil ".~A.wrapper-tmp-stale" artifact))
+         "stale")
+        (ensure-directories-exist
+         (han.path:join-path target
+                             (format nil ".~A.build-tmp-stale" artifact)
+                             "placeholder"))
+        (%taf-project-write-string
+         (%taf-project-path "src" "main.taf")
+         "<taffish>\necho must-rollback")
+        (dolist (failure-stage '(:staged :backed-up :snapshot-installed
+                                 :wrapper-installed :validated))
+          (let* ((reached-p nil)
+                 (taf.core::*build-transaction-test-hook*
+                   (lambda (stage)
+                     (when (eql stage failure-stage)
+                       (setf reached-p t)
+                       (error "injected build transaction failure")))))
+            (check-error (error)
+              (taf.core:project-build
+               :start-dir (han.os:current-directory)
+               :verbose nil))
+            (check-true reached-p))
+          (check-equal (taf.core::%project-sha256-file command-file)
+                       old-wrapper)
+          (check-equal (taf.core::%build-snapshot-digest snapshot-dir)
+                       old-snapshot)
+          (check-true (han.path:file-exists-p other-file))
+          (check-false (%taf-project-build-residue-p target)))))))
+
 (deftest test-taf-project-build-wrapper-records-exec-history-hook ()
   (with-taf-project-temp-dir (dir)
     (taf.core:project-new "demo-build-history" nil)
@@ -1080,6 +1443,23 @@ EOF
             (check-equal (%taf-project-string-contains-p record "\"exit_code\":0") t)
             (check-equal (%taf-project-string-contains-p record "--alpha") t)
             (check-equal (%taf-project-string-contains-p record "beta") t)))))))
+
+(deftest test-taf-project-build-wrapper-appends-one-history-record ()
+  (let ((wrapper
+          (taf.core::%make-build-wrapper-string
+           (list :name "atomic-history"
+                 :kind "tool"
+                 :version "0.1.0"
+                 :release "1"
+                 :command-name "taf-atomic-history"
+                 :repository-url "https://github.com/taffish/atomic-history")
+           ".taf-atomic-history-v0.1.0-r1"
+           "src/main.taf"
+           "taf-atomic-history-v0.1.0-r1")))
+    (check-true (search "taf_history_record=$(" wrapper :test #'char=))
+    (check-true
+     (search "printf '%s\\n' \"$taf_history_record\" >> \"$taf_history_file\""
+             wrapper :test #'char=))))
 
 (deftest test-taf-project-build-flow-syncs-toml-dependencies ()
   (with-taf-project-temp-dir (dir)
@@ -1316,21 +1696,19 @@ cat")
            :verbose nil)))
        t))))
 
-(deftest test-taf-project-publish-latest-rejects-older-version ()
+(deftest test-taf-project-publish-latest-allows-older-version ()
   (with-taf-project-temp-dir (dir)
     (taf.core:project-new
      "demo-publish-old"
      '("--version" "1.2.3" "--release" "2"))
     (uiop:with-current-directory ((%taf-project-dir "demo-publish-old"))
-      (check-equal
-       (%taf-project-signal-error-p
-        (lambda ()
-          (taf.core:project-publish
+      (check-equal :planned
+       (getf (taf.core:project-publish
            :start-dir (han.os:current-directory)
            :dry-run t
            :remote-tags '("refs/tags/v1.3.0-r1")
-           :verbose nil)))
-       t))))
+           :verbose nil)
+             :outcome)))))
 
 (deftest test-taf-project-publish-pre-allows-non-latest-version ()
   (with-taf-project-temp-dir (dir)
@@ -1366,6 +1744,10 @@ cat")
                      :remote-tags '("refs/tags/v1.2.3-r1")
                      :verbose nil)))
         (check-equal (getf result :build) nil)
+        (check-equal (getf result :build-status) :planned)
+        (check-equal
+         (getf (%taf-project-publish-phase result :build-ready) :status)
+         :pending)
         (check-equal (probe-file (%taf-project-dir
                                   "demo-publish-dry-build" "target"))
                      nil)))))
@@ -1594,7 +1976,10 @@ This release mentions a todo-like upstream word, but it is not the default templ
 
 (deftest test-taf-project-publish-noninteractive-git-env ()
   (let ((env (taf.core::%publish-noninteractive-env-args)))
-    (dolist (item '("GIT_TERMINAL_PROMPT=0"
+    (dolist (item '("LC_ALL=C"
+                    "LANG=C"
+                    "LANGUAGE=C"
+                    "GIT_TERMINAL_PROMPT=0"
                     "GIT_ASKPASS="
                     "SSH_ASKPASS="
                     "GH_PROMPT_DISABLED=1"
@@ -1661,6 +2046,76 @@ This release mentions a todo-like upstream word, but it is not the default templ
      (taf.core::%publish-remote-tag-commit-from-refs refs "v9.9.9-r9")
      nil)))
 
+(deftest test-taf-project-publish-local-tag-is-missing-before-git-init ()
+  (with-taf-project-temp-dir (dir)
+    (let ((state
+            (taf.core::%publish-local-tag-commit
+             (han.path:->namestring dir) "v0.1.0-r1")))
+      (check-equal (getf state :state) :missing)
+      (check-true
+       (%taf-project-string-contains-p
+        (getf state :evidence) "not a Git worktree")))))
+
+(deftest test-taf-project-publish-local-tag-is-missing-after-git-init ()
+  (with-taf-project-temp-dir (dir)
+    (let* ((root (han.path:->namestring dir))
+           (head (%taf-project-publish-init-git-repository root))
+           (state (taf.core::%publish-local-tag-commit root "v0.1.0-r1")))
+      (check-true (not (null head)))
+      (check-equal (getf state :state) :missing)
+      (check-true
+       (%taf-project-string-contains-p
+        (getf state :evidence) "local tag v0.1.0-r1 is missing")))))
+
+(deftest test-taf-project-publish-local-tag-resolves-exact-commit ()
+  (with-taf-project-temp-dir (dir)
+    (let* ((root (han.path:->namestring dir))
+           (head (%taf-project-publish-init-git-repository root))
+           (tag "v0.1.0-r1"))
+      (taf.core::%publish-run-git/checked root (list "tag" tag "HEAD"))
+      (let ((state (taf.core::%publish-local-tag-commit root tag)))
+        (check-equal (getf state :state) :matching)
+        (check-equal (getf state :commit) head)))))
+
+(deftest test-taf-project-publish-local-noncommit-tag-is-conflicting ()
+  (with-taf-project-temp-dir (dir)
+    (let* ((root (han.path:->namestring dir))
+           (tag "v0.1.0-r1")
+           (blob-file (han.path:join-path root "blob.txt")))
+      (%taf-project-publish-init-git-repository root)
+      (%taf-project-write-string blob-file "not a commit\n")
+      (multiple-value-bind (out err code)
+          (taf.core::%publish-run-git
+           root (list "hash-object" "-w" (han.path:->namestring blob-file)))
+        (declare (ignore err))
+        (check-equal code 0)
+        (taf.core::%publish-run-git/checked
+         root
+         (list "update-ref"
+               (format nil "refs/tags/~A" tag)
+               (taf.core::%publish-trim-output out))))
+      (let ((state (taf.core::%publish-local-tag-commit root tag)))
+        (check-equal (getf state :state) :conflicting)
+        (check-true
+         (%taf-project-string-contains-p
+          (getf state :evidence) "does not resolve to a commit")))
+      (taf.core::%publish-run-git/checked
+       root '("remote" "add" "origin"
+              "https://github.com/taffish/local-tag-conflict"))
+      (let ((state
+              (taf.core::%publish-default-inspect-commit
+               (list :root root
+                     :repository-url
+                     "https://github.com/taffish/local-tag-conflict"
+                     :tag tag
+                     :remote-tags-override '("v9.9.9-r1")
+                     :prompt-p nil
+                     :target-commit nil))))
+        (check-equal (getf state :state) :conflicting)
+        (check-true
+         (%taf-project-string-contains-p
+          (getf state :evidence) "does not resolve to a commit"))))))
+
 (deftest test-taf-project-publish-state-machine-first-run-and-safe-noop ()
   (with-taf-project-temp-dir (dir)
     (with-taf-project-publish-fake
@@ -1709,6 +2164,268 @@ This release mentions a todo-like upstream word, but it is not the default templ
                               :create-remote-tag
                               :create-release))
             (check-false (member mutation (getf state :operations)))))))))
+
+(deftest test-taf-project-publish-waits-for-new-repository-readiness ()
+  (with-taf-project-temp-dir (dir)
+    (with-taf-project-publish-fake
+        ("publish-repository-readiness" state journal-home)
+      (setf (getf state :repository-readiness-misses) 2)
+      (let* ((project-dir (%taf-project-dir "publish-repository-readiness"))
+             (taf.core::*publish-repository-readiness-delays* '(0 0))
+             (result (taf.core:project-publish
+                      :start-dir project-dir
+                      :dry-run nil
+                      :create-repo-p t
+                      :release-p t
+                      :verbose nil))
+             (journal-file
+               (taf.core::%publish-journal-file
+                "https://github.com/taffish/publish-repository-readiness"
+                "v1.2.3-r2"))
+             (journal (han.json:read-json-file journal-file)))
+        (check-equal (getf result :complete-p) t)
+        (check-equal
+         (count :create-repository (getf state :operations) :test #'eql)
+         1)
+        (check-equal
+         (count :inspect-repository (getf state :operations) :test #'eql)
+         4)
+        (check-equal
+         (han.json:get-json journal "repository_created") t)))))
+
+(deftest test-taf-project-publish-repository-readiness-wait-is-bounded ()
+  (with-taf-project-temp-dir (dir)
+    (with-taf-project-publish-fake
+        ("publish-repository-not-ready" state journal-home)
+      (setf (getf state :repository-readiness-misses) 99)
+      (let* ((project-dir (%taf-project-dir "publish-repository-not-ready"))
+             (taf.core::*publish-repository-readiness-delays* '(0 0))
+             (message
+               (%taf-project-error-string
+                (lambda ()
+                  (taf.core:project-publish
+                   :start-dir project-dir
+                   :dry-run nil
+                   :create-repo-p t
+                   :release-p t
+                   :verbose nil)))))
+        (check-true
+         (%taf-project-string-contains-p
+          message "CREATE-REPOSITORY did not reach the required state"))
+        (check-equal
+         (count :create-repository (getf state :operations) :test #'eql)
+         1)
+        (check-equal
+         (count :inspect-repository (getf state :operations) :test #'eql)
+         4)))))
+
+(deftest test-taf-project-publish-missing-repository-without-create-does-not-wait ()
+  (with-taf-project-temp-dir (dir)
+    (with-taf-project-publish-fake
+        ("publish-repository-no-create" state journal-home)
+      (let* ((project-dir (%taf-project-dir "publish-repository-no-create"))
+             (taf.core::*publish-repository-readiness-delays* '(0 0 0))
+             (message
+               (%taf-project-error-string
+                (lambda ()
+                  (taf.core:project-publish
+                   :start-dir project-dir
+                   :dry-run nil
+                   :create-repo-p nil
+                   :release-p t
+                   :verbose nil)))))
+        (check-true
+         (%taf-project-string-contains-p message "does not exist"))
+        (check-equal
+         (count :inspect-repository (getf state :operations) :test #'eql)
+         1)
+        (check-equal
+         (count :create-repository (getf state :operations) :test #'eql)
+         0)))))
+
+(deftest test-taf-project-publish-build-runs-once-and-skips-after-release-identity ()
+  (with-taf-project-temp-dir (dir)
+    (with-taf-project-publish-fake
+        ("publish-build-once" state journal-home)
+      (let* ((project-dir (%taf-project-dir "publish-build-once"))
+             (build-count 0)
+             (taf.core::*publish-build-runner*
+               (lambda (&key command-p image-p start-dir verbose)
+                 (declare (ignore command-p image-p verbose))
+                 (incf build-count)
+                 (taf.core:project-build
+                  :start-dir start-dir :verbose nil)))
+             (first (taf.core:project-publish
+                     :start-dir project-dir
+                     :dry-run nil
+                     :build-p t
+                     :create-repo-p t
+                     :release-p t
+                     :verbose nil)))
+        (check-equal build-count 1)
+        (check-equal (getf first :build-status) :rebuilt)
+        (check-equal
+         (getf (%taf-project-publish-phase first :build-ready) :status)
+         :ready)
+        (let* ((command (getf (getf first :build) :command))
+               (wrapper (getf command :command-file))
+               (snapshot (getf command :snapshot-dir))
+               (wrapper-digest (taf.core::%project-sha256-file wrapper))
+               (snapshot-digest (taf.core::%build-snapshot-digest snapshot))
+               (taf.core::*publish-operation-adapter*
+                 (%taf-project-publish-fake-adapter state))
+               (second (taf.core:project-publish
+                        :start-dir project-dir
+                        :dry-run nil
+                        :build-p t
+                        :create-repo-p t
+                        :release-p t
+                        :verbose nil)))
+          (check-equal build-count 1)
+          (check-equal (getf second :build) nil)
+          (check-equal (getf second :build-status) :release-established)
+          (check-equal
+           (getf (%taf-project-publish-phase second :build-ready) :status)
+           :skipped)
+          (check-equal (taf.core::%project-sha256-file wrapper)
+                       wrapper-digest)
+          (check-equal (taf.core::%build-snapshot-digest snapshot)
+                       snapshot-digest))))))
+
+(deftest test-taf-project-publish-build-dirty-release-identity-fails-before-build ()
+  (with-taf-project-temp-dir (dir)
+    (with-taf-project-publish-fake
+        ("publish-build-dirty" state journal-home)
+      (let* ((project-dir (%taf-project-dir "publish-build-dirty"))
+             (build-count 0)
+             (taf.core::*publish-build-runner*
+               (lambda (&key command-p image-p start-dir verbose)
+                 (declare (ignore command-p image-p verbose))
+                 (incf build-count)
+                 (taf.core:project-build
+                  :start-dir start-dir :verbose nil)))
+             (first (taf.core:project-publish
+                     :start-dir project-dir
+                     :dry-run nil
+                     :build-p t
+                     :create-repo-p t
+                     :release-p t
+                     :verbose nil))
+             (command (getf (getf first :build) :command))
+             (wrapper (getf command :command-file))
+             (wrapper-digest (taf.core::%project-sha256-file wrapper)))
+        (check-equal build-count 1)
+        (%taf-project-write-string
+         (%taf-project-path "publish-build-dirty" "src" "main.taf")
+         "<taffish>\necho dirty-after-release")
+        (let* ((base-adapter (%taf-project-publish-fake-adapter state))
+               (taf.core::*publish-operation-adapter*
+                 (lambda (operation context)
+                   (if (eql operation :inspect-commit)
+                       (%taf-project-publish-fake-result
+                        :conflicting
+                        "project changed after the release commit was established")
+                       (funcall base-adapter operation context))))
+               (message
+                 (%taf-project-error-string
+                  (lambda ()
+                    (taf.core:project-publish
+                     :start-dir project-dir
+                     :dry-run nil
+                     :build-p t
+                     :create-repo-p t
+                     :release-p t
+                     :verbose nil)))))
+          (check-true
+           (%taf-project-string-contains-p
+            message "project changed after the release commit"))
+          (check-equal build-count 1)
+          (check-equal (taf.core::%project-sha256-file wrapper)
+                       wrapper-digest))))))
+
+(deftest test-taf-project-publish-build-resume-never-runs-build-twice ()
+  (with-taf-project-temp-dir (dir)
+    (loop for mutation in '(:create-commit
+                            :create-branch
+                            :create-local-tag
+                            :create-remote-tag
+                            :create-release)
+          for index from 1
+          for project-name = (format nil "publish-build-resume-~D" index)
+          do
+             (with-taf-project-publish-fake
+                 (project-name state journal-home :interrupt-after mutation)
+               (let* ((project-dir (%taf-project-dir project-name))
+                      (build-count 0)
+                      (taf.core::*publish-build-runner*
+                        (lambda (&key command-p image-p start-dir verbose)
+                          (declare (ignore command-p image-p verbose))
+                          (incf build-count)
+                          (taf.core:project-build
+                           :start-dir start-dir :verbose nil))))
+                 (check-true
+                  (%taf-project-error-string
+                   (lambda ()
+                     (taf.core:project-publish
+                      :start-dir project-dir
+                      :dry-run nil
+                      :build-p t
+                      :create-repo-p t
+                      :release-p t
+                      :verbose nil))))
+                 (check-equal build-count 1)
+                 (let* ((taf.core::*publish-operation-adapter*
+                          (%taf-project-publish-fake-adapter state))
+                        (result (taf.core:project-publish
+                                 :start-dir project-dir
+                                 :dry-run nil
+                                 :build-p t
+                                 :create-repo-p t
+                                 :release-p t
+                                 :verbose nil)))
+                   (check-equal (getf result :outcome) :resumed)
+                   (check-equal build-count 1)
+                   (check-equal (getf result :build-status)
+                                :release-established)))))))
+
+(deftest test-taf-project-publish-build-intent-must-match-journal ()
+  (with-taf-project-temp-dir (dir)
+    (with-taf-project-publish-fake
+        ("publish-build-intent" state journal-home
+         :interrupt-after :create-commit)
+      (let* ((project-dir (%taf-project-dir "publish-build-intent"))
+             (build-count 0)
+             (taf.core::*publish-build-runner*
+               (lambda (&key command-p image-p start-dir verbose)
+                 (declare (ignore command-p image-p verbose))
+                 (incf build-count)
+                 (taf.core:project-build
+                  :start-dir start-dir :verbose nil))))
+        (%taf-project-error-string
+         (lambda ()
+           (taf.core:project-publish
+            :start-dir project-dir
+            :dry-run nil
+            :build-p t
+            :create-repo-p t
+            :release-p t
+            :verbose nil)))
+        (check-equal build-count 1)
+        (let ((taf.core::*publish-operation-adapter*
+                (%taf-project-publish-fake-adapter state))
+              (message
+                (%taf-project-error-string
+                 (lambda ()
+                   (taf.core:project-publish
+                    :start-dir project-dir
+                    :dry-run nil
+                    :build-p nil
+                    :create-repo-p t
+                    :release-p t
+                    :verbose nil)))))
+          (check-true
+           (%taf-project-string-contains-p message "build_requested"))
+          (check-equal build-count 1))))))
 
 (deftest test-taf-project-publish-resumes-after-every-side-effect-boundary ()
   (with-taf-project-temp-dir (dir)
@@ -1802,31 +2519,96 @@ This release mentions a todo-like upstream word, but it is not the default templ
 (deftest test-taf-project-publish-unavailable-inspection-gives-resume-guidance ()
   (with-taf-project-temp-dir (dir)
     (taf.core:project-new "publish-unavailable" nil)
-    (let ((taf.core::*publish-journal-user-home*
-            (%taf-project-dir "publish-unavailable-journal"))
-          (taf.core::*publish-operation-adapter*
-            (lambda (operation context)
-              (declare (ignore context))
-              (case operation
-                (:inspect-repository
-                 (list :state :unavailable
-                       :evidence "GitHub repository inspection is unavailable"))
-                (otherwise
-                 (error "unexpected publish operation: ~S" operation))))))
-      (let ((message
-              (%taf-project-error-string
-               (lambda ()
-                 (taf.core:project-publish
-                  :start-dir (%taf-project-dir "publish-unavailable")
-                  :dry-run nil
-                  :create-repo-p t
-                  :verbose nil)))))
+    (labels ((message-for (language journal-name)
+               (let ((taf.core::*publish-journal-user-home*
+                       (%taf-project-dir journal-name))
+                     (taf.core::*publish-operation-adapter*
+                       (lambda (operation context)
+                         (declare (ignore context))
+                         (case operation
+                           (:inspect-repository
+                            (list :state :unavailable
+                                  :evidence
+                                  "GitHub repository inspection is unavailable"))
+                           (otherwise
+                            (error "unexpected publish operation: ~S"
+                                   operation))))))
+                 (taffish.i18n:with-language (language)
+                   (%taf-project-error-string
+                    (lambda ()
+                      (taf.core:project-publish
+                       :start-dir (%taf-project-dir "publish-unavailable")
+                       :dry-run nil
+                       :create-repo-p t
+                       :verbose nil)))))))
+      (let ((english (message-for "en" "publish-unavailable-journal-en"))
+            (chinese (message-for "zh" "publish-unavailable-journal-zh")))
         (check-true
          (%taf-project-string-contains-p
-          message "rerun the same taf publish command"))
+          english "rerun the same taf publish command"))
         (check-true
          (%taf-project-string-contains-p
-          message "PROJECT-VALIDATED"))))))
+          chinese "网络恢复后，请重新运行完全相同的 taf publish 命令"))
+        (dolist (message (list english chinese))
+          (check-true
+           (%taf-project-string-contains-p message "[publish:unavailable]"))
+          (check-true
+           (%taf-project-string-contains-p message "PROJECT-VALIDATED")))))))
+
+(deftest test-taf-project-human-output-localized-and-shell-invariant ()
+  (with-taf-project-temp-dir (dir)
+    (with-output-to-string (*standard-output* nil :element-type 'character)
+      (taf.core:project-new "i18n-project" nil))
+    (let* ((project-dir (%taf-project-dir "i18n-project"))
+           (english
+             (taffish.i18n:with-language ("en")
+               (with-output-to-string
+                   (*standard-output* nil :element-type 'character)
+                 (taf.core:project-check project-dir t))))
+           (chinese
+             (taffish.i18n:with-language ("zh")
+               (with-output-to-string
+                   (*standard-output* nil :element-type 'character)
+                 (taf.core:project-check project-dir t))))
+           (english-shell
+             (taffish.i18n:with-language ("en")
+               (taf.core:project-compile nil project-dir)))
+           (chinese-shell
+             (taffish.i18n:with-language ("zh")
+               (taf.core:project-compile nil project-dir))))
+      (check-true (search "[TAF] project ok: i18n-project" english
+                          :test #'char=))
+      (check-true (search "[TAF] 项目检查通过：i18n-project" chinese
+                          :test #'char=))
+      (check-true (search (han.path:->namestring project-dir) english
+                          :test #'char=))
+      (check-true (search (han.path:->namestring project-dir) chinese
+                          :test #'char=))
+      (check-equal chinese-shell english-shell))))
+
+(deftest test-taf-project-error-localized-with-stable-path ()
+  (with-taf-project-temp-dir (dir)
+    (with-output-to-string (*standard-output*)
+      (taf.core:project-new "i18n-project-error" nil))
+    (let* ((project-dir (%taf-project-dir "i18n-project-error"))
+           (main-file (%taf-project-path "i18n-project-error" "src" "main.taf")))
+      (delete-file main-file)
+      (let ((english
+              (taffish.i18n:with-language ("en")
+                (%taf-project-error-string
+                 (lambda () (taf.core:project-check project-dir nil)))))
+            (chinese
+              (taffish.i18n:with-language ("zh")
+                (%taf-project-error-string
+                 (lambda () (taf.core:project-check project-dir nil))))))
+        (check-true (search "main TAF file does not exist" english
+                            :test #'char=))
+        (check-true (search "main TAF 文件不存在" chinese
+                            :test #'char=))
+        (check-true (search (han.path:->namestring main-file) english
+                            :test #'char=))
+        (check-true (search (han.path:->namestring main-file) chinese
+                            :test #'char=))))))
 
 (deftest test-taf-project-publish-conflicting-tag-hard-fails ()
   (with-taf-project-temp-dir (dir)
@@ -1987,3 +2769,266 @@ This release mentions a todo-like upstream word, but it is not the default templ
                        history "\"status\":\"skipped\""))
           (check-true (%taf-project-string-contains-p
                        history "\"status\":\"conflict\"")))))))
+
+;;;; Publish channel policy: identity, not version ordering, gates publication.
+
+(defmacro %with-taf-publish-function ((name replacement) &body body)
+  (let ((original (gensym "ORIGINAL")))
+    `(let ((,original (symbol-function ',name)))
+       (unwind-protect
+            (progn (setf (symbol-function ',name) ,replacement) ,@body)
+         (setf (symbol-function ',name) ,original)))))
+
+(deftest test-taf-project-publish-version-independent-admission ()
+  (dolist (case '(("2.0.0-a.7.10" "v2.0.0-a.7.3-r1")
+                  ("2.0.0-rc.10" "v2.0.0-rc.2-r1")
+                  ("1.9.0" "v2.0.0-r1")
+                  ("2.0.3" "v2.0.10-r1")
+                  ("2.0.0" "v2.0.0-r10")
+                  ("2026.09-custom" "vnext-r1")))
+    (with-taf-project-temp-dir (dir)
+      (taf.core:project-new "publish-order" (list "--version" (first case)))
+      (dolist (channel '(:latest :pre :no-latest))
+        (let ((result (taf.core:project-publish
+                       :start-dir (%taf-project-dir "publish-order")
+                       :dry-run t :channel channel
+                       :remote-tags (list (second case)) :verbose nil)))
+          (check-equal :planned (getf result :outcome))
+          (check-false (getf result :published-p)))))))
+
+(deftest test-taf-project-publish-channel-create-args-match-plan ()
+  (dolist (channel '(:latest :pre :no-latest))
+    (with-taf-project-temp-dir (dir)
+      (taf.core:project-new "publish-args" '("--version" "3.0.0"))
+      (%taf-project-write-string (%taf-project-path "publish-args" "release.md")
+                                 "# A release")
+      (let* ((result (taf.core:project-publish
+                      :start-dir (%taf-project-dir "publish-args")
+                      :release-p t :channel channel :dry-run t
+                      :remote-tags '("v1.0.0-r1") :verbose nil))
+             (planned (cdr (car (last (getf result :commands)))))
+             (release (copy-list (getf result :release)))
+             (captured nil))
+        (setf (getf release :file) (pathname (getf release :file-display)))
+        (%with-taf-publish-function (taf.core::%publish-gh-program (lambda () "gh"))
+          (%with-taf-publish-function
+              (taf.core::%publish-run-program
+               (lambda (program args &rest options)
+                 (declare (ignore options))
+                 (check-equal "gh" program)
+                 (setf captured args)
+                 (values "created" "" 0)))
+            (taf.core::%publish-default-create-release
+             (list :repository-url (getf result :repository-url)
+                   :tag (getf result :tag) :release-info release
+                   :channel channel :verbose nil))))
+        (check-equal planned captured)
+        (check-true (member "--verify-tag" captured :test #'string=))
+        (check-equal (eq channel :pre)
+                     (not (null (member "--prerelease" captured :test #'string=))))
+        (check-true (member (if (eq channel :latest) "--latest" "--latest=false")
+                            captured :test #'string=))))))
+
+(defun %taf-publish-release-response (channel object &optional (code 0))
+  (%with-taf-publish-function
+      (taf.core::%publish-gh-query
+       (lambda (context args)
+         (declare (ignore context args))
+         (values (han.json:encode-json object) "network unavailable" code)))
+    (taf.core::%publish-default-inspect-release
+     (list :release-requested-p t :repository-url "https://github.com/taffish/demo"
+           :tag "v1.0.0-r1" :release-title "A release" :channel channel
+           :release-notes-sha256 (taf.core::%publish-sha256 "notes")))))
+
+(defun %taf-publish-release-object ()
+  (han.json:json-object (cons "tagName" "v1.0.0-r1")
+                        (cons "name" "A release") (cons "body" "notes")
+                        (cons "isDraft" nil) (cons "isPrerelease" nil)))
+
+(deftest test-taf-project-publish-release-type-inspection ()
+  (dolist (channel '(:latest :pre :no-latest))
+    (let ((object (%taf-publish-release-object)))
+      (setf (gethash "isPrerelease" object) (eq channel :pre))
+      (check-equal :matching
+                   (getf (%taf-publish-release-response channel object) :state))
+      (setf (gethash "isPrerelease" object) (not (eq channel :pre)))
+      (check-equal :conflicting
+                   (getf (%taf-publish-release-response channel object) :state))))
+  (dolist (field '("isDraft" "tagName" "name" "body"))
+    (let ((object (%taf-publish-release-object)))
+      (setf (gethash field object) (if (string= field "isDraft") t "different"))
+      (check-equal :conflicting
+                   (getf (%taf-publish-release-response :latest object) :state)))))
+
+(deftest test-taf-project-publish-release-incomplete-response-is-unavailable ()
+  (dolist (field '("isDraft" "isPrerelease" "tagName" "name" "body"))
+    (let ((object (%taf-publish-release-object)))
+      (remhash field object)
+      (check-equal :unavailable
+                   (getf (%taf-publish-release-response :latest object) :state)))
+    (dolist (bad '(:null 0 "false"))
+      (let ((object (%taf-publish-release-object)))
+        (setf (gethash field object) bad)
+        ;; Strings are valid for the text fields, but not for JSON booleans.
+        (unless (and (stringp bad)
+                     (member field '("tagName" "name" "body") :test #'string=))
+          (check-equal :unavailable
+                       (getf (%taf-publish-release-response :latest object) :state))))))
+  (dolist (object (list :null #() "not an object"))
+    (check-equal :unavailable
+                 (getf (%taf-publish-release-response :latest object) :state)))
+  (check-equal :unavailable
+               (getf (%taf-publish-release-response
+                      :latest (%taf-publish-release-object) 1) :state)))
+
+(deftest test-taf-project-publish-channel-journal-resume-and-noop ()
+  (dolist (channel '(:latest :pre :no-latest))
+    (with-taf-project-temp-dir (dir)
+      (with-taf-project-publish-fake
+          ("publish-channel" state journal-home :interrupt-after :create-release)
+        (let* ((root (%taf-project-dir "publish-channel"))
+               (options (list :start-dir root :dry-run nil :create-repo-p t
+                              :release-p t :channel channel :verbose nil))
+               (journal (taf.core::%publish-journal-file
+                         "https://github.com/taffish/publish-channel" "v1.2.3-r2")))
+          (check-true (%taf-project-signal-error-p
+                       (lambda () (apply #'taf.core:project-publish options))))
+          (let ((object (han.json:parse-json-file journal)))
+            (check-equal (string-downcase (string channel)) (gethash "channel" object))
+            (check-equal (if (eq channel :latest) "promote" "preserve")
+                         (gethash "latest_policy" object)))
+          (check-equal (and (eq channel :latest) "v1.2.3-r2")
+                       (getf state :latest-tag))
+          (setf (getf state :operations) nil)
+          (let ((taf.core::*publish-operation-adapter*
+                  (%taf-project-publish-fake-adapter state)))
+            (check-equal :resumed
+                         (getf (apply #'taf.core:project-publish options) :outcome))
+            (setf (getf state :latest-tag) "v99.0.0-r1")
+            (check-equal :skipped
+                         (getf (apply #'taf.core:project-publish options) :outcome))
+            (check-equal "v99.0.0-r1" (getf state :latest-tag))
+            (check-false (member :create-release (getf state :operations)))))))))
+
+(deftest test-taf-project-publish-channel-journal-conflict ()
+  (with-taf-project-temp-dir (dir)
+    (with-taf-project-publish-fake ("publish-policy" state journal-home)
+      (let* ((options (list :start-dir (%taf-project-dir "publish-policy")
+                            :dry-run nil :create-repo-p t :release-p t :verbose nil))
+             (first (apply #'taf.core:project-publish options))
+             (journal-file (getf first :journal-file))
+             (journal-before (han.os:load-string journal-file)))
+        (dolist (channel '(:pre :no-latest))
+          (setf (getf state :operations) nil)
+          (check-true (%taf-project-string-contains-p
+                       (%taf-project-error-string
+                        (lambda () (apply #'taf.core:project-publish
+                                           :channel channel options)))
+                       "[publish:conflict]"))
+          (check-false (getf state :operations))
+          (check-equal journal-before (han.os:load-string journal-file)))
+        (check-equal :skipped
+                     (getf (apply #'taf.core:project-publish options) :outcome))))))
+
+(deftest test-taf-project-publish-legacy-channel-journal ()
+  (dolist (release-exists '(nil t))
+    (with-taf-project-temp-dir (dir)
+      (with-taf-project-publish-fake ("publish-legacy" state journal-home)
+        (let* ((options (list :start-dir (%taf-project-dir "publish-legacy")
+                             :dry-run nil :create-repo-p t :release-p t :verbose nil))
+               (result (apply #'taf.core:project-publish options))
+               (file (getf result :journal-file))
+               (journal (han.json:parse-json-file file)))
+          (remhash "channel" journal)
+          (remhash "latest_policy" journal)
+          (han.json:write-json-file file journal)
+          (unless release-exists (setf (getf state :release-intent) nil))
+          (let ((taf.core::*publish-operation-adapter*
+                  (%taf-project-publish-fake-adapter state)))
+            (if release-exists
+                (progn
+                  (check-true (%taf-project-string-contains-p
+                               (%taf-project-error-string
+                                (lambda () (apply #'taf.core:project-publish
+                                                   :channel :pre options)))
+                               "[publish:conflict]"))
+                  (check-false (nth-value 1
+                                (han.json:get-json
+                                 (han.json:parse-json-file file) "channel")))
+                  (check-true (getf (apply #'taf.core:project-publish options)
+                                    :complete-p)))
+                (check-true (getf (apply #'taf.core:project-publish
+                                         :channel :pre options) :complete-p)))))))))
+
+(deftest test-taf-project-publish-all-channels-dry-run-and-tag-only ()
+  (dolist (channel '(:latest :pre :no-latest))
+    (with-taf-project-temp-dir (dir)
+      (with-taf-project-publish-fake ("publish-tag-only" state journal-home)
+        (let* ((options (list :start-dir (%taf-project-dir "publish-tag-only")
+                              :create-repo-p t :channel channel :verbose nil))
+               (dry (apply #'taf.core:project-publish :release-p t options)))
+          (check-equal :planned (getf dry :outcome))
+          (check-false (han.path:directory-exists-p journal-home))
+          (check-false (some (lambda (op) (search "CREATE-" (symbol-name op)))
+                             (getf state :operations)))
+          (let ((result (apply #'taf.core:project-publish :dry-run nil options)))
+            (check-true (getf result :complete-p))
+            (check-false (getf result :release))
+            (check-false (getf state :release-intent))
+            (check-false (member :create-release (getf state :operations)))
+            (check-equal "not-applicable"
+                         (gethash "latest_policy"
+                                  (han.json:parse-json-file
+                                   (getf result :journal-file))))))))))
+
+(deftest test-taf-project-build-progress-preserves-snapshot-and-quiet-api ()
+  (with-taf-project-temp-dir (dir)
+    (taf.core:project-new "progress-build" nil)
+    (let* ((start (%taf-project-dir "progress-build"))
+           (result nil)
+           (text (%operation-test-display
+                  (lambda ()
+                    (decf (taf.core::%operation-display-started taf.core::*operation-display*)
+                          (* 2 internal-time-units-per-second))
+                    (setf result (taf.core:project-build :start-dir start :verbose nil)))
+                  :terminal-p t))
+           (wrapper (getf (getf result :command) :command-file))
+           (bytes (han.os:load-string wrapper)))
+      (check-true (search "Copying project snapshot" text))
+      (check-true (search "Writing command wrapper" text))
+      (check-true (search "Checking build and installation" text))
+      (check-equal "" (han.host:with-character-output-to-string (*error-output*)
+                        (let ((taf.core::*operation-display* nil))
+                          (setf result (taf.core:project-build :start-dir start :verbose nil)))))
+      (check-equal :up-to-date (getf (getf result :command) :status))
+      (check-equal bytes (han.os:load-string wrapper)))))
+
+(deftest test-taf-project-image-build-yields-status-before-native-output ()
+  (let ((check (symbol-function 'taf.core:project-check))
+        (build (symbol-function 'taf.core::%build-container-image))
+        (calls 0))
+    (unwind-protect
+         (progn
+           (setf (symbol-function 'taf.core:project-check)
+                 (lambda (&rest args) (declare (ignore args)) (list :name "image-test"))
+                 (symbol-function 'taf.core::%build-container-image)
+                 (lambda (project backend &key verbose)
+                   (declare (ignore verbose))
+                   (incf calls)
+                   (check-equal "image-test" (getf project :name))
+                   (check-equal :podman backend)
+                   (check-equal nil (taf.core::%operation-display-active-p taf.core::*operation-display*))
+                   (write-line "native build output" *standard-output*)
+                   (list :image "fixture-image" :backend backend)))
+           (let ((stdout (han.host:with-character-output-to-string (*standard-output*)
+                           (%operation-test-display
+                            (lambda ()
+                              (taf.core::%operation-stage "build")
+                              (let ((result (taf.core:project-build :image-p t :command-p nil
+                                                                  :backend :podman :verbose nil)))
+                                (check-equal "fixture-image" (getf (getf result :image) :image))))
+                            :terminal-p t))))
+             (check-equal (format nil "native build output~%") stdout))
+           (check-equal 1 calls))
+      (setf (symbol-function 'taf.core:project-check) check
+            (symbol-function 'taf.core::%build-container-image) build))))

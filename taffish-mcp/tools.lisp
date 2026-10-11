@@ -119,8 +119,11 @@
                   :required '("path")))
           (%tool "taffish_check_environment"
                  "Check TAFFISH Environment"
-                 "Return structured, read-only diagnostics for TAFFISH homes, config, index, PATH, completion, Vim/Neovim, Apptainer SIF cache, and container backend readiness. Does not initialize, repair, or modify the system."
-                 (%tool-schema))
+                 "Return structured, read-only diagnostics. Default environment checks homes, config, index, PATH, completion, Vim/Neovim, SIF cache and backend readiness. Select index or hub for offline index/installed-file checks with evidence and remediation. Missing evidence establishes neither damage nor authenticity. Command shortcut warnings are separate from artifact integrity. Never repairs or runs apps."
+                 (%tool-schema :properties
+                               (list (cons "check" (%json-object (cons "type" "string")
+                                                                 (cons "enum" #("environment" "index" "hub"))))
+                                     (cons "targets" (%schema-string-array "Installed app names or versioned commands; hub mode only. Omit to check all installed apps.")))))
           (%tool "taffish_get_config"
                  "Get TAFFISH Config"
                  "Return effective TAFFISH runtime configuration. Read-only."
@@ -201,7 +204,7 @@
                  "Plan installation of all indexed apps selected by kind. Dry-run only; does not write files."
                  (%tool-schema
                   :properties (list (cons "kind" (%schema-string "Filter: tool, flow, or all. Default all."))
-                                    (cons "pruneOld" (%schema-boolean "Plan keeping only newest local versions after install. Does not delete.")))))
+                                    (cons "pruneOld" (%schema-boolean "Request safe pruning after install. Requires a valid installed index latest; protects private/newer versions. Dry-run never deletes.")))))
           (%tool "taffish_plan_upgrade"
                  "Plan TAFFISH Upgrade"
                  "Plan installing newer indexed versions for local apps. Dry-run only; does not install."
@@ -212,7 +215,7 @@
                                     (cons "pruneOld" (%schema-boolean "Plan pruning old versions after upgrade. Does not delete.")))))
           (%tool "taffish_plan_prune"
                  "Plan TAFFISH Prune"
-                 "Plan removal of older local app versions. Dry-run only; does not delete files."
+                 "Plan removal of older same-source app versions, retaining a valid installed index latest. Missing targets and private/newer versions are protected. Dry-run only; does not delete files."
                  (%tool-schema
                   :properties (list (cons "target" (%schema-string "Optional single app or command."))
                                     (cons "targets" (%schema-string-array "Optional apps or commands."))
@@ -401,6 +404,8 @@
 
 (defun %call-doctor-check (arguments)
   (let ((result (taf.core:system-doctor :scope (%mcp-scope arguments)
+                                        :check (or (%json-string arguments "check") "environment")
+                                        :targets (%json-string-array-or-single arguments "targets")
                                         :user-home (%json-string arguments "userHome")
                                         :system-home (%json-string arguments "systemHome")
                                         :init-p nil

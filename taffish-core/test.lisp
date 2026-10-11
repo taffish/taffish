@@ -686,6 +686,12 @@ c"))
              (taffish.core:taffish-to-shell code input context))))
     (check-equal chinese english)))
 
+(deftest test-taffish-to-shell-preserves-unicode-literal ()
+  (let* ((code "<shell>\nprintf '%s\\n' '你好，世界'")
+         (shell (taffish.core:taffish-to-shell
+                 code nil (%default-test-context))))
+    (check-true (search "你好，世界" shell :test #'char=))))
+
 (deftest test-taffish-to-shell-block-slot-args-render-as-shell-tokens ()
   (let* ((code (format nil
                        "ARGS~%<(@:)only-step>~%RUN~%<shell>~%echo ::(@:)only-step::~%"))
@@ -867,6 +873,18 @@ c"))
     (let ((final-run-args (%line-containing shell "# FINAL RUN ARGS:")))
       (check-equal (%string-contains-p shell "# CHOSEN BACKEND: DOCKER") t)
       (check-equal (%string-contains-p final-run-args "--label note=a]b") t))))
+
+(deftest test-taffish-to-shell-container-structured-run-args-preserve-unicode ()
+  (let* ((code "RUN
+<container:ghcr.io/taffish/blast:2.16.0$@[docker: --label note=你好]>
+  tblastn -h")
+         (shell (taffish.core:taffish-to-shell
+                 code
+                 (%default-test-input-args)
+                 (%default-test-context
+                  '((:available-backends . (:docker))
+                    (:force-backend . :docker))))))
+    (check-true (search "--label note=你好" shell :test #'char=))))
 
 (deftest test-taffish-to-shell-container-structured-run-args-bad-target-error ()
   (let ((code (format nil

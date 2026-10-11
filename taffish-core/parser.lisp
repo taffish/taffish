@@ -15,7 +15,7 @@
   (%make-taf-line-from-raw tag 0))
 
 (defun %make-<>-line (value)
-  (%make-taf-line-from-raw (format nil "<~A>" value) 0))
+  (%make-taf-line-from-raw (%format-character-string "<~A>" value) 0))
 
 (defun %normalize-taf-lines (taf-lines)
   "Normalize RAW-TAF-LINES into normalized TAF-LINES
@@ -38,7 +38,7 @@
       (t
        ;;(error "Unknown TAF-LINE kind: ~A" (taf-line-kind first-effective-line))
        (signal-taffish-error
-        (format nil "Unknown TAF-LINE kind: ~A" (taf-line-kind first-effective-line))
+        (%format-character-string "Unknown TAF-LINE kind: ~A" (taf-line-kind first-effective-line))
         :line (taf-line-line-number first-effective-line)
         :column nil
         :source-string (taf-line-raw-string first-effective-line))))))
@@ -163,7 +163,7 @@
         (let ((kind (taf-token-kind token)))
           (case kind
             (:arg
-             (push (format nil "@{~A}"
+             (push (%format-character-string "@{~A}"
                            (han.args:arg-spec-name
                             (han.args:parse-arg-spec
                              (taf-token-value token))))
@@ -172,7 +172,7 @@
              (push (taf-token-value token)
                    default-list)))))
       (push " " default-list))
-    (format nil "~{~A~}" (nreverse (cdr default-list)))))
+    (%format-character-string "~{~A~}" (nreverse (cdr default-list)))))
 
 (defun %subtag-head-p (line)
   (and line
@@ -198,12 +198,12 @@
        :line (taf-token-line token)
        :column (taf-token-column token)
        :source-string (taf-line-raw-string head))))
-  (format nil "~{~A~}" (mapcar #'taf-token-value (taf-line-tokens head))))
+  (%format-character-string "~{~A~}" (mapcar #'taf-token-value (taf-line-tokens head))))
 
 (defun %extract-block-args (args-block)
   (mapcar #'(lambda (arg-block)
               (let ((head (car arg-block)))
-                (format nil "~A=~A"
+                (%format-character-string "~A=~A"
                         (%subtag-head-string head)
                         (%combine-args-value-lines-to-default (cdr arg-block)))))
           args-block))
@@ -226,7 +226,7 @@
           ;;       (taf-line-line-number line)
           ;;       (string-trim '(#\Space #\Tab) (taf-line-raw-string line)))
           (signal-taffish-error
-           (format nil "There is no content under your SUB-TAG [~A]."
+           (%format-character-string "There is no content under your SUB-TAG [~A]."
                    (string-trim '(#\Space #\Tab) line-string))
            :line (taf-line-line-number line)
            :column nil
@@ -284,7 +284,7 @@
                 ;;(error "[line: ~A, column: ~A] ~A arg can't be set and no default!"
                 ;;       (taf-token-line token) (taf-token-column token) arg-name)
                 (signal-taffish-error
-                 (format nil "[~A] arg can't be set and no default!" arg-name)
+                 (%format-character-string "[~A] arg can't be set and no default!" arg-name)
                  :line (taf-token-line token)
                  :column (taf-token-column token)
                  :source-string (taf-line-raw-string line))))))))))

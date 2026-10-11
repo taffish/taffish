@@ -8,21 +8,23 @@
 
 (defun %hub-install-safe-path-part (value label)
   (unless (%hub-non-empty-string-p value)
-    (error "[install] ~A must be a non-empty string." label))
+    (%hub-error "install-non-empty" :label label))
   (when (or (find #\/ value)
             (find #\\ value)
             (string= value ".")
             (string= value ".."))
-    (error "[install] ~A must not contain path separators: ~S" label value))
+    (%hub-error "install-path-separator"
+                :label label
+                :value (%hub-repr value)))
   value)
 
 (defun %hub-install-command-name (record)
   (let ((command (%hub-json-ref record "command")))
     (unless (han.json:json-object-p command)
-      (error "[install] version record is missing command object."))
+      (%hub-error "install-record-command"))
     (let ((name (%hub-json-string command "name")))
       (unless (%hub-non-empty-string-p name)
-        (error "[install] version record is missing command.name."))
+        (%hub-error "install-record-command-name"))
       name)))
 
 (defun %hub-install-record-version-id (record fallback)
@@ -43,7 +45,7 @@
         (version (%hub-json-string record "version"))
         (release (%hub-json-integer-string record "release")))
     (unless (and version release)
-      (error "[install] version record must contain version and release."))
+      (%hub-error "install-record-version"))
     (format nil "~A-v~A-r~A" command-name version release)))
 
 (defun %hub-install-source-object (record)
@@ -106,6 +108,7 @@
 
 (defun %hub-install-run-program
     (program args &key (noninteractive t) (prompt nil) (verbose nil))
+  (when verbose (%operation-progress-yield))
   (han.os:run-program
    (if noninteractive
        (cons (%publish-env-program)
@@ -119,14 +122,14 @@
 
 (defun %hub-install-run-git-clone
     (source ref target-dir &key prompt-p (verbose t))
-  (let ((args (append (list "clone" "--depth" "1")
+  (let ((args (append (list "-c" "advice.detachedHead=false" "clone" "--depth" "1")
                       (when (%hub-non-empty-string-p ref)
                         (list "--branch" ref "--single-branch"))
                       (list source (han.path:->namestring target-dir)))))
     (when verbose
-      (format t "[TAF] cloning source: ~A (~A)~%"
-              source
-              (or ref "default"))
+      (%hub-print-message "install.cloning"
+                          :source source
+                          :ref (or ref "default"))
       (finish-output))
     (multiple-value-bind (out err code)
         (%hub-install-run-program
@@ -136,19 +139,23 @@
          :prompt prompt-p
          :verbose verbose)
       (unless (and (integerp code) (= code 0))
-        (error "[install] git clone failed (~A): git ~{~A~^ ~}~%~A~A~@[~%~A~]"
-               code args out err
-               (and (not prompt-p)
-                    (%publish-noninteractive-auth-hint))))
+        (%hub-error
+         "install-clone"
+         :code code
+         :command (format nil "~{~A~^ ~}" args)
+         :detail (format nil "~A~A~@[~%~A~]"
+                         out err
+                         (and (not prompt-p)
+                              (%publish-noninteractive-auth-hint)))))
       (values out err code))))
 
 (defun %hub-install-copy-local-source (source target-dir &key (verbose t))
   (let ((local-dir (%hub-install-local-source-dir source)))
     (unless local-dir
-      (error "[install] local source directory does not exist: ~A" source))
+      (%hub-error "install-local-source" :source source))
     (when verbose
-      (format t "[TAF] copying local source: ~A~%"
-              (han.path:->namestring local-dir)))
+      (%hub-print-message "install.copying"
+                          :source (han.path:->namestring local-dir)))
     (%copy-directory-tree/supersede local-dir target-dir)))
 
 (defun %hub-install-copy-or-clone-source
@@ -161,8 +168,7 @@
                                  :prompt-p prompt-p
                                  :verbose verbose))
     (t
-     (error "[install] source must be a Git URL or local directory, but got: ~A"
-            source))))
+     (%hub-error "install-source" :source source))))
 
 (defun %hub-install-trim-output (string)
   (string-trim '(#\Space #\Tab #\Newline #\Return)
@@ -181,10 +187,9 @@
        :prompt nil
        :verbose nil)
     (unless (and (integerp code) (= code 0))
-      (error "[install] failed to inspect installed source commit in ~A.~%~A~A"
-             (han.path:->namestring source-dir)
-             out
-             err))
+      (%hub-error "install-inspect-commit"
+                  :source (han.path:->namestring source-dir)
+                  :detail (format nil "~A~A" out err)))
     (%hub-install-trim-output out)))
 
 (defun %hub-install-git-status (source-dir)
@@ -201,10 +206,9 @@
        :prompt nil
        :verbose nil)
     (unless (and (integerp code) (= code 0))
-      (error "[install] failed to inspect installed source status in ~A.~%~A~A"
-             (han.path:->namestring source-dir)
-             out
-             err))
+      (%hub-error "install-inspect-status"
+                  :source (han.path:->namestring source-dir)
+                  :detail (format nil "~A~A" out err)))
     (%hub-install-trim-output out)))
 
 (defun %hub-install-verify-source-commit
@@ -213,16 +217,16 @@
     (let ((actual-commit (%hub-install-git-head-commit source-dir))
           (source-status (%hub-install-git-status source-dir)))
       (unless (string-equal actual-commit expected-commit)
-        (error "[install] source commit mismatch.~%  source  : ~A~%  ref     : ~A~%  expected: ~A~%  got     : ~A"
-               (or source-url "<unknown>")
-               (or source-ref "<unknown>")
-               expected-commit
-               actual-commit))
+        (%hub-error "install-commit-mismatch"
+                    :source (or source-url "<unknown>")
+                    :ref (or source-ref "<unknown>")
+                    :expected expected-commit
+                    :actual actual-commit))
       (unless (string= source-status "")
-        (error "[install] source commit matches, but source worktree is not clean.~%  source: ~A~%  ref   : ~A~%  status:~%~A"
-               (or source-url "<unknown>")
-               (or source-ref "<unknown>")
-               source-status))
+        (%hub-error "install-dirty"
+                    :source (or source-url "<unknown>")
+                    :ref (or source-ref "<unknown>")
+                    :status source-status))
       actual-commit)))
 
 (defun %hub-install-source-verification-dir (source target-dir)
@@ -404,21 +408,24 @@ exec ~A \"$@\"
        (%hub-install-delete-dir-if-exists install-root))
       (install-exists-p
        (unless force-p
-         (error "[install] app version is already installed: ~A~%Use --force to reinstall."
-                (han.path:->namestring install-root)))))
+         (%hub-error "install-already"
+                     :path (han.path:->namestring install-root)))))
     (cond
       ((and force-p launcher-exists-p (not dry-run-p))
        (%hub-install-delete-file-if-exists launcher-file))
       (launcher-exists-p
        (unless force-p
-         (error "[install] command already exists: ~A~%Use --force to replace it."
-                (han.path:->namestring launcher-file)))))))
+         (%hub-error "install-command-exists"
+                     :path (han.path:->namestring launcher-file)))))))
 
 (defun %hub-install-print-result (result)
-  (format t "[TAF] ~A: ~A ~A~%"
-          (if (getf result :dry-run-p) "install dry-run" "installed")
-          (getf result :package-name)
-          (getf result :version-id))
+  (%operation-progress-yield)
+  (%hub-print-message
+   "install.header"
+   :action (%hub-status-display
+            (if (getf result :dry-run-p) :install-dry-run :installed))
+   :app (getf result :package-name)
+   :version (getf result :version-id))
   (%print-hub-info-field "scope"
                          (string-downcase (string (getf result :scope))))
   (%print-hub-info-field "source" (getf result :source-url))
@@ -444,14 +451,14 @@ exec ~A \"$@\"
   (%print-hub-info-field "bin" (getf result :bin-dir))
   (%print-hub-info-field "path"
                          (if (getf result :bin-in-path-p)
-                             "ok"
-                             "not in PATH"))
+                             (%hub-message "value.ok")
+                             (%hub-message "value.not-in-path")))
   (unless (getf result :bin-in-path-p)
     (%print-hub-info-field
      "hint"
      (%taffish-bin-path-export-command (getf result :bin-dir))))
   (when (getf result :dry-run-p)
-    (%print-hub-info-field "action" "rerun without --dry-run to install"))
+    (%print-hub-info-field "action" (%hub-message "install.apply-hint")))
   nil)
 
 (defun %hub-install-paths
@@ -489,8 +496,7 @@ exec ~A \"$@\"
     ((stringp value)
      (%hub-normalize-version-id value))
     (t
-     (error "[install] dependency version must be a string, but got: ~S"
-            value))))
+     (%hub-error "install-dependency-string" :value (%hub-repr value)))))
 
 (defun %hub-install-dependency-version-ids (value)
   (cond
@@ -499,7 +505,7 @@ exec ~A \"$@\"
        (loop for item across value
              do (push (%hub-install-dependency-version-id item) items))
        (when (null items)
-         (error "[install] dependency version array must not be empty."))
+         (%hub-error "install-dependency-empty"))
        (nreverse items)))
     (t
      (list (%hub-install-dependency-version-id value)))))
@@ -519,7 +525,7 @@ exec ~A \"$@\"
                    (han.json:get-json dependencies query))))
         (han.json:json-keys dependencies)))
       (t
-       (error "[install] version record dependencies must be an object.")))))
+       (%hub-error "install-dependencies-object")))))
 
 (defun %hub-install-key (package-name version-id)
   (format nil "~A@~A" package-name version-id))
@@ -601,6 +607,7 @@ exec ~A \"$@\"
                     :verbose verbose)))))
 
 (defun hub-install (&key
+                      repair-p
                       query
                       version-id
                       (scope :user)
@@ -617,6 +624,14 @@ exec ~A \"$@\"
                       query-kind
                       origin-kind
                       origin)
+  (%with-operation-progress (verbose)
+  (when repair-p
+    (when (or force-p record) (%hub-error "repair-conflict"))
+    (return-from hub-install
+      (%hub-repair-install :targets (list (list :query query :version-id version-id))
+                           :scope scope :user-home user-home :system-home system-home
+                           :system-bin-dir system-bin-dir :dry-run-p dry-run-p
+                           :prompt-p prompt-p :verbose verbose)))
   (let* ((normalized-scope (%normalize-taffish-scope scope))
          (user-home-path (%taffish-user-home user-home))
          (system-home-path (%taffish-system-home system-home))
@@ -709,12 +724,14 @@ exec ~A \"$@\"
                         :record record)
                   paths)))
     (unless (%hub-non-empty-string-p source-url)
-      (error "[install] version record has no repository/source URL."))
+      (%hub-error "install-no-source"))
     (when (member install-key *hub-install-stack* :test #'string=)
-      (error "[install] circular dependency detected: ~{~A~^ -> ~} -> ~A"
-             (reverse *hub-install-stack*)
-             install-key))
-    (let ((*hub-install-stack* (cons install-key *hub-install-stack*)))
+      (%hub-error "install-circular"
+                  :chain (format nil "~{~A~^ -> ~}"
+                                 (reverse *hub-install-stack*))
+                  :package install-key))
+    (flet ((perform-install ()
+      (let ((*hub-install-stack* (cons install-key *hub-install-stack*)))
       (%hub-install-ensure-free-paths install-root
                                       launcher-file
                                       force-p
@@ -749,12 +766,15 @@ exec ~A \"$@\"
                  (%ensure-directory (%taffish-home-dir home "apps"))
                  (%ensure-directory bin-dir)
                  (%ensure-directory install-root)
+                 (%operation-stage "fetch" :target artifact-name)
+                 (%operation-progress-yield)
                  (%hub-install-copy-or-clone-source
                   resolved-source-url
                   source-ref
                   source-dir
                   :prompt-p prompt-p
                   :verbose verbose)
+                 (%operation-stage "verify-source" :target artifact-name)
                  (let ((actual-source-commit
                          (%hub-install-verify-source-commit
                           (%hub-install-source-verification-dir
@@ -769,6 +789,7 @@ exec ~A \"$@\"
                             (list :actual-source-commit actual-source-commit
                                   :source-commit-verified-p t)
                             result))))
+                 (%operation-stage "build" :target artifact-name)
                  (let* ((build (project-build :start-dir source-dir
                                               :command-p t
                                               :image-p nil
@@ -780,9 +801,10 @@ exec ~A \"$@\"
                         (command-file (getf command :command-file)))
                    (unless (and built-artifact
                                 (string= built-artifact artifact-name))
-                     (error "[install] built command does not match index.~%  expected: ~A~%  got     : ~A"
-                            artifact-name
-                            (or built-artifact "<missing>")))
+                     (%hub-error "install-command-mismatch"
+                                 :expected artifact-name
+                                 :actual (or built-artifact "<missing>")))
+                   (%operation-stage "verify" :target artifact-name)
                    (%hub-install-write-launcher launcher-file
                                                 command-file
                                                 :launcher-name artifact-name
@@ -818,6 +840,9 @@ exec ~A \"$@\"
                    (%hub-install-delete-file-if-exists command-launcher-file))
                  (%hub-install-delete-dir-if-exists install-root))
              (error c)))))))))
+      (if dry-run-p
+          (perform-install)
+          (%hub-call-with-write-locks home command-bin-dir #'perform-install))))))
 
 (defun %hub-install-project-version-id (project)
   (format nil "~A-r~A"
@@ -929,22 +954,21 @@ exec ~A \"$@\"
                  :origin (getf project :root-dir))))
 
 (defun %hub-install-print-many-summary (results)
-  (format t "[TAF] install batch summary: ~D target~:P~%"
-          (length results))
-  (format t "  installed/skipped : ~D/~D~%"
-          (count-if (lambda (result)
-                      (getf result :installed-p))
-                    results)
-          (count-if-not (lambda (result)
-                          (getf result :installed-p))
-                        results))
-  (format t "  commands          : ~{~A~^, ~}~%"
-          (mapcar (lambda (result)
-                    (or (getf result :artifact-name)
-                        (getf result :query)))
-                  results)))
+  (%hub-print-message "install.batch" :count (length results))
+  (%hub-print-message
+   "install.batch-counts"
+   :installed (count-if (lambda (result) (getf result :installed-p)) results)
+   :skipped (count-if-not (lambda (result) (getf result :installed-p)) results))
+  (%hub-print-message
+   "batch.commands"
+   :commands (format nil "~{~A~^, ~}"
+                     (mapcar (lambda (result)
+                               (or (getf result :artifact-name)
+                                   (getf result :query)))
+                             results))))
 
 (defun hub-install-many (&key
+                           repair-p
                            targets
                            (scope :user)
                            user-home
@@ -955,9 +979,18 @@ exec ~A \"$@\"
                            prompt-p
                            (install-dependencies-p t)
                            (verbose t))
-  (let ((items (%hub-normalize-targets targets "install"))
-        (results nil))
+  (%with-operation-progress (verbose)
+  (when repair-p
+    (when force-p (%hub-error "repair-conflict"))
+    (return-from hub-install-many
+      (%hub-repair-install :targets targets :scope scope
+                           :user-home user-home :system-home system-home
+                           :system-bin-dir system-bin-dir :dry-run-p dry-run-p
+                           :prompt-p prompt-p :verbose verbose)))
+  (let* ((items (%hub-normalize-targets targets "install"))
+         (results nil) (*operation-item* 0) (*operation-total* (length items)))
     (dolist (item items)
+      (incf *operation-item*)
       (push (hub-install :query (getf item :query)
                          :version-id (getf item :version-id)
                          :scope scope
@@ -980,4 +1013,4 @@ exec ~A \"$@\"
       (when (and verbose
                  (> (length ordered-results) 1))
         (%hub-install-print-many-summary ordered-results))
-      summary)))
+      summary))))

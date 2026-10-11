@@ -11,8 +11,9 @@ Therefore, TAFFISH should not currently claim to be an external formal standard.
 
 1. The reference implementation defines current factual behavior.
 2. The specification draft lifts those facts into discussable, maintainable, compatibility-aware contracts.
-3. The current external conformance suite verifies core compiler, project, and
-   Hub workflows; future checks can cover more of the written contracts.
+3. The current external conformance suite verifies delivered-binary, compiler,
+   project, Hub, system, and localization workflows; future checks can cover
+   more of the written contracts.
 4. Formal standardization, governance committees, or a TEP process can be considered after the ecosystem matures.
 
 ## Difference From A Formal Standard
@@ -34,7 +35,7 @@ Specification documents use draft versions:
 | Version | Meaning |
 | --- | --- |
 | `Draft v0.1` | Historical draft aligned with the TAFFISH 0.3.x reference implementation. |
-| `Draft v0.2` | Current draft aligned with the TAFFISH 0.10.x reference implementation and an operational public Hub/index ecosystem. |
+| `Draft v0.2` | Current draft aligned with the TAFFISH 0.11.x reference implementation and an operational public Hub/index ecosystem. |
 | `v1.0` | Consider after language, project format, Hub index, and install format are validated by real ecosystem usage. |
 
 Schema fields use independent versions such as `taffish.index/v1`, `taffish.install/v1`, and `taffish.config/v1`. Schema versions do not need to match the TAFFISH program version exactly.
@@ -83,10 +84,12 @@ formal external standard.
 
 The current reference implementation is the Common Lisp implementation in this repository:
 
-1. `taffish-core`: TAF-to-shell compiler core.
-2. `taf-core`: project, Hub, install, config, history, and diagnostic tools.
-3. `taffish-cli` and `taf-cli`: command-line entry points.
-4. `vendor/han`: base library used by TAFFISH.
+1. `taffish-i18n`: shared human-language presentation and fallback layer.
+2. `taffish-core`: TAF-to-shell compiler core.
+3. `taf-core`: project, Hub, install, config, history, and diagnostic tools.
+4. `taffish-cli` and `taf-cli`: command-line entry points.
+5. `taffish-mcp`: conservative structured interface for MCP-compatible AI clients.
+6. `vendor/han`: base library used by TAFFISH.
 
 When the draft conflicts with code, short-term factual behavior is the current code. Long-term, either docs or code should be corrected so they match again.
 

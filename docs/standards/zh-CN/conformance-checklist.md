@@ -1,8 +1,8 @@
 # TAFFISH 合规性检查清单
 
 本页是用于判断 `.taf` 文件、taf-app 项目、Hub index 或本地安装结果是否符合
-TAFFISH Specification Draft v0.2 的完整人工清单。仓库已经存在编译器、项目和 Hub
-外部一致性测试，但这些测试尚未编码本页的每一项要求。
+TAFFISH Specification Draft v0.2 的完整人工清单。仓库当前的外部一致性测试已经覆盖
+delivered binary、编译器、项目、Hub、system 与本地化工作流，但尚未编码本页的每一项要求。
 
 ## 结果分类
 
@@ -173,6 +173,7 @@ notes:
 - `[index].url` 如果存在，必须是非空字符串。
 - `[[source.rewrite]]` 的 `from` 和 `to` 必须是非空字符串。
 - `[[source.rewrite]].enabled` 如果存在，必须是布尔值。
+- 顶层 `language` 如果存在，必须能解析为 `auto`、内置语言或当前有效的外部 locale pack。
 - active home 必须能解析为 user 或 system scope。
 - 安装或 update 前，active home 应具备必需目录，或能通过 `taf doctor --init` 创建。
 
@@ -188,6 +189,29 @@ notes:
 - `TAFFISH_CONFIG` 指向的文件覆盖了 source rewrite 但没有记录原因。
 - system scope 在非 root 环境下初始化。
 - command bin 不在 PATH 中。
+
+## 本地化检查
+
+### 必须项
+
+- 即使没有外部 locale 文件，内置 `en` 与 `zh` 仍然可用。
+- `auto` 跟随可识别的宿主 locale；没有可用语言时确定性回退到英文。
+- CLI 每次调用只解析一次语言；下层 renderer 不应各自重新读取 config 或 locale 环境变量。
+- command/option token、exit code、JSON key 与枚举值、生成 shell、持久化 history 以及 MCP
+  协议 schema 必须保持语言不变。
+- 外部翻译缺失或无效时按 key 或 help 文件回退，不能连带禁用有效 sibling 条目。
+- taf-app 或外部进程拥有的原始输出应直接透传，不进入翻译层。
+
+### 应该项
+
+- 外部 locale 目录使用规范 locale ID 与 UTF-8 文本。
+- user locale pack 确定性遮蔽 system pack，但不能覆盖内置英文或中文 catalog。
+- 翻译 placeholder 与英文基准完全一致。
+
+### 警告项
+
+- 脚本解析人类 CLI 文本，而不是请求 JSON 或其他机器接口。
+- 语言包依赖替换 command 名、option 名、schema field 或 semantic status value。
 
 ## runtime/container 检查
 
@@ -247,18 +271,35 @@ notes:
 4. 如果要进入 hub，hub index 记录检查。
 5. 如果要验证安装，install metadata 检查。
 
-发布 TAFFISH 自身或 taffish-hub 前，至少应通过：
+发布 TAFFISH 自身前，至少应通过：
 
-1. schema 版本检查。
-2. 兼容性策略检查。
-3. source rewrite 检查。
-4. 旧安装记录读取检查。
-5. 关键 example app 的安装、运行和卸载检查。
+1. 完整 Common Lisp 单元测试。
+2. 在每个 release platform 上，对最终三个二进制运行 `test/run-tests.sh`。
+3. schema 版本与兼容性策略检查。
+4. source rewrite 与旧安装记录读取检查。
+5. 如果 release 范围影响对应路径，检查关键 example app 的安装、运行和卸载。
+
+taffish-hub 各仓库有自己的 build、smoke、index 和 publication gate；本地 checklist
+不能替代它们。
 
 ## 从 checklist 到自动一致性测试
 
-当前外部测试位于 `test/taffish`、`test/taf-project` 和 `test/taf-hub`。未来可以通过
-专用接口把本页更多检查暴露为如下命令：
+`test/run-tests.sh` 是当前外部测试入口，包含：
+
+1. `test/binary-smoke.sh`。
+2. `test/taffish`。
+3. `test/taf-project`。
+4. `test/taf-hub`。
+5. `test/taf-system`。
+6. `test/i18n`。
+7. `test/installer`。
+8. `test/cli-boundary`。
+
+先决条件、过滤方式、GPG 校验门禁与显式跳过、installer root-only 检查与 CLI 错误边界探测见
+[外部测试指南](../../../test/README.md)。汇总数量通过不代表每个条件分支都已执行，
+也不能替代对正式 release manifest 的独立验证。
+
+这些套件刻意窄于完整书面契约。未来可以通过专用接口把本页更多检查暴露为如下命令：
 
 1. `taf conformance taf <file>`：检查单个 `.taf`。
 2. `taf conformance project <dir>`：检查 taf-app 项目。

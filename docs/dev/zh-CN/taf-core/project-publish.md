@@ -25,6 +25,7 @@ publish 负责：
 project-validated
 repository-ready
 repository-policy-ready
+build-ready                 # 仅在请求 --build 时存在
 commit-ready
 branch-pushed
 local-tag-ready
@@ -65,6 +66,20 @@ TAFFISH 会重新检查 Git 与 GitHub，跳过已经匹配的阶段，只补齐
 如果 local tag、remote tag、repository 身份、visibility、release notes 或其他不可变
 身份不一致，publish 会报 conflict，而不是继续覆盖。
 
+## `--build` 协同
+
+`--build` 也进入 inspect/ensure 模型，不会在每次命令开始时无条件重复运行：
+
+1. dry-run 只记录 planned `build-ready` 阶段，不写 build 产物。
+2. 发布 commit 尚未存在时，publish 调用幂等的 command build。
+3. 未变化且有效的 wrapper/snapshot 会直接接受，不重写文件。
+4. 匹配的发布 commit、local tag 或 remote tag 身份一旦建立，续跑会校验本地 clean
+   commit 身份并跳过 build。
+5. 越过该边界后若本地状态 dirty 或冲突，会在触碰 target 产物前失败。
+
+publish journal 会记录是否请求 build，因此续跑命令不能静默增加或删除 `--build`。
+Git 与 GitHub 身份仍是事实来源；journal 不会授权跳过不一致的 build。
+
 ## Publish Journal
 
 非 dry-run 发布会在以下位置记录发布意图和最近进度：
@@ -73,7 +88,7 @@ TAFFISH 会重新检查 Git 与 GitHub，跳过已经匹配的阶段，只补齐
 $TAFFISH_USER_HOME/history/publish/<owner>--<repo>/<tag>.json
 ```
 
-journal 记录 repository、tag、目标 commit、Release 意图、repository policy 意图、
+journal 记录 repository、tag、目标 commit、build 意图、Release 意图、repository policy 意图、
 最近处理阶段与最后确认阶段。它只是辅助证据，不是事实来源。每次重跑仍会检查本地
 Git 和 GitHub；journal 缺失或损坏也不会授权覆盖远端对象。
 
@@ -85,8 +100,40 @@ tag 名称为：
 v<version>-r<release>
 ```
 
-`latest` channel 要求当前 version/release 高于其他远端 release 的 latest；`--pre`
-允许发布非 latest 版本，但不会放宽 tag 身份检查。
+发布不以版本大小作为准入条件。只要新的固定身份合法且不冲突，即使版本低于历史版本
+也可以发布，不要求上游版本改成严格 SemVer。已有 tag 只有在 commit 和发布意图一致时
+才能续跑或成为 no-op，不允许覆盖不同内容。
+
+使用 `--release` 时选择一个渠道：
+
+| 选项 | 新建 GitHub Release 的行为 |
+| --- | --- |
+| 默认或 `--latest` | 正式发布，明确设为 Latest。 |
+| `--pre` | 预发布，明确不设为 Latest。 |
+| `--no-latest` | 正式发布但不设为 Latest，例如旧维护分支修复。 |
+
+三个选项互斥。未使用 `--release` 时仍然只发布 tag；渠道选项不会创建 Release，也不会
+设置 GitHub Latest 或 Pre-release 状态。版本字符串含 `alpha`、`rc` 不会自动选择
+`--pre`。这里不管理名为 `latest` 的 Git tag 或容器镜像。
+
+dry-run 和正式执行共用 Release 参数构造函数。创建时使用 `--verify-tag`，防止 GitHub
+CLI 从默认分支自行补建缺失 tag。检查 Release 时校验 tag、标题、归一化说明、draft 和
+prerelease 类型。身份/类型字段缺失或异常属于 unavailable，不当成匹配；冲突的 Release
+不会被自动修改或重建。
+
+新 journal 保存 `channel` 和 `latest_policy`，重试时改变策略会报冲突。旧日志仍可读取，
+但已有 Release 的真实类型必须匹配。旧版 `--pre` 实际创建了正式 Release 时，不会静默
+转换类型；如果 Release 尚未创建，则采用本次请求的渠道。
+渠道不匹配的尝试不会覆盖已有 journal 的意图；旧日志缺失的渠道字段只在 Release
+状态核对成功后补齐，避免错误重试导致之后的正确重试无法恢复。
+
+Latest 是创建时策略，不是 Release 的不可变身份。如果 A 发布后 B 已成为 Latest，
+再次执行 A 的发布命令仍是 no-op，不会抢回 Latest。网络响应丢失时继续使用已有
+inspect/ensure 阶段核对事实，不盲目重复创建或修改。
+
+API 旧返回字段 `:remote-latest` 为兼容仍保留排序诊断含义，但不代表 GitHub Latest，
+不再作为发布门槛，也不再显示成人类可读的默认版本推荐。共享 Hub 比较器和 Index 选择
+不属于这个 publish 策略的修改范围。
 
 ## GitHub URL 识别
 
@@ -133,7 +180,8 @@ Releases 和 TAFFISH release-tag ruleset。`--no-lock-repo` 可以显式跳过�
 
 publish history 会区分 `created`、`resumed`、`skipped`、`conflict` 和 `failed`。
 `project-publish` 保留原有返回字段，并增加结构化的 `:outcome`、`:phases`、
-`:resumed-p`、`:complete-p`、`:journal-file` 与 `:warnings`。
+`:resumed-p`、`:complete-p`、`:journal-file`、`:warnings` 与 `:build-status`。实际运行
+build 时，旧有 `:build` 字段保存其结果；发布身份已经建立而跳过 build 时，该字段可以为空。
 
 ## 修改指南
 
@@ -146,3 +194,8 @@ publish history 会区分 `created`、`resumed`、`skipped`、`conflict` 和 `fa
 5. journal 只作提示，Git/GitHub 事实优先。
 6. 每增加一个副作用边界，都增加对应故障注入测试。
 7. publish 始终位于 MCP 修改能力边界之外。
+
+## 操作状态提示
+
+慢操作会在 stderr 提示当前目标与阶段。TTY 更新、日志限频、目标计数的含义、
+静默/JSON 行为及限制见[命令状态与进度](command-progress.md)。提示不改变校验、写操作、重试或退出码规则。

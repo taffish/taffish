@@ -16,9 +16,9 @@
     ((null value) nil)
     ((stringp value) value)
     ((listp value)
-     (format nil "~{~A~^ ~}" value))
+     (%format-character-string "~{~A~^ ~}" value))
     (t
-     (format nil "~A" value))))
+     (%format-character-string "~A" value))))
 
 (defun %put-builtin-binding (table name value)
   (when value
@@ -35,7 +35,7 @@
     (%put-builtin-binding table "*HOMEDIR*"   (taf-context-homedir context))
     (%put-builtin-binding table "*WORKDIR*"   (taf-context-workdir context))
     (%put-builtin-binding table "*LOADDIR*"   (taf-context-loaddir context))
-    (%put-builtin-binding table "*ARGV*"      (format nil "~{~A~^ ~}"
+    (%put-builtin-binding table "*ARGV*"      (%format-character-string "~{~A~^ ~}"
                                                       (taf-context-argv context)))
     (%put-builtin-binding table "*CMD*"       (taf-context-cmd context))
     (%put-builtin-binding table "*CPUS*"      (taf-context-cpus context))

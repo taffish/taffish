@@ -30,6 +30,7 @@ Vim 语法高亮文件，以及面向支持平台的手动构建二进制 releas
 ## 目录
 
 - [TAFFISH 生态入口](#taffish-生态入口)
+- [TAFFISH 如何工作](#taffish-如何工作)
 - [支持平台](#支持平台)
 - [快速安装](#快速安装)
   - [标准安装](#标准安装)
@@ -42,6 +43,7 @@ Vim 语法高亮文件，以及面向支持平台的手动构建二进制 releas
   - [Linux 依赖](#linux-依赖)
 - [安装路径](#安装路径)
 - [运行时配置和镜像源](#运行时配置和镜像源)
+  - [CLI 人类语言](#cli-人类语言)
 - [安装器选项](#安装器选项)
 - [升级或移除 TAFFISH](#升级或移除-taffish)
 - [本地或离线安装](#本地或离线安装)
@@ -85,6 +87,25 @@ release tag 标识不可变 app 版本，app 仓库各自构建容器镜像，
 架构判断和 release engineering 细节。独立的 `taffish/taffish-docs` 仓库则面向
 更广泛的公开读者，适合放快速开始、教程、app 作者指南和用户侧生态文档。
 
+## TAFFISH 如何工作
+
+TAFFISH 包含三个可以分别使用的层次：
+
+1. `.taf` 程序描述 shell 命令、参数契约，以及需要时使用的容器镜像和运行参数。
+   `taffish` 会校验源码并把它编译为 POSIX shell，但不会自行执行生成的 shell。
+2. taf-app 使用 `taffish.toml`、文档以及固定的 `version` 和 `release` 包装 `.taf`
+   程序。app 可以封装一个命令行工具，也可以把多个 app 组合成轻量 flow。
+3. `taf` 管理 app 项目并消费静态 Hub index。`taf install` 会把 app 源码和一个很小的
+   shell wrapper 安装到 user 或 system scope。类似
+   `taf-fastqc-v0.12.1-r1` 的带版本命令对应一个确定的 app release；不带版本的
+   `taf-fastqc` alias 指向该 scope 中已经安装的最新版本。
+
+安装容器化 app 时不会立即下载容器镜像。第一次运行生成的 wrapper 时，它会选择
+Docker、Podman 或 Apptainer，并由相应 backend 获取镜像；后续运行会复用 backend 的
+本地 image/cache。这样既能让安装过程保持轻量，又能提供带版本的稳定命令接口。
+
+`taffish-mcp` 向 AI 客户端提供保守的检查和编译能力，不开放项目运行、镜像构建或发布。
+
 ## 支持平台
 
 当前二进制资产：
@@ -126,14 +147,20 @@ curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/instal
 ```
 
 如果共享服务器使用 Apptainer，系统级安装的 app 会对所有用户可见，但首次运行时
-SIF 镜像缓存仍然需要一个可写目录。部署给多用户前请先看
+SIF 镜像缓存仍然需要一个可写目录。普通 `--system` 安装会让 SIF 目录保持管理员管理，
+不会默认开放给所有用户写入。只有可信服务器明确需要 sticky shared cache 时，才添加
+`--shared-sif-cache`。部署给多用户前请先看
 [Apptainer 系统级共享 SIF 缓存](#apptainer-系统级共享-sif-缓存)。
 
 固定版本安装。安装器本身可以来自 `main`，实际下载内容会固定到指定 git tag：
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sh -s -- --version 0.10.1 --user
+curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sh -s -- --version 0.11.0 --user
 ```
+
+官方安装默认使用 `--verify auto`：选中的二进制必须匹配该 tag 的 `SHA256SUMS`；GPG
+工具可用时还会校验签名 manifest。可以先下载安装器并使用 `--dry-run`，在不联网、不写
+文件的情况下查看解析后的路径、策略和校验模式。
 
 ### 中国地区用户
 
@@ -162,8 +189,11 @@ curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffis
 固定版本安装：
 
 ```sh
-curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffish.gitee.sh | sh -s -- --version 0.10.1 --user
+curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffish.gitee.sh | sh -s -- --version 0.11.0 --user
 ```
+
+Gitee 安装器与 GitHub 安装器使用相同的载荷校验和事务安装规则，只有 provider 默认值
+不同。
 
 如果需要强制把已有配置覆盖为 Gitee/中国镜像配置，添加 `--force-config`：
 
@@ -233,6 +263,12 @@ taf list --user
 taf-fastqc -- --help
 ```
 
+前四条命令依次更新本地 package index、查找 app、安装 app 源码/wrapper，并查看安装
+结果。最后一条命令中的第一个 `--` 表示结束 wrapper 自身的参数解析，因此后面的
+`--help` 会传递给被包装的应用。容器化 app 可能在第一次运行时下载镜像；请至少安装
+一个受支持的 backend。如果 backend 选择失败，可以运行
+`taf doctor --user --verbose` 查看诊断和修复建议。
+
 共享服务器管理员路径：
 
 ```sh
@@ -254,7 +290,14 @@ taf which --system taf-fastqc
 安装器需要标准 POSIX 用户态工具：
 
 ```text
-sh, uname, tar, mktemp, cp, chmod, mkdir, find, dirname
+sh, uname, tar, mktemp, cp, mv, rm, chmod, mkdir, find, dirname,
+awk, sed, grep, tr, stat, id
+```
+
+官方载荷校验还需要一种 SHA256 实现：
+
+```text
+sha256sum 或 shasum
 ```
 
 在线安装还需要一个下载工具：
@@ -262,6 +305,9 @@ sh, uname, tar, mktemp, cp, chmod, mkdir, find, dirname
 ```text
 curl or wget
 ```
+
+默认 `--verify auto` 模式可以不安装 `gpg` 和 `gpgv`，但安装后会启用 signed manifest
+校验；显式选择 `--verify gpg` 时两者都是必需依赖。
 
 `taf update` 默认从 GitHub 下载 TAFFISH index。在 GitHub raw 内容被阻断或网络不稳定的环境中，安装本身仍然可以完成，但 `taf update` 可能会输出 warning。可以之后重试：
 
@@ -372,7 +418,8 @@ curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffis
 
 ## 运行时配置和镜像源
 
-当前 TAFFISH 是 `0.10.1`。运行时配置文件从 `0.2.0` 开始引入，用来稳定支持镜像源和自定义源。默认配置路径是：
+TAFFISH 运行时配置用于管理 package index 地址、源码 URL rewrite 和 CLI 人类语言。
+默认配置路径是：
 
 ```text
 用户级 = ~/.local/share/taffish/config.toml
@@ -420,7 +467,13 @@ user scope 会先加载 system config，再应用可选的 user config 覆盖；
 
 ### CLI 人类语言
 
-TAFFISH 二进制内置完整的英文（`en`）和中文（`zh`）help catalog。新安装且没有已保存
+用 `taf --help` 查看命令总览，用 `taf help <command>` 或 `taf <command> -h`
+查看具体选项。`taffish --help` 说明编译输入、容器设置并给出示例；编译不会执行
+生成的 shell。两个顶层帮助的末尾都提供官网、Hub 和支持邮箱。
+
+TAFFISH 二进制内置英文（`en`）和中文（`zh`）catalog，用于 CLI help 以及 `taf`
+面向用户的状态、诊断和错误输出，无需额外下载语言文件。独立安装脚本自身使用英文提示；
+选择 GitHub 或 Gitee 只改变来源，不决定 CLI 语言。新安装且没有已保存
 语言偏好时，人类 CLI 默认使用 `auto`：可识别的主机 locale 会选择对应语言；locale
 不可用、未设置、为 `C` 或 `POSIX` 时回退到英文。查看当前配置、实际显示语言及所有
 可用语言：
@@ -456,12 +509,19 @@ TAFFISH_LANGUAGE=zh taffish-mcp --help
 整个查找链最终始终回退到内置英文。如果需要不受主机 locale 影响的确定性人类输出，
 应显式保存 `en` 或 `zh`。外部语言包是高级可选能力；文件损坏或翻译不完整时会安全
 回退到英文。`taf config language` 会发现 user/system `share/locales/<locale>/` 下的
-有效语言包；可选 `example.txt` 用于显示一行语言示例。无效或不完整的语言包不会成为
-可选项。
+有效语言包；可选 `example.txt` 用于显示一行语言示例。语言包可以只提供 help、只提供
+`messages.json`，也可以只覆盖其中一部分。缺失、损坏或 placeholder 不兼容的条目会逐条
+按照“精确 locale、基础语言、内置英文”回退；单个错误条目不会使语言包的其他内容失效。
+每次 CLI 调用只解析一次语言，因此同一条命令不会在输出中途切换语言。
 
-本地化只影响面向用户的 CLI help、常见顶层错误、config 输出和 doctor 诊断，其中包括
-`taffish-mcp -h`，但不包括 MCP stdio 协议。command/option、生成 shell、JSON schema、
-history/index/config key 以及 MCP tools/resources/prompts 仍是稳定的英文机器接口。语言包目录和安全规则见
+外部 help 文件替换的是整份对应帮助页。命令说明和联系入口由语言包作者维护，
+内置帮助的更新不会自动追加到自定义帮助页中。
+
+本地化覆盖面向用户的 CLI help，以及 `taf` project、Hub、package、config、doctor 和
+history 的人类输出，其中包括这些命令自身的 parser/业务诊断和 `taffish-mcp -h`，但不包括
+MCP stdio 协议。command/option、生成 shell、JSON schema/value、history/index/config
+数据、MCP tools/resources/prompts/results、taf-app 输出及外部进程输出仍是稳定机器接口。
+`taffish` 编译器的核心诊断仍可能使用英文基准。语言包目录和安全规则见
 [本地化契约](docs/standards/zh-CN/localization.md)。
 
 生成的中国镜像模板有意保持简单：
@@ -499,7 +559,7 @@ enabled = true
 --bin-dir DIR             覆盖可执行文件安装目录
 --taffish-home DIR        覆盖 TAFFISH 运行时 home
 --repo OWNER/REPO         GitHub 仓库 [taffish/taffish]
---version VERSION         Release 版本 [0.10.1]
+--version VERSION         Release 版本 [0.11.0]
 --provider PROVIDER       Raw 提供方：github 或 gitee [github]
 --raw-base-url URL        覆盖 raw base URL，应指向固定 tag
 --os OS                   覆盖目标 OS (darwin|macos|linux)
@@ -510,12 +570,41 @@ enabled = true
 --share-url URL           用 tar.gz archive 覆盖 completion/vim 来源
 --url URL                 从显式 URL 下载完整 bundle tarball
 --archive FILE            从本地 tar.gz archive 安装
+--verify MODE             校验载荷：auto、sha256、gpg 或 none
+--checksum-file FILE      使用本地 SHA256SUMS manifest
+--checksum-url URL        从显式 URL 下载 SHA256SUMS
+--signature-file FILE     使用本地 detached checksum signature
+--signature-url URL       下载 detached checksum signature
+--release-key-file FILE   使用本地 release 公钥
+--release-key-url URL     下载 release 公钥
+--retry COUNT             失败下载重试次数 [3]
+--connect-timeout SEC     下载连接超时秒数 [15]
 --config-profile PROFILE  初始化配置 profile：github、china 或 none
 --force-config            config init 时覆盖已有配置
+--force                   替换核心命令路径上的未识别文件
+--sif-cache-policy POLICY 使用 auto、private、admin 或 shared [auto]
+--shared-sif-cache        等价于 --sif-cache-policy shared
+--dry-run                 解析计划，不联网且不写文件
 --no-update               安装后不运行 taf update
 --no-doctor               安装后不运行 taf doctor --init
 -h, --help                显示安装器帮助
 ```
+
+默认 `auto` 校验模式下，GitHub/Gitee 官方载荷必须先逐个匹配 `SHA256SUMS`，安装器
+才会替换任何核心命令。如果存在 `gpg` 和 `gpgv`，安装器还会使用内置的 TAFFISH
+release key fingerprint 校验签名 manifest。自定义源缺少 manifest 时仍可在 `auto`
+模式使用，但会被明确报告为未校验；使用 `--verify sha256` 或 `--verify gpg` 可以把
+对应等级设为强制要求。
+
+安装器使用 home 级安装锁、候选二进制 `--version` smoke test 和三个核心命令的事务
+替换。除非明确给出 `--force`，它不会覆盖无关文件；未完成的 binary/receipt commit
+会回滚；完全相同的载荷重复安装不会再次替换未变化的核心二进制，但仍可能更新安装收据并
+执行安装后就绪检查。成功后会在
+`<TAFFISH_HOME>/install-receipt.toml` 记录实际版本、来源类型、校验等级、SIF 策略和
+二进制 SHA256，但不会保存 URL、token、密码或凭据。
+
+完整的来源选择、校验、事务、权限策略和维护者测试契约见
+[安装器手册](install/README-CN.md)。
 
 手动覆盖平台检测示例：
 
@@ -553,7 +642,7 @@ system = /usr/local/bin/{taf,taffish,taffish-mcp}
 从已下载的 release bundle 安装：
 
 ```sh
-sh install/install-taffish.sh --archive ./taffish-0.10.1-target.tar.gz --user
+sh install/install-taffish.sh --archive ./taffish-0.11.0-target.tar.gz --user
 ```
 
 从显式 bundle URL 安装：
@@ -589,7 +678,8 @@ vim-highlight/
 
 当前官方二进制载荷由维护者手动构建：macOS Apple Silicon 二进制由 SBCL 构建，
 Linux x86_64 二进制由 LispWorks 构建。`target/` 下保留了
-`SHA256SUMS`、`SHA256SUMS.asc` 和发布公钥，供用户进行手动校验。
+`SHA256SUMS`、`SHA256SUMS.asc` 和发布公钥，供安装器自动校验，也供用户进行独立
+手动校验。
 
 源码构建会生成不带后缀的本地二进制：
 
@@ -777,7 +867,7 @@ INFO: Cleaning up image...
 sudo apt-get install -y squashfuse
 ```
 
-`v0.1.2` 及之后构建的 TAFFISH 生成脚本默认使用 `apptainer --quiet`，让正常 app 输出更干净。运行时错误仍然会报告。
+TAFFISH 生成的脚本默认使用 `apptainer --quiet`，让正常 app 输出更干净。运行时错误仍然会报告。
 
 #### Apptainer 系统级共享 SIF 缓存
 
@@ -789,7 +879,9 @@ ${TAFFISH_SYSTEM_HOME:-/opt/taffish}/images/sif
 ${TAFFISH_USER_HOME:-$HOME/.local/share/taffish}/images/sif
 ```
 
-如果没有已有 SIF，TAFFISH 需要一个可写目录来拉取镜像。在共享服务器上，可以选择以下策略：
+如果没有已有 SIF，TAFFISH 需要一个可写目录来拉取镜像。新建的系统级 SIF 目录使用
+管理员管理的 `0755`；普通重装会保留已有目录权限，除非显式选择 shared 策略。在共享
+服务器上，可以选择以下策略：
 
 1. 用户级缓存，最安全的默认方案：
 
@@ -811,17 +903,19 @@ SIF，不需要写入系统缓存。
 3. 共享可写系统缓存：
 
 ```sh
-sudo mkdir -p /opt/taffish/images/sif
-sudo chmod 1777 /opt/taffish/images/sif
+curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh \
+  | sudo sh -s -- --system --shared-sif-cache
 ```
 
 `1777` 是 `/tmp` 使用的 sticky directory 权限：本地用户可以在其中创建 SIF 文件，
 但不能删除其他用户拥有的文件。只有在你明确希望可信服务器上的本地用户共享一个可写缓存时
-才使用这个方案。如果集群有更严格的安全策略，优先使用管理员预缓存或用户级缓存。
+才使用这个方案。如果集群有更严格的安全策略，优先使用管理员预缓存或用户级缓存。安装器
+只会修改并验证 `/opt/taffish/images/sif` 的权限，不会递归放宽 `/opt/taffish` 的其他
+目录。已有安装可以使用同一版本重新运行 `--system --shared-sif-cache`。
 
 ## TAF App Smoke 元数据
 
-TAFFISH `0.8.0` 增加了面向容器化 taf-app 的声明式 smoke 元数据。
+容器化 taf-app 可以在 `taffish.toml` 中声明 smoke 元数据。
 这是 TAFFISH Hub 供应链/可信模型在本地项目侧的第一块基础：项目可以声明
 index 自动化在接纳一个容器镜像进入公开 index 前，至少应该验证哪些命令。
 
@@ -890,12 +984,44 @@ taf doctor --user --shell zsh --json
 
 它检查 TAFFISH home、config、本地 index、command path、shell completion、
 Vim/Neovim 文件、Apptainer SIF cache，以及有时间上限的 Docker、Podman、
-Apptainer readiness probe。默认输出保持简洁；`--verbose` 显示 evidence 和
-remediation，`--json` 输出稳定的 `taffish.doctor/v1` schema。可以用
+Apptainer readiness probe。简洁输出也会给出异常处理建议；`--verbose` 展开证据和
+文档链接，`--json` 输出稳定的 `taffish.doctor/v1` schema。可以用
 `--shell auto|bash|zsh|fish` 获取指定 shell 的 completion 建议。
 
 doctor 不修改 shell/editor 配置或权限，不启动服务，不拉取镜像，也不运行容器。
-只有显式 `--init` 才创建 TAFFISH 自己的目录；system scope 初始化仍要求 root。
+只有默认环境检查的显式 `--init` 才创建 TAFFISH 自己的目录；system scope 初始化仍要求 root。
+
+对于索引或安装问题，可以进行离线、只读专项检查：
+
+```sh
+taf doctor index --user
+taf doctor hub --user
+taf doctor hub abricate --system --verbose
+taf doctor hub --user --json
+```
+
+`index` 检查缓存索引的格式和 latest 引用；`hub` 还会检查指定或全部本地安装，
+不执行 app，也不探测容器后端。报告会包含应用和版本、作用域、相关路径、原因及安全下一步。
+不指定目标时，`doctor hub` 包括历史安装版本。输出分别说明已枚举总量、问题涉及的应用/
+版本数和问题项数；同一个版本可能有多个问题。无法完整枚举时会明确提示。
+要按全部已安装版本预览修复，使用 `taf install --all-installed --repair --user`
+（系统安装改为 `--system`），而不是仅选择已安装 index.latest 的 `--all --repair`。
+旧安装缺少 `.taf-build.json` 属于 **unverified（未验证）**，不等于损坏；
+必要文件缺失或摘要不一致属于 **invalid（无效）**；路径不可读或格式不支持属于
+**unknown（未知）**。本地文件验证通过不等于官方认证，也不证明容器可以运行。
+专项模式不补写清单、不修复安装，不接受 `--init` 或 `--shell`。存在 invalid/unknown
+时退出码为 1，否则为 0；旧清单缺失等警告仍会显示，但不会使检查失败。
+无版本命令快捷入口缺失或无法识别时会单独提示，不据此判定版本化 app 损坏。
+Hub 默认输出按问题类型和处理策略汇总重复问题，每组包含计数及至多三个例子；
+`--verbose`、`--json` 保留逐项完整检查依据。只读批量探测加快全量 Hub 扫描，不省略
+摘要校验；定向检查避免无关深扫。人类 stderr 显示阶段/计数，TTY 原地更新、日志限频，
+JSON/MCP 无进度文字。共享保守 Unicode 字段排版将长或复杂文本分行，不猜测对齐或截断路径。
+详见[诊断与恢复](docs/dev/zh-CN/taf-core/system-history-doctor.md)。
+
+其他慢命令也会在 stderr 提示当前阶段，包括索引下载、源码获取、构建验证、修复、
+发布确认和删除。批量计数表示当前目标，不是耗时百分比。JSON/MCP 保持静默，
+Git、容器后端原生输出保留。这些提示由阶段切换触发，不是持续计时动画。
+详见[命令状态与进度](docs/dev/zh-CN/taf-core/command-progress.md)。
 
 ## Shell 自动补全
 
@@ -1026,6 +1152,10 @@ taf install --all --flows --yes
 ```
 
 `taf install --all` 默认是 dry-run。需要真实安装时添加 `--yes`。
+批量规划会先检查本地安装文件，再执行更改。stderr 显示阶段/计数进度，TTY 原地更新、
+日志限频；`--json` 和 MCP 不输出进度文字。
+检查采用批量探测，但较大的冻结目录或慢速磁盘仍可能需要更多时间。
+这个阶段不是在下载容器，也不会为了提速跳过摘要校验。
 可以用 `--kind tool|flow|all`、`--tools` 或 `--flows` 限制批量范围。
 添加 `--prune-old` 可以在批量安装成功后移除本地旧版本。`taf uninstall`、
 `taf upgrade --prune-old` 和 `taf prune` 只会删除 TAFFISH app 源码和
@@ -1045,13 +1175,63 @@ taf upgrade taf-my-tool --yes --prune-old
 进行比较，所以建议先运行 `taf update`。通过 `taf install --from` 安装的
 本地/私有 app 会被视为私有来源，并被公开 index 的 upgrade 跳过。
 
-移除旧版本，只保留每个 app 的本地最新版本：
+清理同源旧版本，保留本地 index 的 `latest` 指定且已有效安装的版本：
 
 ```sh
 taf prune
 taf prune --yes
 taf prune --kind flow --yes
 ```
+
+在线安装目标由 index 指定，不会被本地“数值最大版本”替换。`a.7.10` 与 `a.7.3`
+这类混合版本按数字段比较，没有 index 时也能正确排序。无版本 alias 仍跟随本地
+已安装版本的顺序；批量维护不会自动降级确实更新的本地版本。
+
+`prune` 和 `--prune-old` 只有在同源的 `latest` 已有效安装时才清理该 app 的旧版本。
+缺失或损坏的保留目标、私有/未知来源、较新版本以及无法可靠比较的版本均受保护。
+请先 `taf update`，再用 `taf prune --json` 查看计划。这不是依赖感知的垃圾回收：
+明确删除旧版本前仍需检查 Flow 的冻结依赖。共享容器镜像不会被删除。
+
+旧构建清单缺失不会阻断批量安装：结构完备的 app 保留原状，并显示未验证警告。
+明确损坏或无法读取/识别的选中安装会在批量写入前汇总报告；可以运行
+`taf doctor hub APP --user --verbose`（系统安装用 `--system`）排查。
+不要盲目重装私有 app 或覆盖本地修改。参与清理的任一安装版本缺少有效验证证据时，
+自动清理会保护整个包，不会通过补写历史摘要让旧安装“通过验证”。
+
+显式预览已有索引安装的修复：
+
+```sh
+taf install APP --repair --user --dry-run
+taf install APP1 APP2 --repair --user --dry-run
+taf install APP 1.4.0-r1 --repair --user --dry-run
+taf install --all --repair --kind tool --user
+taf install --all --repair --kind tool --user --yes
+taf install --all-installed --repair --user
+taf install --all-installed --repair --user --yes
+```
+
+批量修复有两种选择方式：`--all --repair` 只检查已安装的 `index.latest`，
+未安装的最新版会跳过，不会补装。`--all-installed --repair` 从本地枚举全部已安装版本，
+包括历史版本；不升级、不安装缺失版本或依赖、不清理。两者都默认预览，确认后加
+`--yes` 才执行，也都支持 `--json`、作用域和类型筛选。两种选择器不能并用，也不能与
+显式目标并用；`--all-installed` 必须配合 `--repair`。显式版本目标使用 `--dry-run`
+预览，去掉该参数即执行。已通过验证的目标跳过。两种选择器默认使用 `--user`；
+检查或修复系统安装时改用 `--system`，不会同时处理两个作用域。
+
+`--kind all` 是默认值，表示工具和流程两种类型都包括，可以省略；它不会扩大版本范围，
+也不代表升级。使用 `--tools` 或 `--flows` 可以在已选版本范围内进一步筛选应用类型。
+
+缺失或不可读的安装记录、已不在索引中的版本会保留为受阻目标，不会静默漏掉。
+无法确定类型的目标不能被类型筛选静默排除，私有安装不从公共索引覆盖。
+修复不能与 `--force`、`--from`、`--prune-old` 组合。
+
+整批先完成只读预检，任一目标受阻则整批不写入。重建要求来源与身份一致、路径安全，且
+索引提供固定源码 commit；未知格式、私有来源和自定义命令入口不会被覆盖，也不会伪造清单。
+修复采用暂存、验证、备份及失败回滚；中断后保留事务日志并阻止盲目重试。
+各目标独立完成，后续失败不撤销已完成项；不保证断电后的数据持久性、崩溃自动恢复或零停机。
+修复与普通 install/uninstall/prune 共用安装目录和命令目录的协作写锁，不改变删除策略，
+也不能阻止不遵守新锁的旧客户端同时写入。执行前请阅读
+[修复策略](docs/dev/zh-CN/taf-core/hub-maintenance.md#显式修复)。
 
 安装没有发布到公开 Hub 的私有/本地 app 项目：
 
@@ -1088,6 +1268,9 @@ taf build
 ./target/taf-my-flow-v0.1.0-r1
 ```
 
+对于带版本 command wrapper 与冻结 source snapshot，重复执行 `taf build` 是幂等的：
+未变化且有效的产物只会被校验，不会被重写。显式 container image build 仍是独立操作。
+
 带发布说明发布：
 
 ```sh
@@ -1099,16 +1282,24 @@ taf publish --release --yes
 时，`release.md` 第一行会成为 publish message，整个文件会成为 GitHub Release notes。
 发布前需要替换默认的 `# TODO: release summary` 第一行。
 
+新建 GitHub Release 默认为正式发布，并明确设为 Latest。使用 `--pre` 创建预发布；
+使用 `--no-latest` 创建不替换 Latest 的正式维护版本。这两个选项与 `--latest` 互斥。
+版本号无需递增，但不能用已有 tag 发布不同内容。不带 `--release` 时仍然只发布 tag，
+不会设置 GitHub Latest 或 Pre-release 状态。
+
 发布过程支持自动续跑：如果一次匹配的发布在创建 repository、push branch/tag 或创建
 GitHub Release 后中断，恢复网络后重新运行同一条 `taf publish --yes ...` 命令即可。
 TAFFISH 会重新检查 Git/GitHub、跳过已经匹配的阶段；遇到不可变对象冲突时会停止，
 不会覆盖。
+续跑时保持渠道选项和发布说明一致。重跑已经完成的发布，不会从后续版本抢回 Latest。
 
 ## MCP / AI 集成
 
 `taffish-mcp` 是面向 AI 客户端的保守 stdio MCP server。当前能力包括只读的 TAF
 校验、编译和摘要，taf-app 与项目 inspection，安全的 app invocation compile，
-smoke/trust 元数据检查，以及不执行真实变更的 package 维护规划。当前 tools 包括：
+smoke/trust 元数据检查，以及不执行真实变更的 package 维护规划。server 并非全部只读：
+既有索引更新、app 安装/卸载（默认 dry-run）、项目创建及 wrapper 构建工具可以写文件，
+这些能力不变。`install --repair` 不新增 MCP repair tool、参数或执行入口。当前 tools 包括：
 
 - `taffish_get_version` / `taffish_get_help`
 - `taffish_validate_source` / `taffish_validate_file`
@@ -1221,11 +1412,12 @@ sudo taf-APP-vVERSION-rRELEASE -- --help
 也可以明确允许一个共享可写的系统级 SIF 缓存：
 
 ```sh
-sudo mkdir -p /opt/taffish/images/sif
-sudo chmod 1777 /opt/taffish/images/sif
+curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh \
+  | sudo sh -s -- --system --shared-sif-cache
 ```
 
-只有在你接受本地用户可以写入共享缓存时，才使用 `1777` 方案。更多说明见
+只有在你接受本地用户可以写入共享缓存时，才使用 `1777` 方案。安装器只修改准确的 SIF
+目录。更多说明见
 [Apptainer 系统级共享 SIF 缓存](#apptainer-系统级共享-sif-缓存)。
 
 ### Apptainer 每次运行都输出 `Converting SIF file to temporary sandbox...`
@@ -1274,13 +1466,19 @@ target/SHA256SUMS.asc
 target/TAFFISH-RELEASE-KEY.asc
 ```
 
-可直接复制到 GitHub release 页面的 release note 草稿保存在
-[docs/releases/v0.10.1.zh-CN.md](docs/releases/v0.10.1.zh-CN.md)，英文版见
-[docs/releases/v0.10.1.md](docs/releases/v0.10.1.md)。
+本版本的变更、兼容性说明、验证结果和二进制 checksum 见
+[v0.11.0 发布说明](docs/releases/v0.11.0.zh-CN.md)，另有
+[英文版](docs/releases/v0.11.0.md)。
 
-Raw 安装器主要负责下载并安装固定版本文件；它当前不会自动校验 `SHA256SUMS`
-或 GPG 签名。如果需要高安全安装，应先下载对应 tag 内容或 release bundle，
-手动校验 checksum manifest 和签名后，再从已经验证过的本地文件安装。
+v0.11.0 Raw 安装器会在安装前使用 `SHA256SUMS` 校验每一个选中的官方二进制。
+默认 `auto` 模式在 `gpg` 和 `gpgv` 可用时，还会使用内置 release key fingerprint
+校验签名 manifest；使用 `--verify gpg` 可强制要求该步骤，使用
+`--verify sha256` 可强制只要求 checksum。
+
+载荷校验并不能独立认证通过 `curl | sh` 获取的安装器脚本本身。高安全 bootstrap 应先
+通过独立可信渠道获得并检查固定 tag 的安装器或 release bundle，按下文手动校验 manifest
+及签名，再运行本地安装器。自定义 URL/镜像载荷缺少 manifest 时，在 `auto` 模式会被
+明确标记为未校验，而不会被当作官方可信载荷。
 
 校验 SHA256：
 

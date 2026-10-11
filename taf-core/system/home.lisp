@@ -40,6 +40,21 @@
 (defparameter *taffish-config-filename*
   "config.toml")
 
+(dolist (entry
+         '(("system.error.user-home"
+            "[system] can't detect user home directory. Set TAFFISH_USER_HOME."
+            "[system] 无法识别用户主目录。请设置 TAFFISH_USER_HOME。")
+           ("system.error.scope"
+            "[system] scope must be :user or :system, but got: {value}"
+            "[system] scope 必须是 :user 或 :system，实际收到：{value}")))
+  (apply #'taffish.i18n:register-message entry))
+
+(defun %system-error (suffix &rest bindings)
+  (error "~A"
+         (apply #'taffish.i18n:message-with
+                (format nil "system.error.~A" suffix)
+                bindings)))
+
 (defun %ensure-trailing-slash-string (string)
   (if (and (> (length string) 0)
            (char= #\/ (char string (1- (length string)))))
@@ -57,7 +72,7 @@
 (defun %default-taffish-user-home ()
   (let ((home (han.os:home-directory)))
     (unless home
-      (error "[system] can't detect user home directory. Set TAFFISH_USER_HOME."))
+      (%system-error "user-home"))
     (han.path:join-path home *taffish-user-home-relative*)))
 
 (defun %taffish-user-home (&optional override)
@@ -85,7 +100,7 @@
     ((and (stringp scope) (string-equal scope "user")) :user)
     ((and (stringp scope) (string-equal scope "system")) :system)
     (t
-     (error "[system] scope must be :user or :system, but got: ~S" scope))))
+     (%system-error "scope" :value (prin1-to-string scope)))))
 
 (defun %taffish-home (&key (scope :user) user-home system-home)
   (case (%normalize-taffish-scope scope)

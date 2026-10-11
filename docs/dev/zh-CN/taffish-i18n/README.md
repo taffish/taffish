@@ -1,6 +1,6 @@
 # taffish-i18n
 
-`taffish-i18n` 是 `taf-cli`、`taffish-cli` 和 `taf-core` 部分人类输出共用的表现层，
+`taffish-i18n` 是 `taf-cli`、`taffish-cli` 和 `taf-core` 全部人类 renderer 共用的表现层，
 package 名是 `taffish.i18n`。
 
 ## 职责
@@ -53,7 +53,7 @@ program-specific help 和诊断在拥有相应人类措辞的 renderer 附近注
 2. 用于确定性发现 built-in/user/system 语言的 `available-languages`。
 3. `current-language`、`call-with-resolved-language`、`call-with-language`、
    `with-language`。
-4. `register-message`、`message`、`help-text`、`builtin-message-keys`。
+4. `register-message`、`message`、`message-with`、`help-text`、`builtin-message-keys`。
 
 `taf-cli:main` 和 `taffish-cli:main` 会建立解析后的语言上下文。没有已配置偏好时，这两个人类
 CLI 入口默认使用 `auto`，跟随可识别的主机 locale，并最终回退到英文。library 与 MCP
@@ -64,6 +64,11 @@ CLI 入口默认使用 `auto`，跟随可识别的主机 locale，并最终回�
 user pack 会遮蔽 system pack。可选 `example.txt` 只贡献第一条非空行，最多 256 个字符，
 不能单独使语言包变为有效。
 
+help 文件和 `messages.json` 是相互独立的稀疏组件。查找按文件/semantic key 分别执行，
+顺序是精确 locale、基础 locale、英文。CLI 入口每次调用只建立一次语言上下文，因此 core
+renderer 应使用 `current-language`/`message`，不能再次解析 config。placeholder 无效时只拒绝
+对应候选条目。
+
 本模块刻意不修改配置。`taf.core:system-config-language` 根据发现结果校验语言，并只更新
 config 的顶层语言字段。
 
@@ -72,6 +77,6 @@ config 的顶层语言字段。
 外部 locale 文件只是可选数据。不要用 `read`、求值 Lisp 或实现专用 API 替换
 `han.json`/纯文本加载。外部文件不能覆盖内置 `en`、`zh`；无效文件必须回退，不能阻止启动。
 
-修改本模块时，要验证所有 CLI help 的 option token、编译 shell 字节、doctor/config JSON
-以及 MCP tools/resources/prompts 都保持不变。规范行为见
+修改本模块时，要验证所有 CLI help 的 option token、编译 shell 字节、JSON/history/config/
+index 数据、外部进程输出以及 MCP tools/resources/prompts/results 都保持不变。规范行为见
 [本地化契约](../../../standards/zh-CN/localization.md)。

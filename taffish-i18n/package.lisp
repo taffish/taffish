@@ -13,5 +13,6 @@
    :with-language
    :register-message
    :message
+   :message-with
    :help-text
    :builtin-message-keys))

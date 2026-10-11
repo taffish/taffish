@@ -14,6 +14,12 @@
 	   :argv
 	   :getenv
 	   :quit
+	   :prepare-runtime-io
+	   :configure-runtime-io
+	   :standard-input-terminal-p
+	   :standard-error-terminal-p
+	   :current-process-id
+	   :append-utf8-line
 	   :cwd
 	   :file-exists-p
 	   :directory-exists-p
@@ -23,6 +29,7 @@
 	   :delete-directory-tree
 	   :temporary-directory
 	   :escape-sh-token
+	   :with-character-output-to-string
 
 	   ;; process handle
    :host-process
@@ -56,12 +63,24 @@ Common usage:
 	  (han.host:getenv \"HOME\")
 	  (han.host:cwd)
 	  (han.host:quit 0)
+	  (han.host:prepare-runtime-io)
+	  (han.host:configure-runtime-io)
+	  (han.host:standard-input-terminal-p)
+	  (han.host:standard-error-terminal-p)
+	  (han.host:current-process-id)
+	  (han.host:append-utf8-line path line)
 	  (han.host:file-exists-p path)
 	  (han.host:escape-sh-token token)
 	  (han.host:run-program \"/bin/sh\" :arguments '(\"-c\" \"echo hi\"))
 	  (han.host:run-program-sync '(\"git\" \"status\") :output :string)
 
+Terminal query:
+  standard-error-terminal-p  true only when process stderr (fd 2) is a terminal
+  This read-only query does not inspect a rebound *error-output*, read stdin,
+  or start a subprocess. A non-terminal or closed stderr returns NIL.
+
 Process API:
+	  append-utf8-line    append one UTF-8 line without cross-process overwrite
 	  run-program          start a child process
 	  run-program-sync     run a command and wait for output/status
 	  process-wait         wait for process completion

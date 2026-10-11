@@ -1,5 +1,37 @@
 (in-package :taffish.mcp)
 
+(han.test:deftest test-taffish-mcp-entry-startup-error-boundary ()
+  (dolist (stage '(:io :language))
+    (dolist (broken-stderr '(nil t))
+      (let* ((symbols '(han.host:configure-runtime-io han.host:quit
+                        taffish.i18n:call-with-resolved-language))
+             (originals (mapcar #'symbol-function symbols))
+             (exit-tag (gensym "CLI-EXIT"))
+             (*standard-output* (make-string-output-stream))
+             (*error-output* (if broken-stderr
+                                 (make-string-input-stream "")
+                                 (make-string-output-stream))))
+        (unwind-protect
+             (progn
+               (setf (symbol-function 'han.host:configure-runtime-io)
+                     (lambda ()
+                       (when (eq stage :io) (error "startup test")))
+                     (symbol-function 'taffish.i18n:call-with-resolved-language)
+                     (lambda (function &rest options)
+                       (declare (ignore function options))
+                       (error "startup test"))
+                     (symbol-function 'han.host:quit)
+                     (lambda (&optional (code 0)) (throw exit-tag code)))
+               (han.test:check-equal 1 (catch exit-tag (taffish.mcp:main '("--help"))))
+               (han.test:check-equal "" (get-output-stream-string *standard-output*))
+               (unless broken-stderr
+                 (han.test:check-true
+                  (search "[TAFFISH-MCP-ERROR] startup test"
+                          (get-output-stream-string *error-output*)))))
+          (loop for symbol in symbols for original in originals
+                do (setf (symbol-function symbol) original)))))))
+
+
 ;;;; ============================================================
 ;;;; taffish-mcp / test.lisp
 ;;;; ============================================================
@@ -225,7 +257,7 @@ Initial MCP project test release.
        (han.path:delete-directory-tree ,root :if-does-not-exist :ignore))))
 
 (han.test:deftest test-taffish-mcp-version-string-basic ()
-  (han.test:check-true (search "taffish-mcp 0.10.1" *taffish-mcp-version*)))
+  (han.test:check-true (search "taffish-mcp 0.11.0" *taffish-mcp-version*)))
 
 (han.test:deftest test-taffish-mcp-initialize-response ()
   (let* ((raw "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-06-18\"}}")
@@ -310,7 +342,7 @@ Initial MCP project test release.
          (structured (%mcp-test-structured result)))
     (han.test:check-equal nil (han.json:get-json result "isError"))
     (han.test:check-true
-     (search "taffish-mcp 0.10.1"
+     (search "taffish-mcp 0.11.0"
              (han.json:get-json structured "taffish_mcp")))
     (han.test:check-true
      (> (length (han.json:get-json structured "features")) 0))
@@ -455,6 +487,18 @@ Initial MCP project test release.
     (han.test:check-equal t (han.json:get-json structured "ok"))
     (han.test:check-true
      (search "echo hello" (han.json:get-json structured "shell")))))
+
+(han.test:deftest test-taffish-mcp-compile-source-preserves-unicode ()
+  (let* ((result (call-tool
+                  "taffish_compile_source"
+                  (%json-object
+                   (cons "source"
+                         "<shell>\nprintf '%s\\n' '你好，MCP'"))))
+         (structured (%mcp-test-structured result)))
+    (han.test:check-equal nil (han.json:get-json result "isError"))
+    (han.test:check-equal t (han.json:get-json structured "ok"))
+    (han.test:check-true
+     (search "你好，MCP" (han.json:get-json structured "shell")))))
 
 (han.test:deftest test-taffish-mcp-validate-source-reports-invalid ()
   (let* ((result (call-tool
@@ -805,6 +849,63 @@ Initial MCP project test release.
       (han.test:check-equal 1 (han.json:get-json prune-summary "total"))
       (han.test:check-equal 0 (han.json:get-json prune-summary "prunable")))))
 
+(han.test:deftest test-taffish-mcp-plans-share-version-order-and-index-target ()
+  (han.test::with-taf-hub-temp-dir (root)
+    (multiple-value-bind (home index package) (han.test::%taf-hub-order-fixture root)
+      (declare (ignore index package))
+      (han.test::%taf-hub-order-install home "2.0.0-a.7.3-r1")
+      (dolist (name '("taffish_check_outdated" "taffish_plan_install_all"
+                      "taffish_plan_upgrade" "taffish_plan_prune"))
+        (let* ((response (call-tool name (%json-object
+                                         (cons "userHome" (han.path:->namestring home))
+                                         (cons "systemHome" (han.path:->namestring home)))))
+               (body (%mcp-test-structured response))
+               (item (aref (han.json:get-json body "items") 0)))
+          (han.test:check-equal nil (han.json:get-json response "isError"))
+          (han.test:check-equal t (han.json:get-json body "ok"))
+          (han.test:check-equal "2.0.0-a.7.10-r1" (han.json:get-json item "latest_version_id"))
+          (han.test:check-equal
+           (cond ((string= name "taffish_plan_prune") "skip")
+                 ((string= name "taffish_plan_install_all") "upgrade")
+                 (t "install_latest"))
+           (han.json:get-json item "action"))
+          (unless (string= name "taffish_check_outdated")
+            (han.test:check-equal t (han.json:get-json body "dry_run_p")))))
+      (han.test:check-equal '("2.0.0-a.7.3-r1") (han.test::%taf-hub-order-versions home)))))
+
+(han.test:deftest test-taffish-mcp-plans-isolate-kind-filter-errors ()
+  (han.test::with-taf-hub-temp-dir (root)
+    (dolist (pair '((:flow "tool") (:tool "flow")))
+      (multiple-value-bind (home index package)
+          (han.test::%taf-hub-order-fixture
+           (han.path:join-path root (format nil "~A/" (first pair))) (first pair))
+        (han.test::%taf-hub-order-install home "2.0.0-a.7.3-r1")
+        (setf (gethash "nightly-r1" (gethash "versions" package))
+              (%json-object (cons "version" "nightly") (cons "release" 1)
+                            (cons "kind" (string-downcase (string (first pair)))))
+              (gethash "latest" package) "nightly-r1")
+        (han.test::%taf-hub-order-write-index home index)
+        (dolist (name '("taffish_check_outdated" "taffish_plan_upgrade"))
+          (dolist (kind (list (second pair) "all"))
+            (let* ((response (call-tool name (%json-object
+                                             (cons "kind" kind)
+                                             (cons "userHome" (han.path:->namestring home))
+                                             (cons "systemHome" (han.path:->namestring home)))))
+                   (body (%mcp-test-structured response)))
+              (if (string= kind "all")
+                  (progn
+                    (han.test:check-equal t (han.json:get-json response "isError"))
+                    (han.test:check-equal nil (han.json:get-json body "ok"))
+                    (han.test:check-equal "business-error"
+                      (han.json:get-json (han.json:get-json body "error") "kind")))
+                  (progn
+                    (han.test:check-equal nil (han.json:get-json response "isError"))
+                    (han.test:check-equal t (han.json:get-json body "ok"))
+                    (han.test:check-equal 0 (length (han.json:get-json body "items")))
+                    (unless (string= name "taffish_check_outdated")
+                      (han.test:check-equal t (han.json:get-json body "dry_run_p"))))))))
+        (han.test:check-equal '("2.0.0-a.7.3-r1") (han.test::%taf-hub-order-versions home))))))
+
 (han.test:deftest test-taffish-mcp-compile-app-invocation-reports-invalid ()
   (with-mcp-installed-app (root user-home system-home)
     (let* ((result (call-tool
@@ -924,6 +1025,33 @@ Initial MCP project test release.
       (han.test:check-equal t (han.json:get-json structured "ok"))
       (han.test:check-true
        (search "reads.fa" (han.json:get-json structured "shell"))))))
+
+(han.test:deftest test-taffish-mcp-build-project-is-idempotent ()
+  (with-mcp-project (root project-dir nested-dir)
+    (let* ((arguments
+             (%json-object
+              (cons "startDir" (han.path:->namestring nested-dir))))
+           (first-result (call-tool "taffish_build_project" arguments))
+           (first (%mcp-test-structured first-result))
+           (first-command (han.json:get-json first "command"))
+           (second-result (call-tool "taffish_build_project" arguments))
+           (second (%mcp-test-structured second-result))
+           (second-command (han.json:get-json second "command")))
+      (han.test:check-equal nil (han.json:get-json first-result "isError"))
+      (han.test:check-equal nil (han.json:get-json second-result "isError"))
+      (han.test:check-equal "rebuilt"
+                            (han.json:get-json first-command "status"))
+      (han.test:check-equal "up_to_date"
+                            (han.json:get-json second-command "status"))
+      (han.test:check-equal
+       (han.json:get-json first-command "source_sha256")
+       (han.json:get-json second-command "source_sha256"))
+      (han.test:check-equal
+       (han.json:get-json first-command "wrapper_sha256")
+       (han.json:get-json second-command "wrapper_sha256"))
+      (han.test:check-true
+       (han.path:file-exists-p
+        (han.json:get-json second-command "manifest_file"))))))
 
 (han.test:deftest test-taffish-mcp-tools-call-unknown-is-tool-error ()
   (let* ((raw "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"missing_tool\",\"arguments\":{}}}")
@@ -1054,6 +1182,24 @@ Initial MCP project test release.
            (han.test:check-equal chinese english))
       (han.path:delete-directory-tree root :if-does-not-exist :ignore))))
 
+(han.test:deftest test-taffish-mcp-core-error-result-is-language-invariant ()
+  (let* ((root (%mcp-test-temp-root))
+         (missing (han.path:join-path root "missing-project"))
+         (arguments (%json-object
+                     (cons "startDir" (han.path:->namestring missing)))))
+    (unwind-protect
+         (let ((english
+                 (taffish.i18n:with-language ("en")
+                   (han.json:encode-json
+                    (call-tool "taffish_inspect_project" arguments))))
+               (chinese
+                 (taffish.i18n:with-language ("zh")
+                   (han.json:encode-json
+                    (call-tool "taffish_inspect_project" arguments)))))
+           (han.test:check-equal chinese english)
+           (han.test:check-true (search "project-not-found" english)))
+      (han.path:delete-directory-tree root :if-does-not-exist :ignore))))
+
 (han.test:deftest test-taffish-mcp-prompt-uses-arguments ()
   (let* ((result (get-prompt
                   "inspect-taffish-app"
@@ -1077,3 +1223,68 @@ Initial MCP project test release.
          (response (%mcp-test-parse (handle-json-rpc-string raw)))
          (error (%mcp-test-error response)))
     (han.test:check-equal -32601 (han.json:get-json error "code"))))
+
+(han.test:deftest test-taffish-mcp-stdio-server-emits-only-json-rpc ()
+  (let ((input
+        (make-string-input-stream
+           (format nil
+                   "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\",\"params\":{}}~%")))
+        (output (make-string-output-stream :element-type 'character))
+        (errors (make-string-output-stream :element-type 'character)))
+    (let ((*standard-input* input)
+          (*standard-output* output)
+          (*error-output* errors))
+      (run-stdio-server))
+    (let* ((text (get-output-stream-string output))
+           (response (han.json:parse-json text)))
+      (han.test:check-equal "2.0" (han.json:get-json response "jsonrpc"))
+      (han.test:check-equal 1 (han.json:get-json response "id"))
+      (han.test:check-false (search "TAFFISH-MCP" text))
+      (han.test:check-equal "" (get-output-stream-string errors)))))
+
+(han.test:deftest test-taffish-mcp-doctor-specialized-contract ()
+  (let* ((root (%mcp-test-temp-root))
+         (home (han.path:join-path root "missing/")))
+    (unwind-protect
+         (progn
+           (dolist (check '("index" "hub"))
+             (let* ((arguments (%json-object (cons "check" check)
+                                              (cons "userHome" (namestring home))
+                                              (cons "systemHome" (namestring home))))
+                    (result (call-tool "taffish_check_environment" arguments))
+                    (data (%mcp-test-structured result)))
+               (han.test:check-equal nil (han.json:get-json result "isError"))
+               (han.test:check-equal check (han.json:get-json data "check"))
+               (han.test:check-equal 0 (han.json:get-json data "exit_code"))))
+           (han.test:check-false (han.path:directory-exists-p home))
+           (let ((result (call-tool "taffish_check_environment"
+                                   (%json-object (cons "check" "index") (cons "targets" #("x"))))))
+             (han.test:check-equal t (han.json:get-json result "isError"))))
+      (han.path:delete-directory-tree root :if-does-not-exist :ignore))))
+
+(han.test:deftest test-taffish-mcp-does-not-expose-repair ()
+  (let* ((result (read-resource "taffish://mcp/safety"))
+         (text (han.json:get-json
+                (aref (han.json:get-json result "contents") 0) "text")))
+    (han.test:check-true (search "Repair is CLI-only" text))
+    (han.test:check-true (search "Do not emulate it" text)))
+  (dolist (name '("taffish_install_app" "taffish_plan_install_all" "taffish_check_environment"))
+    (let* ((tool (%mcp-test-tool name))
+           (properties (han.json:get-json (han.json:get-json tool "inputSchema") "properties")))
+      (han.test:check-false (nth-value 1 (han.json:get-json properties "repair")))))
+  (let ((original (symbol-function 'taf.core:hub-install-many)) (captured nil))
+    (unwind-protect
+         (progn
+           (setf (symbol-function 'taf.core:hub-install-many)
+                 (lambda (&rest args)
+                   (setf captured args)
+                   (list :target-count 1 :dry-run-p t :results nil)))
+           (let ((result (call-tool "taffish_install_app"
+                          (%json-object (cons "target" "demo") (cons "repair" t)))))
+             (han.test:check-true captured)
+             (han.test:check-false (getf captured :repair-p))
+             (han.test:check-true (getf captured :dry-run-p))
+             (han.test:check-false (han.json:get-json result "isError"))
+             (han.test:check-true
+              (han.json:get-json (%mcp-test-structured result) "ok"))))
+      (setf (symbol-function 'taf.core:hub-install-many) original))))

@@ -8,13 +8,13 @@ and the boundary between human text and stable machine interfaces.
 TAFFISH localization is an additive presentation layer. It may translate:
 
 1. `taf`, `taffish`, and `taffish-mcp` human CLI help text.
-2. Common top-level CLI diagnostics.
-3. Human-readable `taf config` output.
-4. Human-readable `taf doctor` diagnostics and remediation.
+2. `taf` parser diagnostics.
+3. Human-readable project, Hub, package-management, config, doctor, and history
+   status and diagnostics produced by `taf`.
 
-Lower-level project, Hub, install, and compiler diagnostics may still use the
-English fallback. The current implementation does not claim complete
-localization of every human-readable string.
+Core `taffish` compiler diagnostics may still use the English baseline.
+Output owned by a taf-app or an external process is deliberately passed through
+instead of localized.
 
 Localization MUST NOT change:
 
@@ -24,6 +24,8 @@ Localization MUST NOT change:
    Hub index fields.
 4. MCP tool/resource/prompt names, schemas, descriptions, or structured
    results.
+5. taf-app stdout/stderr or raw stdout/stderr from git, gh, curl, container
+   backends, and other external processes.
 
 ## Built-In Languages
 
@@ -74,6 +76,10 @@ exact locale -> base language -> en
 
 For example, `ja-JP` falls back through `ja` to `en`.
 
+The CLI resolves its language once at the process entry point. Every human
+renderer in that invocation uses the same dynamic language context; it does
+not re-read config or locale variables between messages.
+
 ## Language Management CLI
 
 Use the config command instead of editing the preference by hand:
@@ -119,7 +125,12 @@ help/taf/<command>.txt
 help/taffish.txt
 ```
 
-External packs currently provide help overrides for `taf` and `taffish`.
+External packs provide independent human-presentation components. Help files
+override `taf` and `taffish` help, while `messages.json` overrides registered
+semantic runtime messages used by `taf`. A pack may contain either component,
+both components, or only selected command/help/message entries. Missing
+components and keys continue through the normal fallback chain.
+
 `taffish-mcp -h` embeds built-in English and Chinese; other selected languages
 fall back to English. This does not affect the English MCP protocol.
 
@@ -137,13 +148,16 @@ message keys and whose values are translated strings:
 
 ```json
 {
-  "cli.unknown-option": "未知选项：{option}"
+  "taf.project.check.header": "Proyecto válido: {name}",
+  "taf.project.check.field.root": "directorio raíz"
 }
 ```
 
 Named placeholders MUST exactly match the English baseline. A translation
-with missing or additional placeholders is ignored. Help files are plain UTF-8
-text and are subject to the same placeholder check.
+with missing or additional placeholders is ignored for that key only. Help
+files are plain UTF-8 text and are subject to the same placeholder check. A
+valid sibling key or help file remains active when another entry is missing or
+invalid.
 
 For a given locale, a valid user pack shadows the corresponding system pack.
 Exact-locale files are checked before base-language files. Discovery is
@@ -161,6 +175,31 @@ and placeholder mismatches fail softly. TAFFISH ignores the invalid candidate
 and continues through the fallback chain. A damaged optional locale pack MUST
 NOT prevent the CLI from starting.
 
+## Human Layout And Diagnostic Summaries
+
+Hub/doctor field rendering uses a shared, language-independent display-width
+helper, not per-language spaces or string character counts. It conservatively
+supports selected Unicode narrow/wide characters and combining marks attached
+to a supported base. Ambiguous widths, shaping scripts, emoji sequences,
+controls and unsupported characters are not guessed. This is not a general
+Unicode grapheme engine or an exact model of every terminal/font.
+
+Long labels, long values, multiline or uncertain-width text use separate
+label/value lines; values are not truncated or automatically wrapped. The
+layout budget is fixed, not a terminal-size query. Alignment does not normalize
+or rewrite path/identity values and does not affect machine output.
+
+Default Hub diagnostics group repeated issues by type/state and handling policy
+within the selected scope, with counts and at most three examples per group.
+Examples may be shortened and control characters sanitized for the summary;
+`--verbose` and JSON keep full evidence. English and Chinese must preserve the
+same counts, classifications, preview/apply distinction and safety advice.
+
+Human progress is stderr-only: stages/counts update in place on an interactive
+TTY, while logs use rate-limited lines. Non-TTY streams and `TERM=dumb` must not
+receive cursor controls. JSON and MCP calls suppress progress. This changes
+presentation, not diagnostic state, exit codes or machine schemas.
+
 ## Compatibility
 
 Adding a translation is compatible when semantic keys, placeholders, command
@@ -168,3 +207,12 @@ tokens, machine schemas, the default `auto` selection contract, and final
 English fallback remain unchanged. Removing or renaming a semantic key or
 changing its placeholder set requires a compatibility review and corresponding
 conformance-test updates.
+
+## Operation Stage Messages
+
+Slow-command stage keys use the `taf.progress.*` namespace in `messages.json`.
+For example, `"taf.progress.download": "Downloading index"` overrides the
+index-download label. The formatter supplies the app identity and optional
+current-target/total count; translated labels must not add their own counts or
+claim success. Missing keys follow the existing sparse-catalog fallback.
+See [command status](../../dev/en/taf-core/command-progress.md).

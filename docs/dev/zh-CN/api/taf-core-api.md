@@ -125,11 +125,18 @@
 4. 对 flow 项目可能重写 `[dependencies]`。
 5. `:image-p t` 时运行 Docker 或 Podman build。
 
+command-wrapper 产物通过私有 build manifest 建立内容身份。未变化且有效的
+wrapper/snapshot 会直接返回，不重写两项产物；重建替换通过 staging 完成，失败时恢复
+最后一个有效产物对。
+
 返回：
 
 ```lisp
 (:project project :command command-result :image image-result)
 ```
+
+command plist 保留原有字段，并以 additive 方式报告 `:status`、`:source-sha256`、
+`:wrapper-sha256` 与 `:manifest-file`。
 
 ### `taf.core:project-publish`
 
@@ -154,6 +161,10 @@
 
 默认 `dry-run t`，不会执行发布。
 
+发布不要求当前版本高于历史版本。`:release-p t` 时，`:channel :latest`（默认）
+创建正式 GitHub Release 并标记为 Latest；`:pre` 创建 GitHub prerelease 且不设置
+Latest；`:no-latest` 创建正式 Release 但不设置 Latest。`:release-p nil` 仍然只发布 tag。
+
 非 dry-run 副作用：
 
 1. git init。
@@ -168,7 +179,12 @@
 发布内部使用 inspect/ensure 状态机。中断后使用相同参数再次调用会继续匹配的半完成
 发布；commit、tag、repository、policy 或 Release 身份冲突时会停止且不覆盖。返回值
 保留旧字段，并增加 `:outcome`、`:phases`、`:resumed-p`、`:complete-p`、
-`:journal-file` 和 `:warnings`。
+`:journal-file`、`:warnings` 与 `:build-status`。`:build-p t` 时会在 commit 前确保
+build；匹配的发布 commit/tag 身份建立后会跳过重建。
+
+续跑必须保持相同渠道与 Release 意图。已有匹配 Release 不会被修改，也不会从后续发布
+抢回 Latest。旧返回字段 `:remote-latest` 仅是远端 tag 排序诊断，不代表 GitHub Latest，
+也不用于决定是否允许发布。
 
 ## Hub API
 
@@ -217,6 +233,15 @@
 
 支持 `dry-run-p`。dry-run 不应写文件。
 
+可选 `:repair-p` 默认为 `nil`。为 `t` 时，先对全部选中对象只读预检，仅重建来源、身份、
+受管理路径及固定源码 commit 均通过修复检查的已有索引身份。verified 目标跳过；任一
+blocked 目标阻断整批写入。显式目标缺失、未知 schema、私有来源及自定义 launcher 均受阻。
+repair 不递归安装依赖，拒绝 `:force-p`；单项 API 的 repair 模式也拒绝调用方提供
+`:record`。用 `:dry-run-p t` 预览，否则显式单项/多项 repair 会执行。
+opt-in 返回 `taffish.repair-plan/v1`，普通调用的返回结果不变。暂存、备份、验证、回滚和
+中断 journal 限制见[修复策略](../taf-core/hub-maintenance.md#显式修复)。不新增 MCP
+repair 参数或执行入口。
+
 安全说明：source URL 会通过 system config 的 rewrite 规则解析。安装会运行 git 和 build 逻辑。
 
 ### `taf.core:hub-install-all`
@@ -229,6 +254,18 @@
 
 支持 `dry-run-p`；CLI 和 MCP planner 层默认应使用 dry-run。可选的 `prune-old-p`
 只会在非 dry-run 且安装成功后移除本地旧版本。
+
+默认情况下，`:repair-p t` 仅选择 `:kind`、`:scope` 范围内已安装的 index.latest 身份。
+确实不存在的身份计数后跳过，已有目录但元数据损坏时受阻。不升级其他版本、不新装
+app/依赖。一个旧身份可通过 `hub-install` 的显式 `:version-id` 指定；全部已安装版本
+则使用 `:all-installed-p t`。repair 拒绝
+`:force-p`、`:prune-old-p`；只有 `:yes-p t` 且 `:dry-run-p nil` 才执行，否则预览。
+整批预检及 `taffish.repair-plan/v1` 返回契约与上文一致。
+
+`:all-installed-p` 默认为 `nil`，必须配合 `:repair-p t`。为真时从本地全部已安装版本
+选择目标，而非 index.latest；缺失或无法解析的记录保持受阻。类型/作用域筛选、
+预览/yes 和既有安全预检仍适用。修复结果新增 `selection`：`index-latest`、
+`installed-all-versions` 或 `explicit`；已有字段和普通安装结果不变。
 
 ### `taf.core:hub-outdated`
 
@@ -254,7 +291,8 @@ ahead、missing-index、local-project 或 not-installed 状态。
 
 稳定性：稳定。
 
-作用：移除本地旧 app 版本，只保留本地最新版本。
+作用：保留已安装且有效的 index.latest，只移除可靠地更旧的同源版本。
+缺失或无效目标跳过；私有/未知/冲突来源、较新或顺序不明确的身份受到保护。
 
 副作用：
 
@@ -267,9 +305,17 @@ ahead、missing-index、local-project 或 not-installed 状态。
 
 ### Package Maintenance 输出
 
-`hub-install-all`、`hub-outdated`、`hub-upgrade` 和 `hub-prune` 返回或打印同一类
-package-plan 结构。JSON 输出保留每个 item。默认文本输出面向人类阅读，可能隐藏
-`skip` items；如果所有 item 都被 skipped，则报告 `no changes`。
+普通 `hub-install-all`（不带 repair）、`hub-outdated`、`hub-upgrade` 和 `hub-prune` 返回或打印同一类
+package-plan 结构。JSON 输出保留每个 item。默认文本只隐藏状态正常且无需变更的项，
+仍显示验证警告、缺少目标或来源不匹配等问题。版本已是 current 不代表完整性已验证。
+没有需要呈现的变更、警告或阻塞时报告 `no changes`。
+
+重复诊断在作用域内按问题类型/状态和策略汇总，含计数及每组至多三个例子，不重复 skip 行；
+完整结构化证据仍保留。人类 stderr 进度在 TTY 原地显示阶段/计数，在日志中限频逐行输出。
+`:verbose nil`、JSON、MCP 无进度文字；探测缓存仅限同一次只读扫描，不跨变更复用。
+
+在线目标遵循 index.latest，不重新求本地最大值。精确目标已有效安装时为 current，
+即使还有更高的本地版本；维护不会自动降级。详见 [Hub 版本策略](../taf-core/hub-system.md#版本选择与安全清理)。
 
 ### `taf.core:hub-uninstall` / `hub-uninstall-many`
 
@@ -341,7 +387,7 @@ profile：
 
 ### `taf.core:system-config-language`
 
-稳定性：v0.11.0 新增接口。
+稳定性：增量公开接口。
 
 作用：查看 configured/displayed language 和可用内置/外部语言包，或更新目标 scope 的顶层
 `language` 字段。
@@ -363,11 +409,24 @@ container backend readiness 结构化诊断。
 :shell :auto|:bash|:zsh|:fish
 :detail-p boolean
 :json-p boolean
+:check :environment|:index|:hub
+:targets list-of-strings
 ```
 
 result 保留 `:status`、`:directories`、`:executables` 和 `:paths`，并新增
 `:diagnostic-status` 与 `:diagnostics`。`:verbose` 控制渲染；JSON schema 为
 `taffish.doctor/v1`。
+
+Hub 默认文本按问题/策略限量摘要（每组至多三个例子）；`:detail-p t` 对应 CLI
+`--verbose`，保留逐项完整检查。`:verbose` 控制是否渲染，而非证据完整性；返回 plist
+及 JSON 保留全部诊断。Hub 使用批量只读探测，人类进度仅写 stderr，TTY 原地更新，日志
+限频，JSON/MCP 不输出进度文字。
+
+`:check` 默认 `:environment`。`:index` 和 `:hub` 为离线只读检查，增量返回
+`:check`、`:exit-code` 及每项的 `:inspection` 证据。仅 `:hub` 接受应用/命令名
+列表 `:targets`；专项检查拒绝 init 和非默认 shell 选择。退出码 1 表示 invalid/unknown，
+0 包括警告。旧字段仍保留，未运行的默认环境检查组返回空列表。
+详见 [doctor 契约](../taf-core/system-history-doctor.md)。
 
 副作用：默认无副作用。只有 `init-p t` 时创建 TAFFISH 自己的缺失目录，system
 scope init 需要 root。它不修改 shell/editor 配置或权限，不启动服务，不拉取镜像，

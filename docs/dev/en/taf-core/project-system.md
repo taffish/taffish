@@ -10,7 +10,9 @@ The project system puts a single `.taf` file into a maintainable application pro
 
 | File | Role |
 | --- | --- |
+| `i18n.lisp` | Register project human messages and render localized status/errors without changing project data. |
 | `common.lisp` | Shared project constants, paths, and helpers. |
+| `digest.lisp` | Private, portable SHA-256 helpers shared by build and publish identity checks. |
 | `new.lisp` | Create taf-app project skeletons. |
 | `check.lisp` | Read and validate `taffish.toml` and entry files. |
 | `compile.lisp` | Compile project TAF. |
@@ -50,4 +52,5 @@ When changing the project system, also check:
 2. Whether `taffish.toml` field changes affect existing taf-apps.
 3. Whether build or publish artifacts can still be described by the Hub index.
 4. Whether README, completion, and CLI help need updates.
-
+5. Whether English/Chinese human output changes while generated shell, project
+   metadata, history, and publish state remain language-invariant.

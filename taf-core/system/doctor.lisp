@@ -199,10 +199,12 @@
 
 (defun %doctor-config-diagnostic (scope user-home system-home)
   (handler-case
-      (let* ((config (%effective-taffish-config
-                      :scope scope
-                      :user-home user-home
-                      :system-home system-home))
+      (let* ((config
+               (taffish.i18n:with-language ("en")
+                 (%effective-taffish-config
+                  :scope scope
+                  :user-home user-home
+                  :system-home system-home)))
              (files (getf config :config-files)))
         (%doctor-diagnostic
          :config :ok scope
@@ -296,8 +298,7 @@
            (t :unknown))))
       ((member value '(:bash :zsh :fish) :test #'eql) value)
       (t
-       (error "[doctor] shell must be auto, bash, zsh, or fish, but got: ~S"
-              shell)))))
+       (%doctor-error "shell" :value (prin1-to-string shell))))))
 
 (defun %doctor-completion-files (home shell)
   (case shell
@@ -652,15 +653,10 @@
 
 (defun %doctor-print-paths (scope user-home system-home)
   (format t "~A~%" (taffish.i18n:message "doctor.header"))
-  (format t "  ~A       : ~A~%"
-          (taffish.i18n:message "doctor.label.scope")
-          (%doctor-human-scope scope))
-  (format t "  ~A   : ~A~%"
-          (taffish.i18n:message "doctor.label.user-home")
-          (%directory-namestring user-home))
-  (format t "  ~A : ~A~%"
-          (taffish.i18n:message "doctor.label.system-home")
-          (%directory-namestring system-home)))
+  (%print-display-fields
+   (list (list (taffish.i18n:message "doctor.label.scope") (%doctor-human-scope scope))
+         (list (taffish.i18n:message "doctor.label.user-home") (%directory-namestring user-home))
+         (list (taffish.i18n:message "doctor.label.system-home") (%directory-namestring system-home)))))
 
 (defun %doctor-print-dir-results (dir-results)
   (format t "~%~A~%" (taffish.i18n:message "doctor.heading.directories"))
@@ -714,21 +710,25 @@
               (%taffish-bin-path-export-command (getf missing :path))))))
 
 (defun %doctor-print-diagnostic-item (item detail-p)
+  (when (getf item :inspection)
+    (write-string (%hub-diagnostic-text (getf item :inspection) (getf item :scope)))
+    (when detail-p
+      (format t "    ~A :~%~A~%" (taffish.i18n:message "doctor.label.evidence")
+              (han.json:encode-json (%hub-diagnostic-json-value (getf item :evidence)) :indent 2)))
+    (return-from %doctor-print-diagnostic-item nil))
   (format t "  [~A] ~A: ~A~%"
           (string-upcase (%doctor-human-status (getf item :status)))
           (%doctor-human-id (getf item :id))
           (%doctor-human-summary item))
   (when detail-p
-    (format t "    ~A    : ~S~%"
-            (taffish.i18n:message "doctor.label.evidence")
-            (getf item :evidence))
-    (unless (string= (getf item :remediation) "")
-      (format t "    ~A : ~A~%"
-              (taffish.i18n:message "doctor.label.remediation")
-              (%doctor-human-remediation item)))
-    (format t "    ~A         : ~A~%"
-            (taffish.i18n:message "doctor.label.docs")
-            (getf item :docs-url))))
+    (%print-display-fields
+     (list (list (taffish.i18n:message "doctor.label.evidence") (prin1-to-string (getf item :evidence)))
+           (list (taffish.i18n:message "doctor.label.docs") (getf item :docs-url)))))
+  (when (and (or detail-p (not (member (getf item :status) '(:ok :not-applicable))))
+             (not (string= (getf item :remediation) "")))
+    (format t "    ~A : ~A~%"
+            (taffish.i18n:message "doctor.label.remediation")
+            (%doctor-human-remediation item))))
 
 (defun %doctor-print-diagnostics (diagnostics diagnostic-status detail-p)
   (format t "~%~A~%"
@@ -736,11 +736,19 @@
            "doctor.heading.diagnostics-status"
            (list (cons "status" (%doctor-human-status diagnostic-status)))))
   (let ((printed-p nil))
+    (unless detail-p
+      (let* ((inspections (loop for item in diagnostics
+                                when (and (getf item :inspection)
+                                          (not (member (getf item :status) '(:ok :not-applicable))))
+                                  collect (getf item :inspection)))
+             (scope (or (getf (first diagnostics) :scope) :user)))
+        (when inspections
+          (setf printed-p t)
+          (write-string (%hub-diagnostic-summary-text inspections scope)))))
     (dolist (item diagnostics)
       (when (or detail-p
-                (not (member (getf item :status)
-                             '(:ok :not-applicable)
-                             :test #'eql)))
+                (and (not (getf item :inspection))
+                     (not (member (getf item :status) '(:ok :not-applicable) :test #'eql))))
         (setf printed-p t)
         (%doctor-print-diagnostic-item item detail-p)))
     (unless printed-p
@@ -787,7 +795,7 @@
     (t (princ-to-string value))))
 
 (defun %doctor-result-json (result)
-  (han.json:json-object
+  (let ((object (han.json:json-object
    (cons "schema_version" "taffish.doctor/v1")
    (cons "scope" (%doctor-status-string (getf result :scope)))
    (cons "init_p" (if (getf result :init-p) t :false))
@@ -809,7 +817,88 @@
                  'vector))
    (cons "diagnostics"
          (coerce (mapcar #'%doctor-json-value (getf result :diagnostics))
-                 'vector))))
+                 'vector)))))
+    (when (getf result :check)
+      (han.json:set-json object "check" (%doctor-status-string (getf result :check)))
+      (han.json:set-json object "exit_code" (getf result :exit-code)))
+    object))
+
+(defun %doctor-inspection-diagnostic (inspection scope id)
+  (let* ((state (getf inspection :state))
+         (status (case state (:verified :ok) (:unverified :warning)
+                       (:invalid :error) (t :unknown))))
+    (append
+     (%doctor-diagnostic
+      id status scope
+      (format nil "~A ~A: ~A"
+              (or (getf inspection :package-name) "index")
+              (or (getf inspection :version-id) "") (%doctor-status-string state))
+      inspection
+      (taffish.i18n:with-language ("en") (%hub-diagnostic-remediation inspection scope))
+      (%doctor-docs-url "basic-usage"))
+     (list :inspection inspection))))
+
+(defun %doctor-print-hub-coverage (diagnostics targets)
+  (let ((names (make-hash-table :test #'equal))
+        (identities (make-hash-table :test #'equal)) (incomplete nil))
+    (dolist (item diagnostics)
+      (when (eq (getf item :id) :hub-installation)
+        (let* ((inspection (getf item :inspection))
+               (name (getf inspection :package-name))
+               (version (getf inspection :version-id)))
+          (when name (setf (gethash name names) t))
+          (when (and name version) (setf (gethash (list name version) identities) t))
+          (when (or (null version)
+                    (some (lambda (issue)
+                            (member (getf issue :code) '("read-error" "unsafe-path") :test #'equal))
+                          (getf inspection :issues)))
+            (setf incomplete t)))))
+    (%hub-print-message (if targets "diagnostic.coverage-selected" "diagnostic.coverage-all")
+                        :packages (hash-table-count names) :versions (hash-table-count identities))
+    (when incomplete (%hub-print-message "diagnostic.coverage-incomplete"))))
+
+(defun %doctor-specialized (check targets scope user-home system-home system-bin home json-p detail-p verbose)
+  (let ((*hub-diagnostic-progress* (%hub-make-diagnostic-progress
+                                   (and (eql check :hub) verbose (not json-p)))))
+   (multiple-value-bind (index-result index) (%hub-diagnose-index home)
+    (let ((diagnostics (list (%doctor-inspection-diagnostic index-result scope :index))))
+      (when (eql check :hub)
+        (dolist (inspection (%hub-diagnose-installations home targets))
+          (let* ((name (getf inspection :package-name))
+                 (packages (%hub-json-ref index "packages"))
+                 (package (and name (%hub-json-ref packages name)))
+                 (record (%hub-json-ref (%hub-json-ref package "versions") (or (getf inspection :version-id) "")))
+                 (repository (or (%hub-json-string record "repository_url")
+                                 (%hub-json-string package "repository_url"))))
+            (setf (getf inspection :index-latest) (%hub-json-string package "latest")
+                  (getf inspection :source-status)
+                  (cond ((equal (getf inspection :origin-kind) "local-project") :local-project)
+                        ((not (eql (getf index-result :state) :verified)) :unknown)
+                        ((null package) :not-indexed)
+                        ((or (null repository) (null (getf inspection :repository-url))) :unknown)
+                        ((equal repository (getf inspection :repository-url)) :matching-index)
+                        (t :mismatch))))
+          (push (%doctor-inspection-diagnostic
+                 inspection scope (if (eql (getf inspection :check-kind) :command-entry)
+                                      :hub-command :hub-installation)) diagnostics)))
+      (setf diagnostics (nreverse diagnostics))
+      (let* ((status (%doctor-diagnostic-status diagnostics))
+             (exit-code (if (some (lambda (d) (member (getf d :status) '(:error :unknown))) diagnostics) 1 0))
+             (result (list :check check :scope scope :init-p nil :exit-code exit-code
+                           :user-home (%directory-namestring user-home)
+                           :system-home (%directory-namestring system-home)
+                           :system-bin-dir (%directory-namestring system-bin)
+                           :home (%directory-namestring home)
+                           :directories nil :executables nil :paths nil
+                           :status status :diagnostic-status status :diagnostics diagnostics)))
+        (when verbose
+          (if json-p
+              (format t "~A~%" (han.json:encode-json (%doctor-result-json result)))
+              (progn
+                (%doctor-print-paths scope user-home system-home)
+                (when (eq check :hub) (%doctor-print-hub-coverage diagnostics targets))
+                (%doctor-print-diagnostics diagnostics status detail-p))))
+        result)))))
 
 (defun system-doctor (&key (init-p nil)
                         (scope :user)
@@ -819,18 +908,36 @@
                         (shell :auto)
                         (detail-p nil)
                         (json-p nil)
+                        (check :environment)
+                        targets
                         (verbose t))
-  (let* ((normalized-scope (%normalize-taffish-scope scope))
+  (let* ((normalized-check (cond ((member check '(:environment :index :hub)) check)
+                                 ((equal check "environment") :environment)
+                                 ((equal check "index") :index)
+                                 ((equal check "hub") :hub)
+                                 (t (%doctor-error "check"))))
+         (normalized-scope (%normalize-taffish-scope scope))
          (user-home-path (%taffish-user-home user-home))
          (system-home-path (%taffish-system-home system-home))
          (system-bin-path (%taffish-system-bin-dir system-bin-dir))
          (home (%taffish-home :scope normalized-scope
                               :user-home user-home-path
                               :system-home system-home-path)))
+    (when (or (and targets (not (eql normalized-check :hub)))
+              (not (listp targets))
+              (not (every #'%hub-non-empty-string-p targets))
+              (and (not (eql normalized-check :environment))
+                   (or init-p (not (eql shell :auto)))))
+      (%doctor-error "check-options"))
+    (unless (eql normalized-check :environment)
+      (return-from system-doctor
+        (%doctor-specialized normalized-check targets normalized-scope
+                             user-home-path system-home-path system-bin-path home
+                             json-p detail-p verbose)))
     (when (and init-p
                (eql normalized-scope :system)
                (not (%root-user-p)))
-      (error "[doctor] --init --system requires root permission."))
+      (%doctor-error "init-system-root"))
     (let* ((dir-results
              (mapcar (lambda (item)
                        (%doctor-dir-result (car item) (cdr item) init-p))

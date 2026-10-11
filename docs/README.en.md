@@ -6,6 +6,22 @@ Ordinary users can start from the root [README](../README.md) and the public
 [TAFFISH documentation](https://github.com/taffish/taffish-docs). The documents
 here go deeper than installation and basic command usage.
 
+## Start Here
+
+- New users: read the root [README](../README.md), then follow its installation,
+  first-run, container-backend, and troubleshooting sections in order.
+- Guided users: use the public
+  [TAFFISH Quick Start](https://github.com/taffish/taffish-docs/blob/main/en/quick-start.en.md).
+- Source builders and contributors: begin with the
+  [Developer Manual](dev/README.en.md) and
+  [Build From Source](dev/en/build-from-source.md).
+- Installer maintainers: use the source-adjacent
+  [Installer Manual](../install/README.md) for provider generation,
+  verification, transaction, permission, and conformance-test contracts.
+- Maintainers reviewing a release: read the current
+  [v0.11.0 Release Notes](releases/v0.11.0.md) together with the root README's
+  release-verification section.
+
 ## Documentation Scope
 
 This directory prioritizes four kinds of content:
@@ -25,14 +41,14 @@ ecosystem repositories. Paper narratives remain outside this source tree.
 - [Developer Manual](dev/README.en.md)
 - [TAFFISH Specification Draft](standards/README.en.md)
 - [TAFFISH System Architecture](architecture/README.en.md)
-- [Release Notes](releases/v0.10.1.md)
+- [Current Release Notes: v0.11.0](releases/v0.11.0.md)
 
 Chinese entries:
 
 - [Chinese Developer Manual](dev/README.zh-CN.md)
 - [Chinese TAFFISH Specification Draft](standards/README.zh-CN.md)
 - [Chinese TAFFISH System Architecture](architecture/README.zh-CN.md)
-- [Chinese Release Notes](releases/v0.10.1.zh-CN.md)
+- [Chinese Release Notes: v0.11.0](releases/v0.11.0.zh-CN.md)
 
 ## Writing Principles
 

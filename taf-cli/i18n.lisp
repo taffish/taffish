@@ -7,49 +7,53 @@
 (defparameter *taf-help-zh*
   (list
    (cons nil
-         "用法：
-  taf [-h | --help]
-  taf [-v | --version]
+         "管理 TAFFISH 项目、应用安装与本地环境。
+
+用法：
+  taf <COMMAND> [ARGS...]
   taf help [COMMAND]
   taf <COMMAND> [-h | --help]
-  taf <COMMAND> [ARGS...]
+  taf [-h | --help]
+  taf [-v | --version]
 
 项目命令：
-  new         创建新的 TAFFISH app 项目
-  check       检查当前 TAFFISH app 项目
-  compile     编译当前项目并输出 shell 代码
-  build       构建版本化命令包装器或镜像
+  new         创建工具或流程项目
+  check       检查当前项目
+  compile     输出当前项目的 shell 代码，不运行
+  build       构建版本化命令；可选构建容器镜像
   run         编译并运行当前项目
-  publish     将当前项目发布到 GitHub
+  publish     发布到 GitHub，或继续中断的发布
 
 Hub 命令：
-  update      更新本地 TAFFISH index
-  search      在本地 index 中搜索 app
-  info        显示 index 中的 app/版本信息
-  install     从 index 或本地项目安装 app
-  outdated    显示落后于本地 index 的已安装 app
-  upgrade     安装 index 中较新的版本
-  prune       删除本地已安装的旧版本
-  uninstall   卸载本地 app 或命令
-  list        列出已安装或 index 中的 app
-  which       显示本地路径和元数据
+  update      刷新本地索引，不升级应用
+  search      搜索本地索引中的应用
+  info        查看索引中的应用和版本信息
+  install     从索引或本地项目安装应用
+  outdated    根据本地索引检查应用更新
+  upgrade     根据本地索引升级已安装应用
+  prune       清理可安全删除的旧版本
+  uninstall   卸载已安装应用
+  list        列出已安装或索引中的应用
+  which       查看已安装命令的路径与元数据
 
 系统命令：
-  doctor      检查或初始化 TAFFISH 环境
-  config      显示或管理 TAFFISH 运行时配置
-  history     显示或清理本地执行历史
+  doctor      诊断环境与本地安装，默认只读
+  config      查看或管理运行时配置
+  history     查看或清理执行历史
+
+入门：
+  taf update                  获取应用索引
+  taf install fastqc          安装应用
+  taf help install            查看命令的选项与示例
 
 语言：
-  taf config language             显示当前语言及可用语言
-  taf config language auto        跟随主机 locale [默认]
-  taf config language zh          将内置中文保存为首选语言
-  TAFFISH_LANGUAGE=en taf --help  仅为单次命令覆盖语言
+  taf config language         查看当前语言及可用语言
+  taf config language zh      切换中文；en 为英文，auto 跟随系统 [默认]
 
-示例：
-  taf help install
-  taf update
-  taf install fastqc
-  taf run -- --help")
+更多信息：
+  官网：https://taffish.com
+  Hub：https://taffish.github.io/
+  支持：support@taffish.com")
    (cons "new"
          (format nil "用法：
   taf new [-h | --help]
@@ -169,10 +173,10 @@ Hub 命令：
    (cons "publish"
          "用法：
   taf publish [-h | --help]
-  taf publish [-n | --dry-run] [--latest | --pre] [-b | --build]
+  taf publish [-n | --dry-run] [--latest | --pre | --no-latest] [-b | --build]
               [-r | --release] [--create-repo] [--public | --private]
               [--no-lock-repo] [--prompt]
-  taf publish [-y | --yes] [--latest | --pre] [-b | --build]
+  taf publish [-y | --yes] [--latest | --pre | --no-latest] [-b | --build]
               [-r | --release] [--create-repo] [--public | --private]
               [--no-lock-repo] [--prompt]
 
@@ -184,24 +188,31 @@ Hub 命令：
   - 检查名为 v<version>-r<release> 的远端 tag
   - 除非给出 --prompt，否则远端 git 检查为非交互模式
   - 使用 --release 时读取 release.md 并创建 GitHub release
+  - 版本无需递增；已有 tag 不可用于发布不同内容
+  - 未使用 --release 时只发布 Git tag；渠道选项不会设置 GitHub Latest 或预发布状态
   - 使用 --create-repo 时可以创建 GitHub 仓库
   - 新建仓库默认会锁定：启用 immutable releases，并保护 v* tag
     使其不能被更新或删除
+  - 使用 --build 时，会在建立发布 commit 前确保精确的带版本 wrapper 与冻结快照；
+    输入未变化且产物有效时不会重写文件
   - 发布中断后重新运行完全相同的命令；已匹配的 repository、tag 和 release
     阶段会被跳过，包括已由 --create-repo 创建的仓库
+  - 一旦匹配的发布 commit 或 tag 身份已经建立，续跑 --build 会校验该身份并跳过重建
   - 已完整匹配的发布不会重复执行发布修改，并以成功结束
+    不会从后续发布抢回 Latest
   - 拒绝冲突的 commit、tag、release 或已改变的发布意图
   - 仅在给出 --yes 时执行 commit、tag、push 和可选 release 创建
 
 选项：
   -n, --dry-run              仅输出发布计划 [默认]
   -y, --yes                  执行 commit、tag、push 和 release
-  -b, --build                发布前构建命令 wrapper
+  -b, --build                发布前以幂等方式确保命令 wrapper
   -r, --release              读取项目根目录的 release.md：
                               第一行作为发布消息；整个文件作为
                               GitHub release notes
-  --latest                   要求版本比远端最新版本更新 [默认]
-  --pre                      允许发布非最新的预发布 tag
+  --latest                  将新 GitHub Release 设为 Latest [默认]
+  --pre                     创建 GitHub Pre-release，不设为 Latest
+  --no-latest               创建正式 GitHub Release，但不设为 Latest
   --create-repo              仓库不存在时创建 GitHub 仓库
   --public                   将缺失仓库创建为 public [默认]
   --private                  将缺失仓库创建为 private
@@ -211,7 +222,9 @@ Hub 命令：
 
 注意：
   TAF 不管理 GitHub 登录。未使用 --prompt 时，远端 git 命令会快速失败，
-  而不会询问凭据。")
+  而不会询问凭据。
+  --latest、--pre 与 --no-latest 互斥。请使用相同选项和 release.md 续跑；
+  publish 不会修改已有 Release 的正式/预发布类型。")
    (cons "update"
          "用法：
   taf update [-h | --help]
@@ -288,6 +301,7 @@ Hub 命令：
   taf install [OPTIONS] <APP-NAME|TAF-COMMAND> <VERSION-ID>
   taf install [OPTIONS] --from <PROJECT-DIR>
   taf install [OPTIONS] --all
+  taf install [OPTIONS] --all-installed --repair
 
 从本地 index 或本地项目安装 TAFFISH app。
 
@@ -296,6 +310,7 @@ Hub 命令：
   indexed exact        按明确 VERSION-ID 安装一个 app/command
   local project        使用 --from <PROJECT-DIR> 安装私有项目
   batch index          按 --kind 选择并计划或安装所有 index app
+  installed repair     使用 --all-installed --repair 修复本地已有版本
 
 细节：
   - 接受 package 名，例如 my-tool
@@ -309,20 +324,31 @@ Hub 命令：
   - --from 向上查找 taffish.toml，并将来源记录为
     [local-project] <PROJECT-ROOT>；此模式不读取 index
   - --all 默认为 dry-run；使用 --yes 才执行安装
+  - 在线目标使用 index.latest；批量操作不会自动降级较新的本地版本
+  - --prune-old 仅在同源 index.latest 已安装且验证有效时清理旧版本
+  - --repair 只从可验证的索引来源重建已有安装，并保留备份；
+    不安装缺失的应用/依赖，不与 --force、--from、--prune-old 同用
+  - 建议先加 --dry-run 查看计划；--all --repair 默认只预览已安装
+    index.latest 目标，确认后加 --yes
+  - --all-installed --repair 预览本地全部已安装版本，确认后加 --yes；
+    不升级、不安装缺失版本、不清理旧版本
+  - --all-installed 不与 --all 或显式目标并用；也可指定版本单独修复
 
 选项：
   -u, --user                安装到用户 home [默认]
   -s, --system              将 app 数据安装到系统 home，并将命令安装到
                             TAFFISH_SYSTEM_BIN_DIR [/usr/local/bin]
   -n, --dry-run             输出安装计划，不修改文件
-  -y, --yes                 执行 --all 安装计划；仅可与 --all 一起使用
+  -y, --yes                 执行批量安装或修复计划
   -f, --force               替换此版本的已有安装
+      --repair              安全重建来源可验证的已有安装
   -a, --all                 安装 --kind 选中的所有 index app
-  -k, --kind <KIND>         按 tool、flow 或 all 过滤 --all [all]
+      --all-installed       选择全部已安装版本；必须配合 --repair
+  -k, --kind <KIND>         按 tool、flow 或 all 过滤批量目标 [all]
       --tools               --kind tool 的快捷形式
       --flows               --kind flow 的快捷形式
-      --prune-old           --all 后只保留本地最新版本
-  -j, --json                以 JSON 输出 --all 计划/结果；仅可与 --all 使用
+      --prune-old           --all 后安全清理同源旧版本
+  -j, --json                以 JSON 输出批量计划或结果
   --from <PROJECT-DIR>      从本地 TAFFISH 项目目录安装
   --prompt                  允许 git 在终端询问凭据
   -h, --help                显示此帮助
@@ -331,7 +357,11 @@ Hub 命令：
   taf install fastqc
   taf install taf-fastqc-v0.12.1-r1
   taf install --from .
-  taf install --all --tools --yes")
+  taf install --all --tools --yes
+  taf install --all --repair
+  taf install --all --repair --yes
+  taf install --all-installed --repair
+  taf install --all-installed --repair --yes")
    (cons "outdated"
          "用法：
   taf outdated [-h | --help]
@@ -343,7 +373,7 @@ Hub 命令：
 细节：
   - 读取本地安装元数据和 index/current.json
   - 不给出目标时检查所有本地已安装 app
-  - 默认文本只显示变化；全部为最新时输出 no changes
+  - 默认文本显示变化和维护阻塞原因；无需变更时输出 no changes
   - --json 为自动化保留 current/skipped 项
   - 本地/私有 --from 安装显示为 skipped，不会升级
   - 使用 taf upgrade 执行 install-latest 动作
@@ -375,10 +405,11 @@ Hub 命令：
 细节：
   - 不给出目标时检查所有本地已安装 app
   - 默认为 dry-run；使用 --yes 才执行计划
-  - 默认文本只显示变化；全部为最新时输出 no changes
+  - 默认文本显示变化和维护阻塞原因；无需变更时输出 no changes
   - --json 为自动化保留 current/skipped 项
   - 跳过本地/私有 --from 安装
-  - --prune-old 在升级成功后删除本地旧版本
+  - 在线目标使用 index.latest；不会自动降级较新的本地版本
+  - --prune-old 在升级成功且目标验证有效后清理同源旧版本
 
 选项：
   -u, --user                升级用户 home [默认]
@@ -390,7 +421,7 @@ Hub 命令：
   -k, --kind <KIND>         按 tool、flow 或 all 过滤 [all]
       --tools               --kind tool 的快捷形式
       --flows               --kind flow 的快捷形式
-      --prune-old           升级后只保留本地最新版本
+      --prune-old           升级后安全清理同源旧版本
       --prompt              允许 git 在终端询问凭据
   -j, --json                以 JSON 输出结果
   -h, --help                显示此帮助
@@ -410,9 +441,11 @@ Hub 命令：
 
 细节：
   - 不给出目标时检查所有本地已安装 app
-  - 为每个选定 app 保留本地最新版本
+  - 保留 index.latest 指定的、已有效安装的同源版本
+  - 没有有效 index.latest 或保留目标尚未有效安装时，跳过清理
+  - 保护私有、未知来源、较新及无法可靠比较的本地版本
   - 默认为 dry-run；使用 --yes 才删除旧版本
-  - 默认文本只显示可删除版本；没有变化时输出 no changes
+  - 文本显示可删除版本与受阻原因；JSON 保留全部项目
   - 保留共享容器镜像和 SIF 文件
 
 选项：
@@ -516,6 +549,8 @@ Hub 命令：
   taf doctor [-u | --user | -s | --system] [--shell SHELL]
   taf doctor [-i | --init] [-u | --user | -s | --system]
   taf doctor [-j | --json | --verbose] [--shell SHELL]
+  taf doctor index [-u | --user | -s | --system] [-j | --json | --verbose]
+  taf doctor hub [APP|COMMAND...] [-u | --user | -s | --system] [-j | --json | --verbose]
 
 检查或初始化本地 TAFFISH 环境。
 
@@ -527,13 +562,23 @@ Hub 命令：
   - 不编辑 shell/Vim 配置、权限、服务或容器状态
   - --init 为选定 scope 创建缺失目录
   - --system --init 需要 root 权限
+  - index 检查本地 JSON/格式/latest 引用；hub 还检查已安装文件
+  - hub 接受应用名或带版本命令；不指定目标则检查全部已安装版本
+  - 输出区分枚举总量、涉及问题的应用/版本数和问题项数
+  - 简洁输出合并重复问题；--verbose/--json 保留全部证据
+  - hub 文本模式在 stderr 显示进度；JSON 和 MCP 保持静默
+  - index/hub 离线只读，不接受 --init 或 --shell
+  - 预览包含旧版本的修复：taf install --all-installed --repair
+    加 --user 或 --system，与诊断作用域保持一致
+  - 旧清单缺失属于未验证，不代表确定损坏；不会自动修复
+  - index/hub 有阻断问题退出 1，成功或仅警告退出 0
 
 选项：
   -i, --init                创建缺失的 TAFFISH home 目录
   -u, --user                检查或初始化用户 home [默认]
   -s, --system              检查或初始化系统 home
   -j, --json                输出稳定 JSON 诊断
-  --verbose                 为每项检查输出 evidence 和 remediation
+  --verbose                显示每项检查的依据和处理建议
   --shell SHELL             检查 auto|bash|zsh|fish [默认：auto]
   -h, --help                显示此帮助")
    (cons "config"
@@ -698,6 +743,128 @@ Hub 命令：
  "taf.cli.unknown-option-or-argument"
  "[{command}] unknown option or argument: {option}"
  "[{command}] 未知选项或参数：{option}")
+
+(dolist
+    (entry
+     '(("taf.cli.error.list-commands"
+        "Run `taf --help` to list commands."
+        "运行 `taf --help` 查看命令列表。")
+       ("taf.cli.error.project-name-missing"
+        "[new] project name missing."
+        "[new] 缺少项目名称。")
+       ("taf.cli.error.no-arguments"
+        "[{command}] taf {command} does not accept arguments."
+        "[{command}] taf {command} 不接受参数。")
+       ("taf.cli.error.unknown-mode"
+        "[{command}] unknown {command} mode: {mode}"
+        "[{command}] 未知的 {command} 模式：{mode}")
+       ("taf.cli.error.requires-value"
+        "[{command}] {option} requires a value."
+        "[{command}] {option} 需要一个值。")
+       ("taf.cli.error.requires-positive-integer"
+        "[{command}] {option} requires a positive integer, but got: {value}"
+        "[{command}] {option} 需要正整数，实际收到：{value}")
+       ("taf.cli.error.requires-non-negative-integer"
+        "[{command}] {option} requires a non-negative integer, but got: {value}"
+        "[{command}] {option} 需要非负整数，实际收到：{value}")
+       ("taf.cli.error.conflict"
+        "[{command}] {left} and {right} can't be used together."
+        "[{command}] {left} 与 {right} 不能同时使用。")
+       ("taf.cli.error.help-alone"
+        "[{command}] -h/--help must be used alone."
+        "[{command}] -h/--help 必须单独使用。")
+       ("taf.cli.error.target-missing"
+        "[{command}] app name or command name missing."
+        "[{command}] 缺少应用名称或命令名称。")
+       ("taf.cli.error.keyword-missing"
+        "[search] keyword missing."
+        "[search] 缺少搜索关键词。")
+       ("taf.cli.error.standalone-version-batch"
+        "[{command}] standalone VERSION-ID is only supported with one target. Use exact versioned command names for batch operations."
+        "[{command}] 独立 VERSION-ID 仅支持单个目标；批量操作请使用带精确版本的命令名称。")
+       ("taf.cli.error.kind"
+        "[{command}] --kind must be tool, flow, or all, but got: {value}"
+        "[{command}] --kind 必须是 tool、flow 或 all，实际收到：{value}")
+       ("taf.cli.error.backend-build"
+        "[build] --backend requires docker or podman."
+        "[build] --backend 需要 docker 或 podman。")
+       ("taf.cli.error.backend-run"
+        "[run] --backend requires apptainer, podman or docker."
+        "[run] --backend 需要 apptainer、podman 或 docker。")
+       ("taf.cli.error.install-from-conflict"
+        "[install] --from can't be combined with --all, --yes, --json, --prune-old, or app/command targets."
+        "[install] --from 不能与 --all、--yes、--json、--prune-old 或应用/命令目标同时使用。")
+       ("taf.cli.error.install-all-targets"
+        "[install] --all can't be combined with app/command targets."
+        "[install] --all 不能与应用/命令目标同时使用。")
+       ("taf.cli.error.install-batch-only"
+        "[install] --json and --yes require --all or --all-installed --repair; --prune-old requires --all without --repair."
+        "[install] --json、--yes 需要 --all 或 --all-installed --repair；--prune-old 需要 --all 且不能与 --repair 并用。")
+       ("taf.cli.error.install-installed-requires-repair"
+        "[install] --all-installed requires --repair; it never installs missing versions."
+        "[install] --all-installed 必须配合 --repair；不会安装缺失版本。")
+       ("taf.cli.error.install-installed-conflict"
+        "[install] --all-installed cannot be combined with --all or explicit targets."
+        "[install] --all-installed 不能与 --all 或显式目标并用。")
+       ("taf.cli.error.install-from-once"
+        "[install] --from can only be given once."
+        "[install] --from 只能指定一次。")
+       ("taf.cli.error.all-explicit-targets"
+        "[{command}] --all can't be combined with explicit targets."
+        "[{command}] --all 不能与显式目标同时使用。")
+       ("taf.cli.error.doctor-shell-required"
+        "[doctor] --shell requires auto, bash, zsh, or fish."
+        "[doctor] --shell 需要 auto、bash、zsh 或 fish。")
+       ("taf.cli.error.doctor-shell-invalid"
+        "[doctor] invalid --shell value: {value}. Expected auto, bash, zsh, or fish."
+        "[doctor] 无效的 --shell 值：{value}。应为 auto、bash、zsh 或 fish。")
+       ("taf.cli.error.doctor-root-ambiguous"
+        "[doctor] running `taf doctor --init` as root is ambiguous. Use --system explicitly, or --user with TAFFISH_USER_HOME."
+        "[doctor] 以 root 运行 `taf doctor --init` 存在歧义；请显式使用 --system，或结合 TAFFISH_USER_HOME 使用 --user。")
+       ("taf.cli.error.config-show-language-only"
+        "[config] --show is only valid with `config language`."
+        "[config] --show 仅可与 `config language` 一起使用。")
+       ("taf.cli.error.config-show-value-conflict"
+        "[config] --show and a language value can't be used together."
+        "[config] --show 与语言值不能同时使用。")
+       ("taf.cli.error.config-language-options"
+        "[config] language does not accept profile or --force options."
+        "[config] language 不接受配置方案或 --force 选项。")
+       ("taf.cli.error.config-one-subcommand"
+        "[config] only one subcommand is allowed."
+        "[config] 只能指定一个子命令。")
+       ("taf.cli.error.history-record-requires"
+        "[history] --record-exec requires {option}."
+        "[history] --record-exec 需要 {option}。")
+       ("taf.cli.error.history-record-option"
+        "[history] unknown --record-exec option: {option}"
+        "[history] 未知的 --record-exec 选项：{option}")
+       ("taf.cli.error.history-path-clear-query"
+        "[history] --path/--clear can't be combined with query options."
+        "[history] --path/--clear 不能与查询选项同时使用。")
+       ("taf.cli.error.history-last-value"
+        "[history] --last requires N."
+        "[history] --last 需要 N。")
+       ("taf.cli.error.history-id-value"
+        "[history] --id requires RUN-ID."
+        "[history] --id 需要 RUN-ID。")))
+  (apply #'taffish.i18n:register-message entry))
+
+(defun %taf-cli-message (suffix &rest bindings)
+  (apply #'taffish.i18n:message-with
+         (format nil "taf.cli.error.~A" suffix)
+         bindings))
+
+(defun %taf-cli-repr (value)
+  (prin1-to-string value))
+
+(defun %taf-cli-error (suffix &rest bindings)
+  (error "~A" (apply #'%taf-cli-message suffix bindings)))
+
+(defun %taf-cli-error-with-help (suffix help &rest bindings)
+  (error "~A~%~A"
+         (apply #'%taf-cli-message suffix bindings)
+         help))
 
 (defun %taf-unknown-command-message (arguments)
   (taffish.i18n:message

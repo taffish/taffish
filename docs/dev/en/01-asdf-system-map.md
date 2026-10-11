@@ -1,6 +1,6 @@
 # ASDF System And Module Map
 
-TAFFISH uses ASDF to describe Common Lisp systems. The current main system is `taffish`, version `0.10.1`, and it depends on the built-in base library `han`. The ASDF file is not just build configuration; it is also an important architecture map.
+TAFFISH uses ASDF to describe Common Lisp systems. The current main system is `taffish`, version `0.11.0`, and it depends on the built-in base library `han`. The ASDF file is not just build configuration; it is also an important architecture map.
 
 ## Main System Load Order
 
@@ -40,13 +40,19 @@ taffish-cli
 
 taf-core
   package
+  version
+  display
+  progress
+  project/i18n
   project/common
+  project/digest
   project/new
   project/check
   project/compile
   project/build
   project/run
   project/publish
+  hub/i18n
   hub/update
   hub/info
   hub/search
@@ -54,9 +60,12 @@ taf-core
   hub/uninstall
   hub/list
   hub/which
+  hub/diagnostics
+  hub/repair
   hub/upgrade
   system/home
   system/config
+  system/history-i18n
   system/history
   system/doctor-i18n
   system/doctor
@@ -70,12 +79,33 @@ taf-cli
 taffish-mcp
   package
   protocol
+  i18n
+  compiler
+  app
+  project
   tools
   resources
   prompts
   server
   main
 ```
+
+## Development System
+
+`taffish.dev.asd` mirrors the production module and file order, then appends
+the corresponding `test.lisp` files to `taffish-i18n`, `taffish-core`, both
+CLI modules, each `taf-core` subsystem, and `taffish-mcp`. Development loads
+therefore test the same dependency order used by delivery while keeping test
+definitions out of release binaries.
+
+Shared `display` and `progress` helpers also have development-only test files.
+`progress` depends on the existing display-width helper and must load before
+the project and Hub command implementations that report human status.
+
+Whenever a production component is added, removed, or reordered, update
+`taffish.asd` and `taffish.dev.asd` together. The development system may add
+tests, but it must not silently define business behavior required only for
+tests.
 
 ## Meaning Behind Load Order
 
@@ -121,7 +151,7 @@ When adding a file, first decide which package responsibility it belongs to, the
 
 ## Checkpoints Before Editing ASDF
 
-Before editing `taffish.asd` or `vendor/han/han.asd`, check:
+Before editing `taffish.asd`, `taffish.dev.asd`, or `vendor/han/han.asd`, check:
 
 1. Whether the new file really needs to be loaded by the system.
 2. Whether every structure, function, or macro it depends on has already loaded before it.

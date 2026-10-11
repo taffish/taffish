@@ -26,6 +26,8 @@ taffish-core
 
 ## 公开 API
 
+慢操作内部共用[命令状态提示](command-progress.md)，不新增公开 API，也不改变机器结果。
+
 `taf-core/package.lisp` 导出的 API 覆盖三类能力：
 
 | 类别 | 示例 |
@@ -44,7 +46,9 @@ taffish-core
 2. hub index schema 和 package 解析放在 `hub/info.lisp` 等 hub 文件。
 3. 配置默认值和来源合并放在 `system/config.lisp`。
 4. 文件系统目录约定放在 `system/home.lisp`。
-5. CLI 文案和子命令分发尽量放在 `taf-cli`，不要塞回 `taf-core`。
+5. CLI help、参数解析和子命令分发属于 `taf-cli`；业务层人类消息应放在拥有其语义的
+   `taf-core` renderer 附近，并通过 `taffish.i18n` 渲染。
+6. 人类本地化不能改变 JSON、持久化状态、生成 shell、外部进程输出或 MCP 投影。
 
 ## 相关专题
 

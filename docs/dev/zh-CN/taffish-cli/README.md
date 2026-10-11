@@ -11,6 +11,36 @@
 `main.lisp` 在 dispatch 前通过 `taffish.i18n` 建立人类语言上下文。`i18n.lisp` 负责内置
 中英文 help 和顶层缺失命令诊断。编译器诊断与生成 shell 不进入本地化层。
 
+## 帮助与输入
+
+`taffish --help` 依次说明用法、输入、容器设置、示例、语言和联系入口。内置中英文
+暴露相同选项；`--version` 保持单行命令名和版本号。
+
+除帮助/版本选项和开头的 `--` 外，首参数为已存在的普通文件时选择文件输入，否则
+读取标准输入并把参数交给 TAF 程序。不存在的文件名也属于后一种情况，拼错文件名
+可能导致编译器等待终端输入。`taffish -- < example.taf > example.sh` 明确选择标准输入。
+
+`TAFFISH_CONTAINER_BACKEND` 可选 `apptainer`、`podman`、`docker`。未设置时，为通用
+`<container:...>` 标签自动选择可用后端；显式指定后端的标签不变。例如：
+
+```sh
+TAFFISH_CONTAINER_BACKEND=podman taffish example.taf > example.sh
+```
+
+编译通用容器标签时，指定的后端必须可用。该命令只生成 shell，不拉取镜像、不运行容器。
+三个 `TAFFISH_*_RUN_ARGS` 设置分别追加对应后端的运行参数；语言选择不改变这些变量名
+或生成的 shell。
+
+## 错误处理
+
+可执行入口使用同一内部错误边界覆盖 TAFFISH runtime I/O、语言初始化和逃逸的编译错误。
+错误使用 `[TAFFISH-ERROR]` 前缀写入 stderr，并以状态码 1 退出；编译器的行号、列号及
+定位符诊断保留。stderr 或错误呈现失败时仍以失败退出，不把用于生成 shell 的 stdout
+当作备用错误输出通道。
+
+这不会全局屏蔽库函数 condition 或 warning。实现相关的中断行为和错误边界限制见
+[han.host](../han/host.md)。
+
 ## 系统位置
 
 ```text

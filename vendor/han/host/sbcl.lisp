@@ -10,6 +10,54 @@
 (defun quit (&optional (code 0))
   (sb-ext:exit :code code))
 
+(defmacro prepare-runtime-io ()
+  "Prepare character I/O policy before configuring process streams."
+  t)
+
+(defun configure-runtime-io ()
+  "Configure portable command-line character I/O for this host."
+  t)
+
+(defun current-process-id ()
+  "Return the operating-system process ID of the current Lisp process."
+  (sb-unix:unix-getpid))
+
+(defun append-utf8-line (path line)
+  "Append LINE and one newline to PATH using O_APPEND and UTF-8 bytes."
+  (let* ((file (%->pathname path))
+         (text (%utf8-line-string line))
+         (octets (sb-ext:string-to-octets text :external-format :utf-8))
+         (flags (logior sb-unix:o_wronly
+                        sb-unix:o_creat
+                        sb-unix:o_append)))
+    (%ensure-parent-directories-for-file file)
+    (multiple-value-bind (file-descriptor open-error)
+        (sb-unix:unix-open (coerce (namestring file) 'simple-string)
+                           flags #o666)
+      (unless file-descriptor
+        (error "open(2) failed for append path ~A (errno ~A)."
+               (namestring file) open-error))
+      (unwind-protect
+           (loop with offset = 0
+                 while (< offset (length octets))
+                 do (multiple-value-bind (written write-error)
+                        (sb-unix:unix-write file-descriptor octets offset
+                                           (- (length octets) offset))
+                      (unless (and written (> written 0))
+                        (error "write(2) failed for append path ~A (errno ~A)."
+                               (namestring file) write-error))
+                      (incf offset written)))
+        (sb-unix:unix-close file-descriptor)))
+    file))
+
+(defun standard-input-terminal-p ()
+  "Return true when the process standard input file descriptor is a terminal."
+  (= (sb-unix:unix-isatty 0) 1))
+
+(defun standard-error-terminal-p ()
+  "Query process stderr (fd 2), not *ERROR-OUTPUT*, without reading or writing."
+  (= (sb-unix:unix-isatty 2) 1))
+
 (defun %sbcl-command-program-and-arguments (command)
   (cond
     ((and (consp command)

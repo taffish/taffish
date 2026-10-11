@@ -29,6 +29,13 @@
       (check-equal line 1)
       (check-equal column 1))))
 
+(deftest test-make-char-source-preserves-unicode ()
+  (let* ((text "你好，TAFFISH")
+         (src (han.source:make-char-source text)))
+    (check-equal (han.source:char-source-string src) text)
+    (check-equal (han.source:char-source-length src) (length text))
+    (check-equal (han.source:source-next-char src) (char text 0))))
+
 (deftest test-source-eof-p ()
   (let ((src (han.source:make-char-source "")))
     (check-equal (han.source:source-eof-p src) t))

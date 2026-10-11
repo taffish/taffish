@@ -142,7 +142,7 @@ taf_help_prune=$("$TAF_BIN" help prune)
 
 contains "$taf_help" "taf help [COMMAND]" "taf --help command help route"
 contains "$taf_help" "Project commands:" "taf --help project commands"
-contains "$taf_help" "outdated    Show installed apps" \
+contains "$taf_help" "outdated    Check installed apps" \
   "taf --help compact hub command list"
 contains "$taf_help_install" "Modes:" "taf help install modes"
 contains "$taf_help_install" "taf install --all --tools --yes" "taf help install examples"

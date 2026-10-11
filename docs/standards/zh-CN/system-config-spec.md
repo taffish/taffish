@@ -61,6 +61,9 @@ language 的情况。`en-US`、`zh-CN` 等值会规范化到内置 `en`、`zh`�
 语言只影响面向用户的表现。机器接口、config key、生成 shell 和 MCP 契约保持稳定。
 详见[本地化契约](localization.md)。
 
+外部 help 与运行时 message 组件彼此独立、均为可选。缺失或无效条目逐 semantic key 回退，
+不会改变同一命令其余输出已经选择的语言。
+
 使用 `taf config language` 查看解析结果和已发现语言包；使用
 `taf config language <LANGUAGE>` 更新偏好而不重写其他 config 内容。root 管理的 system
 scope 需要增加 `--system`。

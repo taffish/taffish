@@ -85,9 +85,11 @@ logs/
 | --- | --- |
 | 用户级缓存 | 用户运行 `taf doctor --init --user`，SIF 文件保存到自己的用户级 home。 |
 | 管理员预缓存 | root 先运行常用 app，让 SIF 在普通用户运行前已经存在于 system home。 |
-| 共享可写缓存 | 管理员设置 sticky 权限，例如 `chmod 1777 /opt/taffish/images/sif`。 |
+| 共享可写缓存 | 管理员显式使用 `--system --shared-sif-cache` 安装（或只对准确 SIF 目录应用等价的 sticky `1777` 策略）。 |
 
-共享可写缓存是站点策略决定。它对共享服务器很方便，但不应该由安装器静默自动设置。
+共享可写缓存是站点策略决定。它不会被静默选择：普通 system 安装会为缺失的 SIF 目录
+使用管理员管理的 `0755`，并保留已有目录的权限；只有显式 shared 策略才会把准确的
+`<system-home>/images/sif/` 设置并验证为 `1777`。
 
 ## hub index 文件
 

@@ -28,6 +28,12 @@
   message
   position)
 
+(defun %character-list-string (characters)
+  "Copy CHARACTERS into a full CHARACTER string without host narrowing."
+  (han.host:with-character-output-to-string (out)
+    (dolist (character characters)
+      (write-char character out))))
+
 (defun split-once (string split-char)
   (let ((len (length string)))
     (labels ((sb (index)

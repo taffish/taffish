@@ -9,7 +9,7 @@
 ;;;; ------------------------------------------------------------
 
 (defparameter *taf-version*
-  "taf         0.10.1")
+  "taf         0.11.0")
 
 (defun run-taf-version ()
   (format t "~A~%" *taf-version*))
@@ -39,49 +39,53 @@
     (format t "~%")))
 
 (defun %get-taf-help-string-english ()
-  "Usage:
-  taf [-h | --help]
-  taf [-v | --version]
+  "Manage TAFFISH projects, installed apps, and the local environment.
+
+Usage:
+  taf <COMMAND> [ARGS...]
   taf help [COMMAND]
   taf <COMMAND> [-h | --help]
-  taf <COMMAND> [ARGS...]
+  taf [-h | --help]
+  taf [-v | --version]
 
 Project commands:
-  new         Create a new TAFFISH app project
-  check       Check current TAFFISH app project
-  compile     Compile current project and print shell code
-  build       Build a versioned command wrapper or image
-  run         Compile and run current project
-  publish     Publish current project to GitHub
+  new         Create a tool or flow project
+  check       Check the current project
+  compile     Print the project's shell code without running it
+  build       Build a versioned command; optionally build a container image
+  run         Compile and run the current project
+  publish     Publish to GitHub or resume an interrupted publish
 
 Hub commands:
-  update      Update local TAFFISH index
+  update      Refresh the local index without upgrading apps
   search      Search apps in the local index
   info        Show indexed app/version information
   install     Install from the index or a local project
-  outdated    Show installed apps older than local index
-  upgrade     Install newer indexed versions
-  prune       Remove older locally installed versions
-  uninstall   Uninstall local apps or commands
+  outdated    Check installed apps for updates using the local index
+  upgrade     Upgrade installed apps using the local index
+  prune       Remove old versions that are safe to prune
+  uninstall   Uninstall installed apps
   list        List installed or indexed apps
-  which       Show local paths and metadata
+  which       Show installed command paths and metadata
 
 System commands:
-  doctor      Check or initialize TAFFISH environment
-  config      Show or manage TAFFISH runtime configuration
-  history     Show or clear local execution history
+  doctor      Diagnose the environment and local installs; read-only by default
+  config      Show or manage runtime configuration
+  history     Show or clear execution history
+
+Getting started:
+  taf update                  Fetch the app index
+  taf install fastqc          Install an app
+  taf help install            Show command options and examples
 
 Language:
-  taf config language             Show current and available languages
-  taf config language auto        Follow the host locale [default]
-  taf config language zh          Save built-in Chinese as the preference
-  TAFFISH_LANGUAGE=en taf --help  Override language for one command
+  taf config language         Show current and available languages
+  taf config language zh      Chinese; en: English; auto: host locale [default]
 
-Examples:
-  taf help install
-  taf update
-  taf install fastqc
-  taf run -- --help")
+More information:
+  Website: https://taffish.com
+  Hub: https://taffish.github.io/
+  Support: support@taffish.com")
 
 (defun %get-taf-command-help-string (command)
   (let ((cmd (and command
@@ -116,8 +120,9 @@ Examples:
       ((string= cmd "config") (%get-taf-config-help-string))
       ((string= cmd "history") (%get-taf-history-help-string))
       (t
-       (error "~A~%Run `taf --help` to list commands."
-              (%taf-help-unknown-command-message command))))))
+       (error "~A~%~A"
+              (%taf-help-unknown-command-message command)
+              (%taf-cli-message "list-commands"))))))
 
 (defun run-taf-help (&optional raw-args)
   (cond
@@ -173,8 +178,8 @@ Options:
       (%parse-taf-new-args raw-args)
     (cond
       ((null name)
-       (error "[new] project name missing.~%~A"
-              (%get-taf-new-help-string)))
+       (%taf-cli-error-with-help "project-name-missing"
+                                 (%get-taf-new-help-string)))
       ((member name '("-h" "--help") :test #'string-equal)
        (format t "~A~%" (%get-taf-new-help-string)))
       (t
@@ -209,8 +214,9 @@ Options:
           (member (car raw-args) '("-h" "--help") :test #'string-equal))
      (format t "~A~%" (%get-taf-check-help-string)))
     (t
-     (error "[check] taf check does not accept arguments.~%~A"
-            (%get-taf-check-help-string)))))
+     (%taf-cli-error-with-help "no-arguments"
+                               (%get-taf-check-help-string)
+                               :command "check"))))
 
 ;;;; ------------------------------------------------------------
 ;;;; run: project: compile
@@ -257,7 +263,9 @@ Note:
       (:compile
        (format t "~A" (taf.core:project-compile args)))
       (t
-       (error "[compile] unknown compile mode: ~S" mode)))))
+       (%taf-cli-error "unknown-mode"
+                       :command "compile"
+                       :mode (%taf-cli-repr mode))))))
 
 ;;;; ------------------------------------------------------------
 ;;;; run: project: build
@@ -312,7 +320,7 @@ The generated command uses that frozen snapshot instead of live src files.")
                   (parse (cdr args)))
                  ((%taf-option-p (car args) "-b" "--backend")
                   (unless (cadr args)
-                    (error "[build] --backend requires docker or podman."))
+                    (%taf-cli-error "backend-build"))
                   (setf backend (cadr args))
                   (parse (cddr args)))
                  (t
@@ -344,7 +352,9 @@ The generated command uses that frozen snapshot instead of live src files.")
                        :image-backend (getf (getf result :image) :backend)))
          result))
       (t
-       (error "[build] unknown build mode: ~S" mode)))))
+       (%taf-cli-error "unknown-mode"
+                       :command "build"
+                       :mode (%taf-cli-repr mode))))))
 
 ;;;; ------------------------------------------------------------
 ;;;; run: project: run
@@ -379,7 +389,7 @@ Note:
   for example `taf run -- -h` or `taf run -- --backend value`.")
 
 (defun %standard-input-terminal-p ()
-  (interactive-stream-p *standard-input*))
+  (han.host:standard-input-terminal-p))
 
 (defun %taf-run-input ()
   (if (%standard-input-terminal-p)
@@ -400,7 +410,7 @@ Note:
                   (values :run (cdr args) backend))
                  ((%taf-option-p (car args) "-b" "--backend")
                   (unless (cadr args)
-                    (error "[run] --backend requires apptainer, podman or docker."))
+                    (%taf-cli-error "backend-run"))
                   (setf backend (cadr args))
                   (parse (cddr args)))
                  (t
@@ -435,7 +445,9 @@ Note:
          (unless (and (integerp exit-code) (= exit-code 0))
            (han.host:quit (or exit-code 1)))))
       (t
-       (error "[run] unknown run mode: ~S" mode)))))
+       (%taf-cli-error "unknown-mode"
+                       :command "run"
+                       :mode (%taf-cli-repr mode))))))
 
 ;;;; ------------------------------------------------------------
 ;;;; run: project: publish
@@ -444,10 +456,10 @@ Note:
 (defun %get-taf-publish-help-string-english ()
   "Usage:
   taf publish [-h | --help]
-  taf publish [-n | --dry-run] [--latest | --pre] [-b | --build]
+  taf publish [-n | --dry-run] [--latest | --pre | --no-latest] [-b | --build]
               [-r | --release] [--create-repo] [--public | --private]
               [--no-lock-repo] [--prompt]
-  taf publish [-y | --yes] [--latest | --pre] [-b | --build]
+  taf publish [-y | --yes] [--latest | --pre | --no-latest] [-b | --build]
               [-r | --release] [--create-repo] [--public | --private]
               [--no-lock-repo] [--prompt]
 
@@ -459,25 +471,34 @@ Details:
   - checks remote tags named v<version>-r<release>
   - remote git checks are non-interactive unless --prompt is given
   - with --release, reads release.md and creates a GitHub release
+  - versions need not increase; an existing tag cannot be reused for different content
+  - without --release, only publishes Git tags; channel options do not set
+    GitHub Latest or Pre-release status
   - can create the GitHub repository when --create-repo is given
   - newly created repositories are locked by default:
     immutable releases are enabled and v* tags are protected from update/delete
+  - with --build, ensures an exact versioned wrapper and frozen snapshot before
+    establishing the release commit; unchanged valid artifacts are not rewritten
   - after an interruption, rerun the same command; matching repository, tag,
     and release stages are skipped, including a repository already created by
     --create-repo
+  - once a matching release commit or tag identity is established, a resumed
+    --build publish verifies that identity and skips rebuilding
   - a matching completed publish is a successful no-op for publish mutations
+    and does not reclaim Latest from a later release
   - rejects conflicting commits, tags, releases, or changed publish intent
   - commits, tags, pushes and optional release creation only when --yes is given
 
 Options:
   -n, --dry-run              Print publish plan only [default]
   -y, --yes                  Run publish actions: commit, tag, push and release
-  -b, --build                Build command wrapper before publishing
+  -b, --build                Idempotently ensure command wrapper before publish
   -r, --release              Read release.md from project root:
                               first line becomes publish message;
                               whole file becomes GitHub release notes
-  --latest                   Require a version newer than remote latest [default]
-  --pre                      Allow publishing a non-latest pre-release tag
+  --latest                  Mark the new GitHub Release as Latest [default]
+  --pre                     Create a GitHub Pre-release, not Latest
+  --no-latest               Create a formal GitHub Release without setting Latest
   --create-repo              Create GitHub repository if it is missing
   --public                   Create missing repository as public [default]
   --private                  Create missing repository as private
@@ -487,7 +508,9 @@ Options:
 
 Note:
   TAF does not manage GitHub login. Without --prompt, remote git commands
-  fail fast instead of asking for credentials.")
+  fail fast instead of asking for credentials.
+  --latest, --pre and --no-latest are mutually exclusive. Retry with the same
+  options and release.md; publish never changes an existing Release's type.")
 
 (defun %parse-taf-publish-args (raw-args)
   (let ((dry-run t)
@@ -497,6 +520,7 @@ Note:
         (yes-seen-p nil)
         (latest-seen-p nil)
         (pre-seen-p nil)
+        (no-latest-seen-p nil)
         (create-repo-p nil)
         (repo-visibility :public)
         (public-seen-p nil)
@@ -508,11 +532,18 @@ Note:
                (cond
                  ((null args)
                   (when (and dry-run-seen-p yes-seen-p)
-                    (error "[publish] --dry-run and --yes can't be used together."))
+                    (%taf-cli-error "conflict" :command "publish"
+                                    :left "--dry-run" :right "--yes"))
                   (when (and latest-seen-p pre-seen-p)
-                    (error "[publish] --latest and --pre can't be used together."))
+                    (%taf-cli-error "conflict" :command "publish"
+                                    :left "--latest" :right "--pre"))
+                  (when (and no-latest-seen-p (or latest-seen-p pre-seen-p))
+                    (%taf-cli-error "conflict" :command "publish"
+                                    :left "--no-latest"
+                                    :right (if latest-seen-p "--latest" "--pre")))
                   (when (and public-seen-p private-seen-p)
-                    (error "[publish] --public and --private can't be used together."))
+                    (%taf-cli-error "conflict" :command "publish"
+                                    :left "--public" :right "--private"))
                   (values :publish dry-run build-p channel
                           prompt-p create-repo-p repo-visibility
                           release-p lock-repo-p))
@@ -540,6 +571,10 @@ Note:
                  ((string= (car args) "--pre")
                   (setf channel :pre
                         pre-seen-p t)
+                  (parse (cdr args)))
+                 ((string= (car args) "--no-latest")
+                  (setf channel :no-latest
+                        no-latest-seen-p t)
                   (parse (cdr args)))
                  ((string= (car args) "--create-repo")
                   (setf create-repo-p t)
@@ -582,7 +617,9 @@ Note:
                                  :lock-repo-p lock-repo-p
                                  :release-p release-p))
       (t
-       (error "[publish] unknown publish mode: ~S" mode)))))
+       (%taf-cli-error "unknown-mode"
+                       :command "publish"
+                       :mode (%taf-cli-repr mode))))))
 
 ;;;; ------------------------------------------------------------
 ;;;; run: hub: update
@@ -617,12 +654,14 @@ Options:
         (system-seen-p nil))
     (labels ((require-value (args option)
                (or (cadr args)
-                   (error "[update] ~A requires a value." option)))
+                   (%taf-cli-error "requires-value"
+                                   :command "update" :option option)))
              (parse (args)
                (cond
                  ((null args)
                   (when (and user-seen-p system-seen-p)
-                    (error "[update] --user and --system can't be used together."))
+                    (%taf-cli-error "conflict" :command "update"
+                                    :left "--user" :right "--system"))
                   (values :update scope index-url yes-p))
                  ((and (null (cdr args))
                        (member (car args) '("-h" "--help") :test #'string-equal))
@@ -658,7 +697,9 @@ Options:
        (taf.core:hub-update :scope scope
                             :index-url index-url))
       (t
-       (error "[update] unknown update mode: ~S" mode)))))
+       (%taf-cli-error "unknown-mode"
+                       :command "update"
+                       :mode (%taf-cli-repr mode))))))
 
 ;;;; ------------------------------------------------------------
 ;;;; run: hub: search
@@ -691,8 +732,10 @@ Options:
                 (ignore-errors
                   (parse-integer value :junk-allowed nil)))))
     (unless (and n (> n 0))
-      (error "[search] ~A requires a positive integer, but got: ~S"
-             option-name value))
+      (%taf-cli-error "requires-positive-integer"
+                      :command "search"
+                      :option option-name
+                      :value (%taf-cli-repr value)))
     n))
 
 (defun %parse-taf-search-args (raw-args)
@@ -708,15 +751,19 @@ Options:
                     (char= (char value 0) #\-)))
              (require-value (args option)
                (or (cadr args)
-                   (error "[search] ~A requires a value." option)))
+                   (%taf-cli-error "requires-value"
+                                   :command "search" :option option)))
              (parse (args)
                (cond
                  ((null args)
                   (when (and user-seen-p system-seen-p)
-                    (error "[search] --user and --system can't be used together."))
+                    (%taf-cli-error "conflict" :command "search"
+                                    :left "--user" :right "--system"))
                   (when (null positionals)
-                    (error "[search] keyword missing.~%~A"
-                           (%get-taf-search-help-string)))
+                    (%taf-cli-error-with-help
+                     "keyword-missing"
+                     (%get-taf-search-help-string)
+                     ))
                   (values :search
                           scope
                           (format nil "~{~A~^ ~}" (nreverse positionals))
@@ -745,8 +792,9 @@ Options:
                   (parse (cddr args)))
                  ((and (member (car args) '("-h" "--help") :test #'string-equal)
                        positionals)
-                  (error "[search] -h/--help must be used alone.~%~A"
-                         (%get-taf-search-help-string)))
+                  (%taf-cli-error-with-help "help-alone"
+                                            (%get-taf-search-help-string)
+                                            :command "search"))
                  ((option-like-p (car args))
                   (error "~A~%~A"
                          (%taf-unknown-option-message "search" (car args))
@@ -768,7 +816,9 @@ Options:
                             :limit limit
                             :json-p json-p))
       (t
-       (error "[search] unknown search mode: ~S" mode)))))
+       (%taf-cli-error "unknown-mode"
+                       :command "search"
+                       :mode (%taf-cli-repr mode))))))
 
 ;;;; ------------------------------------------------------------
 ;;;; run: hub: info
@@ -793,17 +843,15 @@ Options:
   (let ((items (nreverse positionals)))
     (cond
       ((null items)
-       (error "[~A] app name or command name missing.~%~A"
-              label
-              help-string))
+       (%taf-cli-error-with-help "target-missing" help-string
+                                 :command label))
       ((and (= (length items) 2)
             (%taf-hub-version-id-string-p (second items)))
        (list (list :query (first items)
                    :version-id (second items))))
       ((some #'%taf-hub-version-id-string-p items)
-       (error "[~A] standalone VERSION-ID is only supported with one target. Use exact versioned command names for batch operations.~%~A"
-              label
-              help-string))
+       (%taf-cli-error-with-help "standalone-version-batch" help-string
+                                 :command label))
       (t
        (mapcar (lambda (item)
                  (list :query item :version-id nil))
@@ -821,8 +869,9 @@ Options:
     ((member value '("flow" "flows") :test #'string-equal) :flow)
     ((string-equal value "all") :all)
     (t
-     (error "[~A] --kind must be tool, flow, or all, but got: ~S"
-            label value))))
+     (%taf-cli-error "kind"
+                     :command label
+                     :value (%taf-cli-repr value)))))
 
 (defun %get-taf-info-help-string-english ()
   "Usage:
@@ -867,7 +916,8 @@ Options:
                (cond
                 ((null args)
                   (when (and user-seen-p system-seen-p)
-                    (error "[info] --user and --system can't be used together."))
+                    (%taf-cli-error "conflict" :command "info"
+                                    :left "--user" :right "--system"))
                   (let* ((targets
                            (%taf-hub-targets-from-positionals
                             positionals
@@ -897,8 +947,9 @@ Options:
                   (parse (cdr args)))
                  ((and (member (car args) '("-h" "--help") :test #'string-equal)
                        positionals)
-                  (error "[info] -h/--help must be used alone.~%~A"
-                         (%get-taf-info-help-string)))
+                  (%taf-cli-error-with-help "help-alone"
+                                            (%get-taf-info-help-string)
+                                            :command "info"))
                  ((option-like-p (car args))
                   (error "~A~%~A"
                          (%taf-unknown-option-message "info" (car args))
@@ -925,7 +976,9 @@ Options:
                               :version-id version-id
                               :json-p json-p)))
       (t
-       (error "[info] unknown info mode: ~S" mode)))))
+       (%taf-cli-error "unknown-mode"
+                       :command "info"
+                       :mode (%taf-cli-repr mode))))))
 
 ;;;; ------------------------------------------------------------
 ;;;; run: hub: install
@@ -938,6 +991,7 @@ Options:
   taf install [OPTIONS] <APP-NAME|TAF-COMMAND> <VERSION-ID>
   taf install [OPTIONS] --from <PROJECT-DIR>
   taf install [OPTIONS] --all
+  taf install [OPTIONS] --all-installed --repair
 
 Install a TAFFISH app from the local index or a local project.
 
@@ -946,6 +1000,7 @@ Modes:
   indexed exact        Install one app/command at an explicit VERSION-ID
   local project        Install a private project with --from <PROJECT-DIR>
   batch index          Plan or install all indexed apps selected by --kind
+  installed repair     Repair existing versions with --all-installed --repair
 
 Details:
   - accepts package names, for example my-tool
@@ -960,20 +1015,32 @@ Details:
   - --from searches upward for taffish.toml and records origin as
     [local-project] <PROJECT-ROOT>; it does not read the index
   - --all is dry-run by default; pass --yes to install
+  - --all targets index latest; it does not automatically downgrade local apps
+  - --prune-old requires a valid installed index latest and matching origins
+  - --repair rebuilds only existing, verifiable indexed installations;
+    it keeps backups, does not install missing apps/dependencies, and rejects
+    --force, --from and --prune-old. Preview first with --dry-run
+  - --all --repair checks installed index.latest targets only; other versions
+    require an explicit version target or --all-installed --repair
+  - --all-installed --repair previews all locally installed versions; --yes
+    applies the plan. It never upgrades, installs missing versions or prunes
+  - --all-installed cannot be combined with --all or explicit targets
 
 Options:
   -u, --user                Install into user home [default]
   -s, --system              Install app data into system home and command
                             into TAFFISH_SYSTEM_BIN_DIR [/usr/local/bin]
   -n, --dry-run             Print install plan without changing files
-  -y, --yes                 Apply --all install plan; only valid with --all
+  -y, --yes                 Apply a batch install/repair plan
   -f, --force               Replace an existing installation of this version
+      --repair              Safely rebuild a verifiable existing installation
   -a, --all                 Install all indexed apps selected by --kind
-  -k, --kind <KIND>         Filter --all by tool, flow, or all [all]
+      --all-installed       Select all installed versions; requires --repair
+  -k, --kind <KIND>         Filter batch targets by tool, flow, or all [all]
       --tools               Shortcut for --kind tool
       --flows               Shortcut for --kind flow
-      --prune-old           Keep only newest local versions after --all
-  -j, --json                Print --all plan/result as JSON; only with --all
+      --prune-old           Safely prune older indexed versions after --all
+  -j, --json                Print a batch plan/result as JSON
   --from <PROJECT-DIR>      Install from a local TAFFISH project directory
   --prompt                  Allow git to ask credentials through terminal
   -h, --help                Show this help
@@ -982,7 +1049,11 @@ Examples:
   taf install fastqc
   taf install taf-fastqc-v0.12.1-r1
   taf install --from .
-  taf install --all --tools --yes")
+  taf install --all --tools --yes
+  taf install --all --repair
+  taf install --all --repair --yes
+  taf install --all-installed --repair
+  taf install --all-installed --repair --yes")
 
 (defun %taf-install-targets-from-positionals (positionals)
   (%taf-hub-targets-from-positionals
@@ -992,6 +1063,8 @@ Examples:
 
 (defun %parse-taf-install-args (raw-args)
   (let ((scope :user)
+        (repair-p nil)
+        (all-installed-p nil)
         (dry-run-p nil)
         (yes-p nil)
         (force-p nil)
@@ -1010,19 +1083,30 @@ Examples:
                     (char= (char value 0) #\-)))
              (require-value (args option)
                (or (cadr args)
-                   (error "[install] ~A requires a value." option)))
+                   (%taf-cli-error "requires-value"
+                                   :command "install" :option option)))
              (parse (args)
                (cond
                  ((null args)
                   (when (and user-seen-p system-seen-p)
-                    (error "[install] --user and --system can't be used together."))
+                    (%taf-cli-error "conflict" :command "install"
+                                    :left "--user" :right "--system"))
                   (when (and dry-run-p yes-p)
-                    (error "[install] --dry-run and --yes can't be used together."))
+                    (%taf-cli-error "conflict" :command "install"
+                                    :left "--dry-run" :right "--yes"))
+                  (when (and all-installed-p (not repair-p))
+                    (%taf-cli-error "install-installed-requires-repair"))
+                  (when (and all-installed-p (or all-p positionals))
+                    (%taf-cli-error "install-installed-conflict"))
+                  (when (and repair-p (or force-p from-dir prune-old-p))
+                    (%taf-cli-error "conflict" :command "install" :left "--repair"
+                                    :right (cond (force-p "--force") (from-dir "--from") (t "--prune-old"))))
                   (cond
                     (from-dir
                      (when (or positionals all-p json-p prune-old-p yes-p)
-                       (error "[install] --from can't be combined with --all, --yes, --json, --prune-old, or app/command targets.~%~A"
-                              (%get-taf-install-help-string)))
+                       (%taf-cli-error-with-help
+                        "install-from-conflict"
+                        (%get-taf-install-help-string)))
                      (values :install-from-project
                              scope
                              nil
@@ -1037,10 +1121,11 @@ Examples:
                              nil
                              nil
                              nil))
-                    (all-p
+                    ((or all-p all-installed-p)
                      (when positionals
-                       (error "[install] --all can't be combined with app/command targets.~%~A"
-                              (%get-taf-install-help-string)))
+                       (%taf-cli-error-with-help
+                        "install-all-targets"
+                        (%get-taf-install-help-string)))
                      (values :install-all
                              scope
                              nil
@@ -1050,15 +1135,18 @@ Examples:
                              prompt-p
                              nil
                              nil
-                             t
+                             all-p
                              kind
                              yes-p
                              json-p
-                             prune-old-p))
+                             prune-old-p
+                             repair-p
+                             all-installed-p))
                     (t
                      (when (or json-p prune-old-p yes-p)
-                       (error "[install] --json, --yes, and --prune-old are only supported with --all.~%~A"
-                              (%get-taf-install-help-string)))
+                       (%taf-cli-error-with-help
+                        "install-batch-only"
+                        (%get-taf-install-help-string)))
                      (let* ((targets
                               (%taf-install-targets-from-positionals
                                positionals))
@@ -1076,7 +1164,8 @@ Examples:
                                kind
                                nil
                                nil
-                               nil)))))
+                               nil
+                               repair-p)))))
                  ((and (null (cdr args))
                        (member (car args) '("-h" "--help") :test #'string-equal)
                        (null positionals))
@@ -1098,8 +1187,14 @@ Examples:
                  ((%taf-option-p (car args) "-f" "--force")
                   (setf force-p t)
                   (parse (cdr args)))
+                 ((string= (car args) "--repair")
+                  (setf repair-p t)
+                  (parse (cdr args)))
                  ((%taf-option-p (car args) "-a" "--all")
                   (setf all-p t)
+                  (parse (cdr args)))
+                 ((string= (car args) "--all-installed")
+                  (setf all-installed-p t)
                   (parse (cdr args)))
                  ((%taf-option-p (car args) "-k" "--kind")
                   (setf kind (%taf-hub-parse-kind
@@ -1123,13 +1218,14 @@ Examples:
                   (parse (cdr args)))
                  ((string= (car args) "--from")
                   (when from-dir
-                    (error "[install] --from can only be given once."))
+                    (%taf-cli-error "install-from-once"))
                   (setf from-dir (require-value args "--from"))
                   (parse (cddr args)))
                  ((and (member (car args) '("-h" "--help") :test #'string-equal)
                        positionals)
-                  (error "[install] -h/--help must be used alone.~%~A"
-                         (%get-taf-install-help-string)))
+                  (%taf-cli-error-with-help "help-alone"
+                                            (%get-taf-install-help-string)
+                                            :command "install"))
                  ((option-like-p (car args))
                   (error "~A~%~A"
                          (%taf-unknown-option-message "install" (car args))
@@ -1142,7 +1238,7 @@ Examples:
 (defun run-taf-install (raw-args)
   (multiple-value-bind
         (mode scope query version-id dry-run-p force-p prompt-p targets from-dir
-         all-p kind yes-p json-p prune-old-p)
+         all-p kind yes-p json-p prune-old-p repair-p all-installed-p)
       (%parse-taf-install-args raw-args)
     (declare (ignore all-p))
     (case mode
@@ -1159,11 +1255,13 @@ Examples:
        (if (and targets
                 (cdr targets))
            (taf.core:hub-install-many :scope scope
+                                      :repair-p repair-p
                                       :targets targets
                                       :dry-run-p dry-run-p
                                       :force-p force-p
                                       :prompt-p prompt-p)
            (taf.core:hub-install :scope scope
+                                 :repair-p repair-p
                                  :query query
                                  :version-id version-id
                                  :dry-run-p dry-run-p
@@ -1171,6 +1269,8 @@ Examples:
                                  :prompt-p prompt-p)))
       (:install-all
        (taf.core:hub-install-all :scope scope
+                                 :repair-p repair-p
+                                 :all-installed-p all-installed-p
                                  :kind kind
                                  :dry-run-p dry-run-p
                                  :yes-p yes-p
@@ -1179,7 +1279,9 @@ Examples:
                                  :prune-old-p prune-old-p
                                  :json-p json-p))
       (t
-       (error "[install] unknown install mode: ~S" mode)))))
+       (%taf-cli-error "unknown-mode"
+                       :command "install"
+                       :mode (%taf-cli-repr mode))))))
 
 ;;;; ------------------------------------------------------------
 ;;;; run: hub: list
@@ -1214,8 +1316,10 @@ Options:
                 (ignore-errors
                   (parse-integer value :junk-allowed nil)))))
     (unless (and n (> n 0))
-      (error "[list] ~A requires a positive integer, but got: ~S"
-             option-name value))
+      (%taf-cli-error "requires-positive-integer"
+                      :command "list"
+                      :option option-name
+                      :value (%taf-cli-repr value)))
     n))
 
 (defun %parse-taf-list-args (raw-args)
@@ -1229,14 +1333,17 @@ Options:
         (online-seen-p nil))
     (labels ((require-value (args option)
                (or (cadr args)
-                   (error "[list] ~A requires a value." option)))
+                   (%taf-cli-error "requires-value"
+                                   :command "list" :option option)))
              (parse (args)
                (cond
                  ((null args)
                   (when (and user-seen-p system-seen-p)
-                    (error "[list] --user and --system can't be used together."))
+                    (%taf-cli-error "conflict" :command "list"
+                                    :left "--user" :right "--system"))
                   (when (and local-seen-p online-seen-p)
-                    (error "[list] --local and --online can't be used together."))
+                    (%taf-cli-error "conflict" :command "list"
+                                    :left "--local" :right "--online"))
                   (values :list scope list-mode limit json-p))
                  ((and (null (cdr args))
                        (member (car args) '("-h" "--help") :test #'string-equal))
@@ -1285,7 +1392,9 @@ Options:
                           :limit limit
                           :json-p json-p))
       (t
-       (error "[list] unknown list mode: ~S" mode)))))
+       (%taf-cli-error "unknown-mode"
+                       :command "list"
+                       :mode (%taf-cli-repr mode))))))
 
 ;;;; ------------------------------------------------------------
 ;;;; run: hub: outdated
@@ -1302,7 +1411,8 @@ Show installed TAFFISH apps that are older than the local index.
 Details:
   - reads local install metadata and index/current.json
   - with no target, checks all locally installed apps
-  - default text output shows only changes and prints no changes when current
+  - default text shows changes and blocked maintenance; hides current items
+  - prints no changes when there is nothing to change or explain
   - --json keeps current/skipped items for automation
   - local/private --from installs are shown as skipped, not upgraded
   - use taf upgrade to apply install-latest actions
@@ -1336,15 +1446,19 @@ Examples:
                     (char= (char value 0) #\-)))
              (require-value (args option)
                (or (cadr args)
-                   (error "[outdated] ~A requires a value." option)))
+                   (%taf-cli-error "requires-value"
+                                   :command "outdated" :option option)))
              (parse (args)
                (cond
                  ((null args)
                   (when (and user-seen-p system-seen-p)
-                    (error "[outdated] --user and --system can't be used together."))
+                    (%taf-cli-error "conflict" :command "outdated"
+                                    :left "--user" :right "--system"))
                   (when (and all-seen-p positionals)
-                    (error "[outdated] --all can't be combined with explicit targets.~%~A"
-                           (%get-taf-outdated-help-string)))
+                    (%taf-cli-error-with-help
+                     "all-explicit-targets"
+                     (%get-taf-outdated-help-string)
+                     :command "outdated"))
                   (values :outdated
                           scope
                           kind
@@ -1384,8 +1498,9 @@ Examples:
                   (parse (cdr args)))
                  ((and (member (car args) '("-h" "--help") :test #'string-equal)
                        positionals)
-                  (error "[outdated] -h/--help must be used alone.~%~A"
-                         (%get-taf-outdated-help-string)))
+                  (%taf-cli-error-with-help "help-alone"
+                                            (%get-taf-outdated-help-string)
+                                            :command "outdated"))
                  ((option-like-p (car args))
                   (error "~A~%~A"
                          (%taf-unknown-option-message "outdated" (car args))
@@ -1407,7 +1522,9 @@ Examples:
                               :json-p json-p
                               :targets targets))
       (t
-       (error "[outdated] unknown outdated mode: ~S" mode)))))
+       (%taf-cli-error "unknown-mode"
+                       :command "outdated"
+                       :mode (%taf-cli-repr mode))))))
 
 ;;;; ------------------------------------------------------------
 ;;;; run: hub: upgrade
@@ -1426,10 +1543,11 @@ Install newer indexed versions for locally installed TAFFISH apps.
 Details:
   - with no target, checks all locally installed apps
   - dry-run is the default; pass --yes to apply the plan
-  - default text output shows only changes and prints no changes when current
+  - default text shows changes/blockers; otherwise prints no changes
   - --json keeps current/skipped items for automation
   - local/private --from installs are skipped
   - --prune-old removes older local versions after successful upgrades
+  - index latest is the target; newer local/private versions are not downgraded
 
 Options:
   -u, --user                Upgrade user home [default]
@@ -1441,7 +1559,7 @@ Options:
   -k, --kind <KIND>         Filter by tool, flow, or all [all]
       --tools               Shortcut for --kind tool
       --flows               Shortcut for --kind flow
-      --prune-old           Keep only newest local versions after upgrade
+      --prune-old           Safely prune older indexed versions after upgrade
       --prompt              Allow git to ask credentials through terminal
   -j, --json                Print result as JSON
   -h, --help                Show this help
@@ -1470,17 +1588,22 @@ Examples:
                     (char= (char value 0) #\-)))
              (require-value (args option)
                (or (cadr args)
-                   (error "[upgrade] ~A requires a value." option)))
+                   (%taf-cli-error "requires-value"
+                                   :command "upgrade" :option option)))
              (parse (args)
                (cond
                  ((null args)
                   (when (and user-seen-p system-seen-p)
-                    (error "[upgrade] --user and --system can't be used together."))
+                    (%taf-cli-error "conflict" :command "upgrade"
+                                    :left "--user" :right "--system"))
                   (when (and dry-run-p yes-p)
-                    (error "[upgrade] --dry-run and --yes can't be used together."))
+                    (%taf-cli-error "conflict" :command "upgrade"
+                                    :left "--dry-run" :right "--yes"))
                   (when (and all-seen-p positionals)
-                    (error "[upgrade] --all can't be combined with explicit targets.~%~A"
-                           (%get-taf-upgrade-help-string)))
+                    (%taf-cli-error-with-help
+                     "all-explicit-targets"
+                     (%get-taf-upgrade-help-string)
+                     :command "upgrade"))
                   (values :upgrade
                           scope
                           kind
@@ -1540,8 +1663,9 @@ Examples:
                   (parse (cdr args)))
                  ((and (member (car args) '("-h" "--help") :test #'string-equal)
                        positionals)
-                  (error "[upgrade] -h/--help must be used alone.~%~A"
-                         (%get-taf-upgrade-help-string)))
+                  (%taf-cli-error-with-help "help-alone"
+                                            (%get-taf-upgrade-help-string)
+                                            :command "upgrade"))
                  ((option-like-p (car args))
                   (error "~A~%~A"
                          (%taf-unknown-option-message "upgrade" (car args))
@@ -1569,7 +1693,9 @@ Examples:
                              :json-p json-p
                              :targets targets))
       (t
-       (error "[upgrade] unknown upgrade mode: ~S" mode)))))
+       (%taf-cli-error "unknown-mode"
+                       :command "upgrade"
+                       :mode (%taf-cli-repr mode))))))
 
 ;;;; ------------------------------------------------------------
 ;;;; run: hub: prune
@@ -1586,9 +1712,12 @@ Remove older locally installed TAFFISH app versions.
 
 Details:
   - with no target, checks all locally installed apps
-  - keeps the newest local version for each selected app
+  - retains the valid, same-source installed version named by index latest
+  - skips apps without a usable index latest or a valid installed target
+  - protects private, unknown-source, newer and unorderable local versions
   - dry-run is the default; pass --yes to delete old versions
-  - default text output shows only removable versions and prints no changes
+  - text shows removable versions and blocked maintenance; JSON keeps all items
+  - prints no changes when there is nothing to remove or explain
   - keeps shared container images and SIF files
 
 Options:
@@ -1624,17 +1753,22 @@ Examples:
                     (char= (char value 0) #\-)))
              (require-value (args option)
                (or (cadr args)
-                   (error "[prune] ~A requires a value." option)))
+                   (%taf-cli-error "requires-value"
+                                   :command "prune" :option option)))
              (parse (args)
                (cond
                  ((null args)
                   (when (and user-seen-p system-seen-p)
-                    (error "[prune] --user and --system can't be used together."))
+                    (%taf-cli-error "conflict" :command "prune"
+                                    :left "--user" :right "--system"))
                   (when (and dry-run-p yes-p)
-                    (error "[prune] --dry-run and --yes can't be used together."))
+                    (%taf-cli-error "conflict" :command "prune"
+                                    :left "--dry-run" :right "--yes"))
                   (when (and all-seen-p positionals)
-                    (error "[prune] --all can't be combined with explicit targets.~%~A"
-                           (%get-taf-prune-help-string)))
+                    (%taf-cli-error-with-help
+                     "all-explicit-targets"
+                     (%get-taf-prune-help-string)
+                     :command "prune"))
                   (values :prune
                           scope
                           kind
@@ -1682,8 +1816,9 @@ Examples:
                   (parse (cdr args)))
                  ((and (member (car args) '("-h" "--help") :test #'string-equal)
                        positionals)
-                  (error "[prune] -h/--help must be used alone.~%~A"
-                         (%get-taf-prune-help-string)))
+                  (%taf-cli-error-with-help "help-alone"
+                                            (%get-taf-prune-help-string)
+                                            :command "prune"))
                  ((option-like-p (car args))
                   (error "~A~%~A"
                          (%taf-unknown-option-message "prune" (car args))
@@ -1707,7 +1842,9 @@ Examples:
                            :json-p json-p
                            :targets targets))
       (t
-       (error "[prune] unknown prune mode: ~S" mode)))))
+       (%taf-cli-error "unknown-mode"
+                       :command "prune"
+                       :mode (%taf-cli-repr mode))))))
 
 ;;;; ------------------------------------------------------------
 ;;;; run: hub: uninstall
@@ -1760,7 +1897,8 @@ Options:
                (cond
                 ((null args)
                   (when (and user-seen-p system-seen-p)
-                    (error "[uninstall] --user and --system can't be used together."))
+                    (%taf-cli-error "conflict" :command "uninstall"
+                                    :left "--user" :right "--system"))
                   (let* ((targets
                            (%taf-hub-targets-from-positionals
                             positionals
@@ -1794,8 +1932,9 @@ Options:
                   (parse (cdr args)))
                  ((and (member (car args) '("-h" "--help") :test #'string-equal)
                        positionals)
-                  (error "[uninstall] -h/--help must be used alone.~%~A"
-                         (%get-taf-uninstall-help-string)))
+                  (%taf-cli-error-with-help "help-alone"
+                                            (%get-taf-uninstall-help-string)
+                                            :command "uninstall"))
                  ((option-like-p (car args))
                   (error "~A~%~A"
                          (%taf-unknown-option-message "uninstall" (car args))
@@ -1825,7 +1964,9 @@ Options:
                                    :dry-run-p dry-run-p
                                    :force-p force-p)))
       (t
-       (error "[uninstall] unknown uninstall mode: ~S" mode)))))
+       (%taf-cli-error "unknown-mode"
+                       :command "uninstall"
+                       :mode (%taf-cli-repr mode))))))
 
 ;;;; ------------------------------------------------------------
 ;;;; run: hub: which
@@ -1872,7 +2013,8 @@ Options:
                (cond
                 ((null args)
                   (when (and user-seen-p system-seen-p)
-                    (error "[which] --user and --system can't be used together."))
+                    (%taf-cli-error "conflict" :command "which"
+                                    :left "--user" :right "--system"))
                   (let* ((targets
                            (%taf-hub-targets-from-positionals
                             positionals
@@ -1902,8 +2044,9 @@ Options:
                   (parse (cdr args)))
                  ((and (member (car args) '("-h" "--help") :test #'string-equal)
                        positionals)
-                  (error "[which] -h/--help must be used alone.~%~A"
-                         (%get-taf-which-help-string)))
+                  (%taf-cli-error-with-help "help-alone"
+                                            (%get-taf-which-help-string)
+                                            :command "which"))
                  ((option-like-p (car args))
                   (error "~A~%~A"
                          (%taf-unknown-option-message "which" (car args))
@@ -1930,7 +2073,9 @@ Options:
                                :version-id version-id
                                :json-p json-p)))
       (t
-       (error "[which] unknown which mode: ~S" mode)))))
+       (%taf-cli-error "unknown-mode"
+                       :command "which"
+                       :mode (%taf-cli-repr mode))))))
 
 ;;;; ------------------------------------------------------------
 ;;;; run: doctor
@@ -1942,6 +2087,8 @@ Options:
   taf doctor [-u | --user | -s | --system] [--shell SHELL]
   taf doctor [-i | --init] [-u | --user | -s | --system]
   taf doctor [-j | --json | --verbose] [--shell SHELL]
+  taf doctor index [-u | --user | -s | --system] [-j | --json | --verbose]
+  taf doctor hub [APP|COMMAND...] [-u | --user | -s | --system] [-j | --json | --verbose]
 
 Check or initialize the local TAFFISH environment.
 
@@ -1953,6 +2100,16 @@ Details:
   - does not edit shell/Vim config, permissions, services or container state
   - --init creates missing directories for the selected scope
   - --system --init requires root permission
+  - index checks local JSON/schema/latest references; hub also checks installed files
+  - hub accepts app names or versioned commands; no targets means all installed versions
+  - output separates enumerated totals from affected apps/versions and issue counts
+  - concise output groups repeated issues; --verbose/--json preserve all evidence
+  - hub shows progress on stderr in text mode; JSON and MCP remain quiet
+  - index/hub are offline, read-only and do not accept --init or --shell
+  - missing old manifests are unverified, not proof of damage; no automatic repair
+  - preview repairs including old versions: taf install --all-installed --repair
+    add --user or --system to match the diagnosed scope
+  - index/hub exit 1 for blocking problems, 0 for success or warnings only
 
 Options:
   -i, --init                Create missing TAFFISH home directories
@@ -1971,16 +2128,23 @@ Options:
         (system-seen-p nil)
         (json-p nil)
         (verbose-p nil)
+        (check :environment)
+        (targets nil)
+        (shell-seen-p nil)
         (shell :auto))
     (labels ((parse (args)
                (cond
                  ((null args)
                   (when (and user-seen-p system-seen-p)
-                    (error "[doctor] --user and --system can't be used together."))
+                    (%taf-cli-error "conflict" :command "doctor"
+                                    :left "--user" :right "--system"))
                   (when (and json-p verbose-p)
-                    (error "[doctor] --json and --verbose can't be used together."))
+                    (%taf-cli-error "conflict" :command "doctor"
+                                    :left "--json" :right "--verbose"))
+                  (when (and (not (eql check :environment)) (or init-p shell-seen-p))
+                    (taf.core::%doctor-error "check-options"))
                   (values :doctor init-p scope scope-seen-p
-                          json-p verbose-p shell))
+                          json-p verbose-p shell check (nreverse targets)))
                  ((and (null (cdr args))
                        (member (car args) '("-h" "--help") :test #'string-equal))
                   (values :help nil nil nil nil nil nil))
@@ -2004,15 +2168,24 @@ Options:
                   (setf verbose-p t)
                   (parse (cdr args)))
                  ((string-equal (car args) "--shell")
+                  (setf shell-seen-p t)
                   (unless (cdr args)
-                    (error "[doctor] --shell requires auto, bash, zsh, or fish."))
+                    (%taf-cli-error "doctor-shell-required"))
                   (let ((value (second args)))
                     (unless (member value '("auto" "bash" "zsh" "fish")
                                     :test #'string-equal)
-                      (error "[doctor] invalid --shell value: ~S. Expected auto, bash, zsh, or fish."
-                             value))
+                      (%taf-cli-error "doctor-shell-invalid"
+                                      :value (%taf-cli-repr value)))
                     (setf shell (intern (string-upcase value) :keyword)))
                   (parse (cddr args)))
+                 ((and (eql check :environment)
+                       (member (car args) '("index" "hub") :test #'string=))
+                  (setf check (if (string= (car args) "index") :index :hub))
+                  (parse (cdr args)))
+                 ((and (eql check :hub) (plusp (length (car args)))
+                       (not (char= (char (car args) 0) #\-)))
+                  (push (car args) targets)
+                  (parse (cdr args)))
                  (t
                   (error "~A~%~A"
                          (%taf-unknown-option-message "doctor" (car args))
@@ -2020,7 +2193,7 @@ Options:
       (parse raw-args))))
 
 (defun run-taf-doctor (raw-args)
-  (multiple-value-bind (mode init-p scope scope-seen-p json-p verbose-p shell)
+  (multiple-value-bind (mode init-p scope scope-seen-p json-p verbose-p shell check targets)
       (%parse-taf-doctor-args raw-args)
     (case mode
       (:help
@@ -2029,14 +2202,17 @@ Options:
        (when (and init-p
                   (not scope-seen-p)
                   (taf.core::%root-user-p))
-         (error "[doctor] running `taf doctor --init` as root is ambiguous. Use --system explicitly, or --user with TAFFISH_USER_HOME."))
+         (%taf-cli-error "doctor-root-ambiguous"))
        (taf.core:system-doctor :init-p init-p
+                               :check check :targets targets
                                :scope scope
                                :shell shell
                                :detail-p verbose-p
                                :json-p json-p))
       (t
-       (error "[doctor] unknown doctor mode: ~S" mode)))))
+       (%taf-cli-error "unknown-mode"
+                       :command "doctor"
+                       :mode (%taf-cli-repr mode))))))
 
 ;;;; ------------------------------------------------------------
 ;;;; run: config
@@ -2097,21 +2273,22 @@ Examples:
                (cond
                  ((null args)
                   (when (and user-seen-p system-seen-p)
-                    (error "[config] --user and --system can't be used together."))
+                    (%taf-cli-error "conflict" :command "config"
+                                    :left "--user" :right "--system"))
                   (when (and language-show-p (not (eql mode :language)))
-                    (error "[config] --show is only valid with `config language`."))
+                    (%taf-cli-error "config-show-language-only"))
                   (when (and language-show-p language)
-                    (error "[config] --show and a language value can't be used together."))
+                    (%taf-cli-error "config-show-value-conflict"))
                   (when (and (eql mode :language)
                              (or profile-seen-p force-p))
-                    (error "[config] language does not accept profile or --force options."))
+                    (%taf-cli-error "config-language-options"))
                   (values mode scope profile force-p language))
                  ((member (car args) '("-h" "--help") :test #'string-equal)
                   (values :help nil nil nil))
                  ((member (car args) '("show" "path" "init" "language")
                           :test #'string-equal)
                   (when mode-seen-p
-                    (error "[config] only one subcommand is allowed."))
+                    (%taf-cli-error "config-one-subcommand"))
                   (setf mode (cond
                                ((string-equal (car args) "show") :config)
                                ((string-equal (car args) "path") :path)
@@ -2129,13 +2306,15 @@ Examples:
                   (parse (cdr args)))
                  ((string= (car args) "--github")
                   (when profile-seen-p
-                    (error "[config] --github and --china can't be used together."))
+                    (%taf-cli-error "conflict" :command "config"
+                                    :left "--github" :right "--china"))
                   (setf profile :github
                         profile-seen-p t)
                   (parse (cdr args)))
                  ((string= (car args) "--china")
                   (when profile-seen-p
-                    (error "[config] --github and --china can't be used together."))
+                    (%taf-cli-error "conflict" :command "config"
+                                    :left "--github" :right "--china"))
                   (setf profile :china
                         profile-seen-p t)
                   (parse (cdr args)))
@@ -2175,7 +2354,9 @@ Examples:
       (:language
        (taf.core:system-config-language :scope scope :language language))
       (t
-       (error "[config] unknown config mode: ~S" mode)))))
+       (%taf-cli-error "unknown-mode"
+                       :command "config"
+                       :mode (%taf-cli-repr mode))))))
 
 ;;;; ------------------------------------------------------------
 ;;;; run: history
@@ -2211,8 +2392,10 @@ Options:
                 (ignore-errors
                   (parse-integer value :junk-allowed nil)))))
     (unless (and n (> n 0))
-      (error "[history] ~A requires a positive integer, but got: ~S"
-             option-name value))
+      (%taf-cli-error "requires-positive-integer"
+                      :command "history"
+                      :option option-name
+                      :value (%taf-cli-repr value)))
     n))
 
 (defun %parse-taf-history-nonnegative-integer (value option-name)
@@ -2220,8 +2403,10 @@ Options:
                 (ignore-errors
                   (parse-integer value :junk-allowed nil)))))
     (unless (and n (>= n 0))
-      (error "[history] ~A requires a non-negative integer, but got: ~S"
-             option-name value))
+      (%taf-cli-error "requires-non-negative-integer"
+                      :command "history"
+                      :option option-name
+                      :value (%taf-cli-repr value)))
     n))
 
 (defun %taf-history-empty-string-to-nil (value)
@@ -2249,17 +2434,21 @@ Options:
         (app-args nil))
     (labels ((require-value (args option)
                (unless (cadr args)
-                 (error "[history] ~A requires a value." option))
+                 (%taf-cli-error "requires-value"
+                                 :command "history" :option option))
                (cadr args))
              (parse (args)
                (cond
                  ((null args)
                   (unless status
-                    (error "[history] --record-exec requires --status."))
+                    (%taf-cli-error "history-record-requires"
+                                    :option "--status"))
                   (unless command
-                    (error "[history] --record-exec requires --command."))
+                    (%taf-cli-error "history-record-requires"
+                                    :option "--command"))
                   (unless exit-code
-                    (error "[history] --record-exec requires --exit-code."))
+                    (%taf-cli-error "history-record-requires"
+                                    :option "--exit-code"))
                   (values
                    :record-exec
                    (list :event "exec"
@@ -2338,8 +2527,8 @@ Options:
                          "--exit-code"))
                   (parse (cddr args)))
                  (t
-                  (error "[history] unknown --record-exec option: ~S"
-                         (car args))))))
+                  (%taf-cli-error "history-record-option"
+                                  :option (%taf-cli-repr (car args)))))))
       (parse raw-args))))
 
 (defun %parse-taf-history-args (raw-args)
@@ -2357,23 +2546,24 @@ Options:
                    (cond
                      ((null args)
                       (when (and path-seen-p clear-seen-p)
-                        (error "[history] --path and --clear can't be used together."))
+                        (%taf-cli-error "conflict" :command "history"
+                                        :left "--path" :right "--clear"))
                       (when (and (or path-p clear-p)
                                  (or id json-p (not (= last 20))))
-                        (error "[history] --path/--clear can't be combined with query options."))
+                        (%taf-cli-error "history-path-clear-query"))
                       (values :history last id json-p path-p clear-p))
                      ((and (null (cdr args))
                            (member (car args) '("-h" "--help") :test #'string-equal))
                       (values :help nil nil nil nil nil))
                      ((%taf-option-p (car args) "-l" "--last")
                       (unless (cadr args)
-                        (error "[history] --last requires N."))
+                        (%taf-cli-error "history-last-value"))
                       (setf last (%parse-taf-history-positive-integer
                                   (cadr args) "--last"))
                       (parse (cddr args)))
                      ((%taf-option-p (car args) "-i" "--id")
                       (unless (cadr args)
-                        (error "[history] --id requires RUN-ID."))
+                        (%taf-cli-error "history-id-value"))
                       (setf id (cadr args))
                       (parse (cddr args)))
                      ((%taf-option-p (car args) "-j" "--json")
@@ -2409,4 +2599,6 @@ Options:
       (:record-exec
        (apply #'%record-taf-history-event last))
       (t
-       (error "[history] unknown history mode: ~S" mode)))))
+       (%taf-cli-error "unknown-mode"
+                       :command "history"
+                       :mode (%taf-cli-repr mode))))))

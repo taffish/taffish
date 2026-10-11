@@ -90,6 +90,8 @@ taffish.config/v1
 
 可选外部语言包位于 user/system home 下的 `share/locales/<locale>/`。它们不是必需目录，
 `doctor --init` 不会创建或下载语言包。即使整个外部 locale tree 不存在，内置中英文仍可用。
+help 文件和 `messages.json` 是独立的稀疏组件；缺失或无效条目逐 key 回退，不会禁用有效
+sibling。
 
 `taf config language` 是只读发现与状态入口；`taf config language <LANGUAGE>` 更新 user
 scope，增加 `--system` 后在 root 权限下更新 system scope。窄 writer 会保留所有非 language

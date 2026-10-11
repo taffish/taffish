@@ -25,7 +25,7 @@
   (cond
     ((null value) "")
     ((%arg-token-list-p value)
-     (format nil "~{~A~^ ~}"
+     (%format-character-string "~{~A~^ ~}"
              (mapcar (lambda (token)
                        (%shell-token-string
                         (han.args:arg-token-text token)))
@@ -55,7 +55,7 @@
              (let ((parts nil))
                (dolist (taf-token (taf-line-tokens taf-line))
                  (push (%resolve-taf-token taf-token args-result) parts))
-               (format nil "~{~A~}" (nreverse parts)))))
+               (%format-character-string "~{~A~}" (nreverse parts)))))
           :number (taf-line-line-number taf-line))))
 
 (defun %resolve-taf-subtag-line (taf-line args-result)
@@ -95,7 +95,7 @@
            (type-of taf-result)))
   (let* ((resolved-body (%resolve-blocks taf-result))
          (shell-blocks (%emit-resolved-body resolved-body taf-result emitters)))
-    (format nil "#!/bin/sh~%~%~{~A~%~}" shell-blocks)))
+    (%format-character-string "#!/bin/sh~%~%~{~A~%~}" shell-blocks)))
 
 (defun compile-taf-program (taf-program &optional (emitters *taf-emitters*))
   (declare (ignore emitters))

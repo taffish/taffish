@@ -10,7 +10,9 @@
 
 | 文件 | 作用 |
 | --- | --- |
+| `i18n.lisp` | 注册 project 人类消息并渲染本地化状态/错误，不改变 project 数据。 |
 | `common.lisp` | 项目通用常量、路径、helper。 |
+| `digest.lisp` | build 与 publish 身份检查共享的私有、可移植 SHA-256 helper。 |
 | `new.lisp` | 创建 taf-app 项目骨架。 |
 | `check.lisp` | 读取并验证 `taffish.toml` 和入口文件。 |
 | `compile.lisp` | 编译项目 TAF。 |
@@ -50,3 +52,5 @@
 2. `taffish.toml` 的字段变化是否影响已有 taf-app。
 3. build 或 publish 产物是否仍能被 hub index 描述。
 4. README、completion 和 CLI help 是否需要更新。
+5. 英文/中文人类输出变化时，生成 shell、project metadata、history 与 publish state 是否仍
+   保持语言不变。
