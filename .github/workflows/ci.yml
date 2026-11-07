@@ -10,10 +10,17 @@ permissions:
   contents: read
 
 jobs:
-  sbcl-tests:
-    name: SBCL tests and script syntax
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
+  source-tests:
+    name: Source / ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
 
     steps:
       - name: Checkout
@@ -21,21 +28,63 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install runtime tools
+      - name: Install Linux runtime tools
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y sbcl zsh fish gnupg shellcheck
 
-      - name: Run Common Lisp tests
-        env:
-          XDG_CACHE_HOME: ${{ github.workspace }}/.cache
+      # macos-15 is the standard arm64 runner; do not use an Intel runner for
+      # the darwin-arm64 release payloads in the separate release job below.
+      - name: Install macOS runtime tools
+        if: runner.os == 'macOS'
+        run: brew install sbcl fish gnupg shellcheck zstd
+
+      - name: Record source and runtime identity
         run: |
-          sbcl --load load-taffish.dev.lisp \
+          git rev-parse HEAD
+          git status --short
+          uname -sm
+          sbcl --version
+          command -v gpg gpgv
+
+      - name: Run TAFFISH Common Lisp tests
+        env:
+          XDG_CACHE_HOME: ${{ runner.temp }}/taffish-unit-cache
+        run: |
+          sbcl --no-userinit --no-sysinit --disable-debugger --load load-taffish.dev.lisp \
             --eval '(multiple-value-bind (passed failed) (han.test:run-all-tests) (declare (ignore passed)) (when (> failed 0) (sb-ext:exit :code 1)))' \
             --quit
 
+      - name: Run independent Han tests
+        env:
+          XDG_CACHE_HOME: ${{ runner.temp }}/han-unit-cache
+        run: |
+          sbcl --no-userinit --no-sysinit --disable-debugger --load vendor/han/load-han.dev.lisp \
+            --eval '(multiple-value-bind (passed failed) (han.test:run-all-tests) (declare (ignore passed)) (when (> failed 0) (sb-ext:exit :code 1)))' \
+            --quit
+
+      - name: Build current source outside target
+        run: sh test/ci-build.sh "$RUNNER_TEMP/taffish-source-build"
+
+      - name: Run complete external suite against current source
+        run: |
+          test/run-tests.sh \
+            --taf "$RUNNER_TEMP/taffish-source-build/taf" \
+            --taffish "$RUNNER_TEMP/taffish-source-build/taffish" \
+            --taffish-mcp "$RUNNER_TEMP/taffish-source-build/taffish-mcp" \
+            2>&1 | tee "$RUNNER_TEMP/source-external.log"
+          # Temporary builds have no release signature. No other skip is allowed;
+          # signed payload behavior is required independently in release-payloads.
+          awk '/^\[SKIP\] / && $0 != "[SKIP] installer/gpg-verification" { bad=1 } END { exit bad }' \
+            "$RUNNER_TEMP/source-external.log"
+          printf '%s\n' 'Source suite: temporary SBCL build; release GPG coverage belongs to the release-payloads jobs.' \
+            >> "$GITHUB_STEP_SUMMARY"
+
       - name: Check installer scripts
         run: |
+          sh -n test/ci-build.sh
+          shellcheck -s sh test/ci-build.sh
           install/generate-installers.sh --check
           sh -n install/generate-installers.sh
           sh -n install/install-taffish.template.sh
@@ -48,18 +97,6 @@ jobs:
           shellcheck -s sh install/install-taffish.sh
           shellcheck -s sh install/install-taffish.gitee.sh
 
-      - name: Run installer conformance tests
-        run: |
-          test/run-tests.sh --filter installer/
-
-      - name: Require installer GPG verification coverage
-        run: |
-          test/run-tests.sh --filter installer/gpg-verification
-
-      - name: Check root-only system installer policies
-        run: |
-          sudo test/run-tests.sh --filter installer/system-permissions
-
       - name: Check shell completions
         run: |
           bash -n completion/bash/taf
@@ -69,12 +106,57 @@ jobs:
           fish -n completion/fish/taf.fish
           fish -n completion/fish/taffish.fish
 
-      - name: Check release checksums
+  # This is an independent mandatory gate, not evidence supplied by source-tests.
+  # Frozen payloads must fail newly added regressions until maintainers rebuild
+  # and sign the final candidate through the separately authorized release flow.
+  release-payloads:
+    name: Release payload / ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Linux release verification tools
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gnupg
+
+      - name: Install macOS release verification tools
+        if: runner.os == 'macOS'
+        run: brew install gnupg zstd
+
+      - name: Check all release checksums and manifest signature
         run: |
           cd target
           shasum -a 256 -c SHA256SUMS
           keydir=$(mktemp -d)
+          trap 'rm -rf "$keydir"' EXIT
           keyring=$keydir/release.gpg
           gpg --batch --yes --dearmor --output "$keyring" TAFFISH-RELEASE-KEY.asc
           gpgv --keyring "$keyring" SHA256SUMS.asc SHA256SUMS
-          rm -rf "$keydir"
+
+      - name: Require signed-payload installer GPG coverage
+        run: test/run-tests.sh --filter installer/gpg-verification
+
+      - name: Check root-only system installer policies
+        run: sudo env "PATH=$PATH" test/run-tests.sh --filter installer/system-permissions
+
+      - name: Run complete external suite against release payloads
+        run: |
+          test/run-tests.sh 2>&1 | tee "$RUNNER_TEMP/release-external.log"
+          if grep '^\[SKIP\] ' "$RUNNER_TEMP/release-external.log"; then
+            echo 'Release payload acceptance requires every case to execute.' >&2
+            exit 1
+          fi

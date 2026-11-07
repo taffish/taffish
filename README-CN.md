@@ -112,7 +112,7 @@ Docker、Podman 或 Apptainer，并由相应 backend 获取镜像；后续运行
 
 | 平台 | 资产后缀 | 构建后端 | 说明 |
 | --- | --- | --- | --- |
-| macOS Apple Silicon | `darwin-arm64` | SBCL | 需要 Homebrew 的 `zstd` 运行时库。 |
+| macOS Apple Silicon | `darwin-arm64` | SBCL | macOS 15.0 或更高；需要 Homebrew 的 `zstd` 运行时库。 |
 | Linux x86_64 | `linux-amd64` | LispWorks | 运行依赖很少；需要基于 glibc 的 Linux。 |
 
 当前未提供：
@@ -158,9 +158,10 @@ SIF 镜像缓存仍然需要一个可写目录。普通 `--system` 安装会让 
 curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sh -s -- --version 0.11.0 --user
 ```
 
-官方安装默认使用 `--verify auto`：选中的二进制必须匹配该 tag 的 `SHA256SUMS`；GPG
-工具可用时还会校验签名 manifest。可以先下载安装器并使用 `--dry-run`，在不联网、不写
-文件的情况下查看解析后的路径、策略和校验模式。
+官方安装默认使用 `--verify auto`。每个选中的二进制都必须匹配该 tag 的 `SHA256SUMS`。
+安装器取得签名和发布公钥，且本机同时有 `gpg` 和 `gpgv` 时，还会验证清单签名。
+如需强制验签，使用 `--verify gpg`。下载好安装器后，可以用 `--dry-run` 离线预览
+路径与校验设置，无需写入文件。
 
 ### 中国地区用户
 
@@ -223,7 +224,15 @@ curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffis
 
 ### 验证安装
 
-用户级安装后验证：
+用户级安装包含两个命令目录：`~/.local/bin` 保存三个 TAFFISH 核心命令，
+`~/.local/share/taffish/bin` 保存以后通过 `taf install` 安装的 app 命令。
+先在当前 shell 中运行下行，并将它加入 shell 配置文件，供下次打开终端时使用：
+
+```sh
+export PATH="$HOME/.local/bin:$HOME/.local/share/taffish/bin:$PATH"
+```
+
+确认三个命令都显示刚安装的版本，再检查用户环境：
 
 ```sh
 taf --version
@@ -231,16 +240,6 @@ taffish --version
 taffish-mcp --version
 taf doctor --user
 ```
-
-用户级安装包含两个命令目录：`~/.local/bin` 保存三个 TAFFISH 核心命令，
-`~/.local/share/taffish/bin` 保存以后通过 `taf install` 安装的 app 命令。
-应把两者都加入 shell 配置文件：
-
-```sh
-export PATH="$HOME/.local/bin:$HOME/.local/share/taffish/bin:$PATH"
-```
-
-然后打开一个新 shell，或者运行 `source ~/.zshrc` / `source ~/.bashrc`。
 
 系统级安装后，应显式检查 system scope：
 
@@ -306,8 +305,8 @@ sha256sum 或 shasum
 curl or wget
 ```
 
-默认 `--verify auto` 模式可以不安装 `gpg` 和 `gpgv`，但安装后会启用 signed manifest
-校验；显式选择 `--verify gpg` 时两者都是必需依赖。
+`auto` 模式下，`gpg` 和 `gpgv` 是可选依赖。如需强制验证清单签名，使用 `--verify gpg`，
+并确保这两个工具、签名和发布公钥都可用。
 
 `taf update` 默认从 GitHub 下载 TAFFISH index。在 GitHub raw 内容被阻断或网络不稳定的环境中，安装本身仍然可以完成，但 `taf update` 可能会输出 warning。可以之后重试：
 
@@ -322,6 +321,9 @@ taf update --url INDEX_URL
 ```
 
 ### macOS 依赖
+
+当前 `darwin-arm64` 二进制的 Mach-O 元数据声明最低系统为 macOS 15.0。更早系统
+不在这批预编译载荷的支持基线内；这是构建要求，不表示每个符合要求的系统版本都已实测。
 
 当前 macOS 二进制由 SBCL 构建，并动态链接 Homebrew 的 `zstd` 库：
 
@@ -591,10 +593,10 @@ enabled = true
 ```
 
 默认 `auto` 校验模式下，GitHub/Gitee 官方载荷必须先逐个匹配 `SHA256SUMS`，安装器
-才会替换任何核心命令。如果存在 `gpg` 和 `gpgv`，安装器还会使用内置的 TAFFISH
-release key fingerprint 校验签名 manifest。自定义源缺少 manifest 时仍可在 `auto`
-模式使用，但会被明确报告为未校验；使用 `--verify sha256` 或 `--verify gpg` 可以把
-对应等级设为强制要求。
+才会替换任何核心命令。签名、发布公钥、`gpg` 和 `gpgv` 齐备时，安装器还会按内置的
+TAFFISH 公钥指纹验证清单签名。缺少其中任一项，官方安装仍可在 SHA256 校验通过后继续。
+自定义源缺少清单时，`auto` 模式会报告未校验。使用 `--verify sha256` 或 `--verify gpg`
+可强制要求相应的校验级别。
 
 安装器使用 home 级安装锁、候选二进制 `--version` smoke test 和三个核心命令的事务
 替换。除非明确给出 `--force`，它不会覆盖无关文件；未完成的 binary/receipt commit
@@ -639,22 +641,37 @@ system = /usr/local/bin/{taf,taffish,taffish-mcp}
 
 ## 本地或离线安装
 
-从已下载的 release bundle 安装：
+`v0.11.0` tag 发布后，在可联网的机器上下载该版本的 **Source code (tar.gz)**。
+归档中包含安装器、正式二进制及其签名清单：
 
 ```sh
-sh install/install-taffish.sh --archive ./taffish-0.11.0-target.tar.gz --user
+curl -fL -o taffish-0.11.0.tar.gz https://github.com/taffish/taffish/archive/refs/tags/v0.11.0.tar.gz
 ```
 
-从显式 bundle URL 安装：
+将 `taffish-0.11.0.tar.gz` 复制到离线机器上的一个空目录。在该目录下取出安装器，
+用原归档安装：
 
 ```sh
-sh install/install-taffish.sh --url https://example.org/taffish.tar.gz --user
+tar -xzf taffish-0.11.0.tar.gz taffish-0.11.0/install/install-taffish.sh
+sh taffish-0.11.0/install/install-taffish.sh --user --archive ./taffish-0.11.0.tar.gz --no-update --verify gpg
+```
+
+`--no-update` 跳过联网更新索引。`--verify gpg` 要求本机有 `gpg` 和 `gpgv`，
+并使用归档内的材料验证清单签名。安装完成后按[验证安装](#验证安装)检查。
+
+如需通过指定的归档 URL 在线安装，同一安装器也支持 `--url`：
+
+```sh
+sh taffish-0.11.0/install/install-taffish.sh --url https://example.org/taffish.tar.gz --user
 ```
 
 Bundle 结构：
 
 ```text
 target/
+  SHA256SUMS
+  SHA256SUMS.asc
+  TAFFISH-RELEASE-KEY.asc
   taf-<os>-<arch>-<version>
   taffish-<os>-<arch>-<version>
   taffish-mcp-<os>-<arch>-<version>
@@ -1470,10 +1487,9 @@ target/TAFFISH-RELEASE-KEY.asc
 [v0.11.0 发布说明](docs/releases/v0.11.0.zh-CN.md)，另有
 [英文版](docs/releases/v0.11.0.md)。
 
-v0.11.0 Raw 安装器会在安装前使用 `SHA256SUMS` 校验每一个选中的官方二进制。
-默认 `auto` 模式在 `gpg` 和 `gpgv` 可用时，还会使用内置 release key fingerprint
-校验签名 manifest；使用 `--verify gpg` 可强制要求该步骤，使用
-`--verify sha256` 可强制只要求 checksum。
+v0.11.0 Raw 安装器默认会在安装前使用 `SHA256SUMS` 校验每一个选中的官方二进制。
+`auto` 模式下，签名、公钥、`gpg` 和 `gpgv` 齐备时，安装器还会按内置公钥指纹验证清单签名。
+使用 `--verify gpg` 可强制要求有效签名，使用 `--verify sha256` 可强制只检查 SHA256。
 
 载荷校验并不能独立认证通过 `curl | sh` 获取的安装器脚本本身。高安全 bootstrap 应先
 通过独立可信渠道获得并检查固定 tag 的安装器或 release bundle，按下文手动校验 manifest

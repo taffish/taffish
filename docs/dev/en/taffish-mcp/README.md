@@ -12,6 +12,15 @@
 
 It must not become a second implementation of project, Hub, or compiler behavior. If a rule belongs to TAFFISH itself, it should live in `taffish-core` or `taf-core`; MCP should call it and shape the result.
 
+## Compilation Boundary
+
+Source, file, project and installed-app compilation share the core inline
+boundary rules described in [Argument Passing](../../../standards/en/argument-passing.md).
+The compiler's source/part metadata stays internal; tool schemas and JSON shapes
+are unchanged. Summary fields that list lines containing `[[taf:` are lexical
+candidates, not resolved dependencies or proof that a call will execute. MCP
+compilation does not execute the generated shell or child apps.
+
 ## Human CLI Help And Machine Language Boundary
 
 `taffish-mcp -h`, `taffish-mcp --help`, and `taffish-mcp help` are human CLI

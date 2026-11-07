@@ -13,6 +13,8 @@
   [TAFFISH 快速开始](https://github.com/taffish/taffish-docs/blob/main/zh/quick-start.cn.md)。
 - 从源码构建或参与开发：从[开发者手册](dev/README.zh-CN.md)和
   [从源码构建](dev/zh-CN/build-from-source.md)开始。
+- 编写 Flow：组合普通参数、`@:`、`*ARGV*` 和 taf-app 命令模式之前，先阅读
+  [参数替换、转发与展示](standards/zh-CN/argument-passing.md)。
 - 维护安装器：阅读贴近源码的[安装器手册](../install/README-CN.md)，其中说明 provider
   生成、载荷校验、事务、权限和 conformance test 契约。
 - 维护者检查 release：同时阅读当前的

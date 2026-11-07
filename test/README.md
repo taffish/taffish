@@ -32,6 +32,25 @@ For local unsuffixed builds:
   --taffish-mcp ./target/taffish-mcp
 ```
 
+For a current-source SBCL development build that leaves official `target/`
+payloads untouched, use a new empty directory outside the checkout:
+
+```sh
+build_dir=$(mktemp -d)
+sh test/ci-build.sh "$build_dir"
+./test/run-tests.sh \
+  --taf "$build_dir/taf" \
+  --taffish "$build_dir/taffish" \
+  --taffish-mcp "$build_dir/taffish-mcp"
+```
+
+The build script keeps compilation caches and build logs in that directory.
+These unsigned binaries cannot supply release-signature evidence. CI runs
+current-source checks separately from signed release-payload acceptance: the
+source suite permits only `installer/gpg-verification` to skip, while the
+release suite permits no skips. Linux/SBCL source builds do not replace the
+maintainer's Linux/LispWorks delivery validation.
+
 Rerun only cases whose names contain a literal substring:
 
 ```sh
@@ -96,7 +115,30 @@ Current suites:
   `$@[...]` arguments across Docker, Podman, and Apptainer using local command
   shims for deterministic backend discovery, plus concurrent delivered-binary
   compilation to catch temporary-file collisions and process cross-talk.
-- `taf-project/conformance.sh`: real `taf new/check/compile/build` project
+  `taffish/argument-contract.py` adds offline compiler cases for scalar text, block
+  token forwarding/display, raw and quoted `*ARGV*`, command-mode shell text,
+  three-level compilation, delayed expansion, empty input, source-only inline
+  boundaries and non-evaluating failure diagnostics. Run
+  `--filter taffish/argument-contract`. Argument counts and
+  contents are checked after actual shell execution, including quotes, `$HOME`,
+  backslashes, whitespace, and Unicode. Nested tests use shell-only `--compile`
+  adapters that invoke the real compiler, not installed Hub apps or containers.
+  Empty strings, mixed quotes and `]]` are also checked through nested calls.
+  `--filter taffish/argument-contract-inline-` includes SPACE/TAB/mixed separators,
+  an explicit `--compile` followed by TAB, and full or indented comment lines
+  containing valid, empty or unclosed inline markers. A harmless child records
+  NUL-delimited argv and detects accidental entry into its run branch. Project
+  checks/builds must discover only real dependencies without invoking children;
+  live compilation and frozen wrappers must agree after the source changes.
+  MCP source/file compilation must return valid shell without invoking children;
+  the test harness then executes that text separately to check its semantics.
+  These regressions require rebuilt binaries containing the inline fixes. The
+  old release candidates intentionally fail; no real apps or containers run.
+  See the bilingual
+  [argument guide](../docs/standards/en/argument-passing.md).
+- `taf-project/conformance.sh`: `taf-project/inline-source-boundaries` checks
+  matching source dependency discovery, live compilation and frozen wrappers.
+  The suite also exercises real `taf new/check/compile/build` project
   workflows, built-wrapper behavior, concurrent wrapper pipelines, `taf run`
   stdin forwarding, exact build idempotency including dotless version strings,
   and offline publish transaction recovery at each remote boundary. Fake

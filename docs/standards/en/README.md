@@ -12,6 +12,7 @@ Module docs explain where code lives and how modules interact; specification doc
 - [TAF Language Contract](taf-language-contract.md)
 - [TAF Language Specification Draft](taf-language-spec.md)
 - [Generated Shell Contract](generated-shell-contract.md)
+- [Argument Substitution, Forwarding, And Display](argument-passing.md)
 - [TAFFISH Project Specification](taffish-project-spec.md)
 - [TAFFISH Home And System Layout Specification](system-home-spec.md)
 - [TAFFISH Configuration Specification](system-config-spec.md)

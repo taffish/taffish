@@ -1728,6 +1728,8 @@ _taf_project_case_publish_stage_output() {
 }
 
 run_taf_project_conformance() {
+  run_case "taf-project/inline-source-boundaries" \
+    python3 "$TAFFISH_TEST_REPO_ROOT/test/taffish/argument-contract.py" project-boundaries
   run_case "taf-project/publish-stage-output" _taf_project_case_publish_stage_output
   run_case "taf-project/new-check-compile-from-nested" _taf_project_case_new_check_compile_from_nested
   run_case "taf-project/smoke-placeholder-boundary" \

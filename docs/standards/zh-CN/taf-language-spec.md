@@ -133,6 +133,9 @@ lexer 对参数 token 的处理规则：
 
 其他反斜杠序列按普通文本保留。
 
+普通参数值按文本替换，传入的 block token 列表则逐参数进行 shell 编码。
+两者的区别、带引号的展示方式、空参数和内联源码边界，见[参数替换、转发与展示](argument-passing.md)。
+
 ## 内置参数
 
 以下参数名由上下文提供，未在 `ARGS` 中声明也可以使用：
@@ -143,7 +146,7 @@ lexer 对参数 token 的处理规则：
 | `*HOMEDIR*` | `taf-context-homedir` 或绑定系统。 |
 | `*WORKDIR*` | `taf-context-workdir` 或绑定系统。 |
 | `*LOADDIR*` | `taf-context-loaddir`。 |
-| `*ARGV*` | `taf-context-argv`。 |
+| `*ARGV*` | 将 `taf-context-argv` 用空格连接，不逐参数进行 shell 编码。 |
 | `*CMD*` | `taf-context-cmd`。 |
 | `*CPUS*` | `taf-context-cpus`。 |
 | `*CONTAINER*` | `taf-context-container`。 |
@@ -182,6 +185,16 @@ parser 不应直接读取真实 CLI 参数，compiler 不应重新解释 `ARGS` 
 | `<podman:IMAGE>` | 指定 Podman。 |
 | `<apptainer:IMAGE>` | 指定 Apptainer。 |
 | `<docker/podman:IMAGE>` | 从给定后端列表中选择可用后端。 |
+
+从源码编译的 `<taffish>` 行只使用源码文本确定 `[[taf: ...]]` 的开始和结束，替换进来
+的参数不改变该结构。调用内的源码引号可以保护 `]]`。命令前缀检查、`--compile`
+处理和 shell 解释仍使用替换后的文本。其他 emitter 和参数引用规则不变，内联调用
+仍限于单行。
+
+完整注释行（首个非 SPACE/TAB 字符为 `#`）保持为注释，不扫描其中的内联标记，
+包括空内容或未闭合的 `[[taf:` 文本。分类来自源码，不由替换参数值决定；此规则
+不扩展到普通代码后的尾部 shell 注释。内联命令名和首个 `--compile` 选项都接受
+SPACE/TAB 分隔，具体边界和引用规则见[参数替换、转发与展示](argument-passing.md)。
 
 container tag 可以在 `$` 后传入 runtime arguments。旧的 `$ARGS` 会应用到所有选中后端。
 结构化 `$@[backend: ARGS]` block 只会应用到匹配后端：

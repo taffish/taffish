@@ -47,6 +47,8 @@
 
 (defun parse-token (string)
   (let ((len (length string)))
+    (when (zerop len)
+      (return-from parse-token (values :value string)))
     (if (= len 2)
         (let ((c0 (char string 0))
               (ce (char string 1)))

@@ -411,21 +411,6 @@
 (defun %dependency-ws-char-p (char)
   (member char '(#\Space #\Tab #\Newline #\Return) :test #'char=))
 
-(defun %dependency-subseq-prefix-p (string index prefix)
-  (and (<= (+ index (length prefix)) (length string))
-       (loop for i from 0 below (length prefix)
-             always (char= (char prefix i)
-                           (char string (+ index i))))))
-
-(defun %dependency-find-taf-ref-close (string start)
-  (let ((len (length string)))
-    (labels ((scan (index)
-               (cond
-                 ((>= index len) nil)
-                 ((%dependency-subseq-prefix-p string index "]]") index)
-                 (t (scan (1+ index))))))
-      (scan start))))
-
 (defun %dependency-first-word (string)
   (let* ((clean (%trim-string string))
          (len (length clean)))
@@ -434,41 +419,29 @@
                      len)))
         (subseq clean 0 end)))))
 
-(defun %scan-taf-dependency-queries-in-line (line &key (error-prefix "[check]"))
-  (let ((deps nil)
-        (len (length line)))
-    (labels ((scan (index)
-               (when (< index len)
-                 (cond
-                   ((and (char= (char line index) #\\)
-                         (< (1+ index) len)
-                         (member (char line (1+ index)) '(#\[ #\])
-                                 :test #'char=))
-                    (scan (+ index 2)))
-                   ((%dependency-subseq-prefix-p line index "[[taf:")
-                    (let* ((content-start (+ index (length "[[taf:")))
-                           (close (%dependency-find-taf-ref-close
-                                   line content-start)))
-                      (unless close
-                        (%project-error "check-flow-ref-unclosed"
-                                        :prefix error-prefix
-                                        :line line))
-                      (let ((command (%dependency-first-word
-                                      (subseq line content-start close))))
-                        (when (%blank-string-p command)
-                          (%project-error "check-flow-ref-empty"
-                                          :prefix error-prefix
-                                          :line line))
-                        (unless (%string-prefix-p "taf-" command)
-                          (%project-error "check-flow-command"
-                                          :prefix error-prefix
-                                          :value (%project-repr command)))
-                        (push command deps))
-                      (scan (+ close 2))))
-                   (t
-                    (scan (1+ index)))))))
-      (scan 0))
-    (nreverse deps)))
+(defun %scan-taf-dependency-queries-in-line
+    (line &key (error-prefix "[check]") source-line)
+  (let* ((source (or source-line (first (taffish.core:lex-taf line))))
+         (nodes
+           (when source (handler-case
+               (taffish.emitter.builtins.taffish::%scan-inline-parts
+                (taffish.emitter.builtins.taffish::%source-inline-parts source)
+                (taffish.core:taf-line-line-number source) line)
+             (taffish.core:taffish-error ()
+               (%project-error "check-flow-ref-unclosed" :prefix error-prefix :line line)))))
+         (deps nil))
+    (dolist (node nodes (nreverse deps))
+      (when (eq (getf node :kind) :taf-app)
+        (let ((command
+                (%dependency-first-word
+                 (taffish.emitter.builtins.taffish::%inline-parts-string
+                  (getf node :parts)))))
+          (when (%blank-string-p command)
+            (%project-error "check-flow-ref-empty" :prefix error-prefix :line line))
+          (unless (%string-prefix-p "taf-" command)
+            (%project-error "check-flow-command" :prefix error-prefix
+                            :value (%project-repr command)))
+          (push command deps))))))
 
 (defun %taffish-block-p (block)
   (let ((head (car block)))
@@ -484,6 +457,7 @@
           (when (eql (taffish.core:taf-line-kind line) :code)
             (dolist (dep (%scan-taf-dependency-queries-in-line
                           (taffish.core:taf-line-raw-string line)
+                          :source-line line
                           :error-prefix error-prefix))
               (pushnew dep deps :test #'string=))))))
     (nreverse deps)))

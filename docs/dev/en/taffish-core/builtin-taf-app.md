@@ -34,6 +34,12 @@ blastn ...
 
 then `taf-app` treats it as command mode. In this mode it does not use the original block lines; instead, it joins the full argv into one line and delegates that line to `next-tag`.
 
+This is a space join without per-argument quoting. It applies even when the
+original body has no `*ARGV*` token. Literal shell quoting or variable references
+in argv can intentionally become shell syntax; ordinary caller quoting alone does
+not preserve space-containing values through this join. Examples and limitations:
+[Argument Passing](../../../standards/en/argument-passing.md).
+
 This works with the missing-required ignore logic in `binder.lisp`:
 
 1. The binder checks whether a `<taf-app:...>` block exists.

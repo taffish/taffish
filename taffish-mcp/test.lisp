@@ -488,6 +488,83 @@ Initial MCP project test release.
     (han.test:check-true
      (search "echo hello" (han.json:get-json structured "shell")))))
 
+(han.test:deftest test-taffish-mcp-source-and-file-inline-boundaries ()
+  (let* ((root (%mcp-test-temp-root))
+         (file (han.path:join-path root "main.taf"))
+         (source (format nil "<taffish>~%[[taf: taf-child ::(@:)step:: ]]~%"))
+         (args (han.json:json-array "taffish" "@step:" "sample]].fa" "a'b\"c")))
+    (unwind-protect
+         (progn
+           (%mcp-test-write-file file source)
+           (dolist (entry `(("taffish_compile_source" "source" ,source)
+                            ("taffish_compile_file" "path" ,(han.path:->namestring file))))
+             (destructuring-bind (tool key value) entry
+               (let* ((result (call-tool tool (%json-object (cons key value) (cons "args" args))))
+                      (data (%mcp-test-structured result))
+                      (shell (han.json:get-json data "shell"))
+                      (json (han.json:encode-json data)))
+                 (han.test:check-equal nil (han.json:get-json result "isError"))
+                 (han.test:check-equal t (han.json:get-json data "ok"))
+                 (han.test:check-true (search "sample]].fa" shell))
+                 (han.test:check-equal nil (search "taffish_step_2=" shell))
+                 (han.test:check-equal nil (search "resolved-parts" json))
+                 (han.test:check-equal nil (search "source-line" json))))))
+      (han.path:delete-directory-tree root :if-does-not-exist :ignore))))
+
+(han.test:deftest test-taffish-mcp-project-and-app-inline-boundaries ()
+  (with-mcp-project (root project-dir nested-dir)
+    (%mcp-test-write-file
+     (han.path:join-path project-dir "src" "main.taf")
+     (format nil "<taffish>~%[[taf: taf-child ::(@:)step:: ]]~%"))
+    (let ((user-home (han.path:join-path root "user"))
+          (system-home (han.path:join-path root "system"))
+          (args (han.json:json-array "@step:" "sample]].fa" "a'b\"c")))
+      (let ((index (%mcp-test-app-index project-dir)))
+        (loop while (search "mcp-demo" index)
+              do (setf index (%mcp-test-replace-substring index "mcp-demo" "mcp-project")))
+        (%mcp-test-write-current-index user-home index))
+      (taf.core:hub-install-from-project :start-dir project-dir :user-home user-home
+                                         :system-home system-home :verbose nil)
+      (dolist (entry
+                (list (list "taffish_compile_project"
+                            (%json-object (cons "startDir" (han.path:->namestring nested-dir))
+                                          (cons "args" args)))
+                      (list "taffish_compile_app_invocation"
+                            (%json-object (cons "target" "taf-mcp-project-v0.1.0-r1")
+                                          (cons "userHome" (han.path:->namestring user-home))
+                                          (cons "systemHome" (han.path:->namestring system-home))
+                                          (cons "args" args)))))
+        (let* ((result (apply #'call-tool entry))
+               (data (%mcp-test-structured result)))
+          (when (han.json:get-json result "isError")
+            (error "~A: ~A" (first entry) (han.json:encode-json result)))
+          (han.test:check-equal nil (han.json:get-json result "isError"))
+          (han.test:check-equal t (han.json:get-json data "ok"))
+          (han.test:check-true (search "sample]].fa" (han.json:get-json data "shell")))
+          (han.test:check-equal nil (search "taffish_step_2=" (han.json:get-json data "shell"))))))))
+
+(han.test:deftest test-taffish-mcp-inline-comments-and-tabs-compile ()
+  (let* ((root (%mcp-test-temp-root))
+         (file (han.path:join-path root "main.taf"))
+         (source (format nil "<taffish>~%# [[taf: taf-hidden ignored]]~%~C# [[taf: ]]~%# [[taf: unfinished~%[[taf: taf-live~C--compile~Carg]]~%"
+                         #\Tab #\Tab #\Tab)))
+    (unwind-protect
+         (progn
+           (%mcp-test-write-file file source)
+           (dolist (entry `(("taffish_compile_source" "source" ,source)
+                            ("taffish_compile_file" "path" ,(han.path:->namestring file))))
+             (destructuring-bind (tool key value) entry
+               (let* ((result (call-tool tool (%json-object (cons key value))))
+                      (data (%mcp-test-structured result))
+                      (shell (han.json:get-json data "shell")))
+                 (han.test:check-equal nil (han.json:get-json result "isError"))
+                 (han.test:check-equal t (han.json:get-json data "ok"))
+                 (han.test:check-true
+                  (search (format nil "if taf-live~C--compile~Carg" #\Tab #\Tab) shell))
+                 (han.test:check-equal nil (search "if taf-hidden" shell))
+                 (han.test:check-equal nil (search "taffish_step_2=" shell))))))
+      (han.path:delete-directory-tree root :if-does-not-exist :ignore))))
+
 (han.test:deftest test-taffish-mcp-compile-source-preserves-unicode ()
   (let* ((result (call-tool
                   "taffish_compile_source"

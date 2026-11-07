@@ -76,6 +76,13 @@ resolved-line 结构：
 (:line <line-string> :number <line-number>)
 ```
 
+这两个字段的旧形式继续受支持。compiler 生成的行还带有 `:source-line` 和
+`:resolved-parts`，见 [Compiler](../taffish-core/compiler.md)。emitter 应忽略不需要
+的字段，并将源码对象视为只读。存在这些字段时，`<taffish>` 只从源码文本识别内联
+边界；对于不完整或不一致的元信息会明确报错，不会静默回退。如果调用者有意用动态
+生成的 shell 替换整行，应新建双字段记录，不要携带失效的源码元信息。两个额外字段
+均不存在时继续按旧文本方式扫描，同时支持带引号的结束标记。函数签名和返回类型不变。
+
 返回：shell string。
 
 错误：

@@ -4,7 +4,8 @@
 ;;;; emitter: registry.lisp
 ;;;; ============================================================
 
-;; resolved-line: (:line <line-string> :number <line-number>)
+;; Resolved lines retain :line/:number. Compiler-produced lines also carry
+;; :source-line/:resolved-parts for source-only inline boundaries.
 (defun %get-line-number (line)
   (and line (getf line :number)))
 

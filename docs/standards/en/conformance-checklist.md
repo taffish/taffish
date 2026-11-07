@@ -46,6 +46,11 @@ notes:
 - Shell quoting around parameter tokens should be clear and reviewable.
 - Container image references should use explicit tags rather than implicit `latest`.
 - `[[taf:...]]` dependency references in flows should be synchronizable back to `[dependencies]`.
+- Write inline start/end markers in source, not in substituted values. Quote
+  literal `]]` in source arguments; keep each call on one line.
+- Check argument counts and bytes, not just displayed shell: empty strings,
+  quotes, `$HOME`, backslashes, delimiter-looking data, nested flows, and delayed
+  variables. See [Argument Passing](argument-passing.md).
 
 ### Warnings
 

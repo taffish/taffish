@@ -52,6 +52,22 @@
 ;;;; parse-args-input
 ;;;; ------------------------------------------------------------
 
+(deftest test-args-empty-token-is-a-value ()
+  (check-equal (multiple-value-list (han.args::parse-token "")) '(:value ""))
+  (let ((tokens (han.args:args-input-tokens
+                 (make-test-input "taf-demo" "" "@step:" ""))))
+    (check-equal (length tokens) 3)
+    (dolist (index '(0 2))
+      (check-equal (han.args:arg-token-kind (aref tokens index)) :value)
+      (check-equal (han.args:arg-token-text (aref tokens index)) ""))))
+
+(deftest test-args-empty-option-value-is-not-missing ()
+  (let ((specs (make-test-specs "!(--/-i)input")))
+    (dolist (argv '(("taf-demo" "--input" "") ("taf-demo" "--input=")))
+      (let ((result (apply #'bind-test specs argv)))
+        (check-equal (han.args:get-arg "input" result) "")
+        (check-equal (han.args:args-result-diagnostics result) nil)))))
+
 (deftest test-args-parse-args-input-basic ()
   (let* ((input (make-test-input "taf-demo"
                                  "--threads=8"

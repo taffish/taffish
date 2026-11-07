@@ -15,6 +15,8 @@ here go deeper than installation and basic command usage.
 - Source builders and contributors: begin with the
   [Developer Manual](dev/README.en.md) and
   [Build From Source](dev/en/build-from-source.md).
+- Flow authors: read [Argument Substitution, Forwarding, And Display](standards/en/argument-passing.md)
+  before combining ordinary parameters, `@:`, `*ARGV*`, and taf-app command mode.
 - Installer maintainers: use the source-adjacent
   [Installer Manual](../install/README.md) for provider generation,
   verification, transaction, permission, and conformance-test contracts.

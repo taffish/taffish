@@ -46,17 +46,21 @@
              (error "Failed to resolve arg token: ~A" token-value)))))))
 
 (defun %resolve-taf-line (taf-line args-result)
-  (let ((kind (taf-line-kind taf-line)))
-    (list :line
-          (case kind
-            ((:empty :comment)
-             (taf-line-raw-string taf-line))
-            (t
-             (let ((parts nil))
-               (dolist (taf-token (taf-line-tokens taf-line))
-                 (push (%resolve-taf-token taf-token args-result) parts))
-               (%format-character-string "~{~A~}" (nreverse parts)))))
-          :number (taf-line-line-number taf-line))))
+  (let ((parts
+          (if (member (taf-line-kind taf-line) '(:empty :comment))
+              (list (list :kind :text :text (taf-line-raw-string taf-line)))
+              (mapcar (lambda (token)
+                        (list :kind (taf-token-kind token)
+                              :token token
+                              :text (%format-character-string
+                                     "~A" (%resolve-taf-token token args-result))))
+                      (taf-line-tokens taf-line)))))
+    ;; Both views share one resolution pass; never mutate the source tokens.
+    (list :line (%format-character-string
+                 "~{~A~}" (mapcar (lambda (part) (getf part :text)) parts))
+          :number (taf-line-line-number taf-line)
+          :source-line taf-line
+          :resolved-parts parts)))
 
 (defun %resolve-taf-subtag-line (taf-line args-result)
   (let ((kind (taf-line-kind taf-line))
@@ -81,7 +85,7 @@
 
 ;; resolved-body = resolved-blocks
 ;; lines is a list of resolved-line plist objects
-;; resolved-line: (:line <line-string> :number <line-number>)
+;; resolved-line also carries optional :source-line and :resolved-parts.
 (defun %emit-resolved-body (resolved-blocks taf-result &optional (emitters *taf-emitters*))
   (mapcar #'(lambda (a-block)
               (let ((tag (getf a-block :tag))

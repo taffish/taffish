@@ -76,6 +76,16 @@ Resolved-line structure:
 (:line <line-string> :number <line-number>)
 ```
 
+This two-field form remains supported. Compiler-produced lines additionally
+carry `:source-line` and `:resolved-parts`; see [Compiler](../taffish-core/compiler.md).
+Emitters should ignore unknown fields and treat source objects as read-only.
+The `<taffish>` emitter scans only source text for inline boundaries when these
+fields are present. It rejects partial or inconsistent metadata rather than
+silently falling back. If a caller deliberately replaces a line with dynamically
+generated shell, supply a fresh two-field record, not stale source metadata.
+Without either field, legacy text scanning remains available, including quoted
+closing-marker handling. Function signatures and return types are unchanged.
+
 Return: shell string.
 
 Errors:

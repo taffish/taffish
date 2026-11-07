@@ -87,6 +87,17 @@ For flow projects, `project-check` scans `<taffish>` blocks for:
 
 and requires `[dependencies]` in `taffish.toml` to declare those dependencies.
 
+Dependency discovery shares the compiler's private source-boundary scanner.
+Quoted `]]` inside an inline call does not end it; markers inside parameter
+tokens or their defaults do not create dependencies. Scanning reuses parsed
+source tokens, without binding input, evaluating defaults, or inferring a
+dynamically supplied command name. Dependency version validation is unchanged.
+
+Full-line source comments, including indented comments and empty or unclosed
+inline-looking markers, produce no dependencies, matching emitter behavior.
+SPACE and TAB both delimit a literal `taf-*` command name. This scan does not
+implement general shell parsing for comments after code or dynamic names.
+
 If an inline dependency is an exact artifact name, such as a form containing `-v...-r...`, dependencies must contain the corresponding version. Otherwise an existing declaration or `latest` semantics can be used.
 
 When a dependency is missing, the error suggests running `taf build` to synchronize.

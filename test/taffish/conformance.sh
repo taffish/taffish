@@ -535,4 +535,11 @@ run_taffish_conformance() {
     _taffish_case_unicode_compile_file_and_stdin
   run_case "taffish/error-stream-contract" \
     _taffish_case_error_stream_contract
+  for argument_case in scalar-text block-roundtrip block-display argv-text \
+    command-text nested-blocks delayed-expression empty-arguments inline-boundaries \
+    inline-error-message inline-separators inline-comments inline-projects inline-mcp
+  do
+    run_case "taffish/argument-contract-$argument_case" \
+      python3 "$TAFFISH_TEST_REPO_ROOT/test/taffish/argument-contract.py" "$argument_case"
+  done
 }

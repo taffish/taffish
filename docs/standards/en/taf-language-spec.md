@@ -133,6 +133,10 @@ TAF-level escapes:
 
 Other backslash sequences are preserved as ordinary text.
 
+Ordinary values are substituted as text, while supplied block-token lists are
+encoded per argument for shell. This distinction, including quoted display and
+empty input and inline source boundaries, is described in [Argument Passing](argument-passing.md).
+
 ## Built-In Parameters
 
 These names are provided by context and may be used without `ARGS` declarations:
@@ -143,7 +147,7 @@ These names are provided by context and may be used without `ARGS` declarations:
 | `*HOMEDIR*` | `taf-context-homedir` or binding system. |
 | `*WORKDIR*` | `taf-context-workdir` or binding system. |
 | `*LOADDIR*` | `taf-context-loaddir`. |
-| `*ARGV*` | `taf-context-argv`. |
+| `*ARGV*` | `taf-context-argv` joined with spaces, without per-argument shell encoding. |
 | `*CMD*` | `taf-context-cmd`. |
 | `*CPUS*` | `taf-context-cpus`. |
 | `*CONTAINER*` | `taf-context-container`. |
@@ -182,6 +186,19 @@ Subtag headers are matched by the emitter registry. Built-in tags include:
 | `<podman:IMAGE>` | require Podman. |
 | `<apptainer:IMAGE>` | require Apptainer. |
 | `<docker/podman:IMAGE>` | choose an available backend from the listed candidates. |
+
+Within source-compiled `<taffish>` lines, source text alone determines the start
+and end of `[[taf: ...]]`; substituted arguments do not alter that structure.
+Source quotes inside a call protect `]]`. Command-prefix checks, `--compile`
+insertion and shell interpretation still use resolved text. Other emitters and
+parameter quoting rules are unchanged; inline calls remain single-line.
+
+Full-line comments (the first non-SPACE/TAB character is `#`) remain comments
+and bypass inline scanning, including empty or unclosed `[[taf:` text. This
+classification comes from source, not substituted argument values. It does not
+extend to trailing shell comments after code. SPACE and TAB both delimit the
+inline command name and its first `--compile` option; see
+[Argument Passing](argument-passing.md) for the exact boundary and quoting rules.
 
 Container tags may pass runtime arguments after `$`. Legacy `$ARGS` applies to
 all selected backends. Structured `$@[backend: ARGS]` blocks apply args only to

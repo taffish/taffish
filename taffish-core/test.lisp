@@ -714,6 +714,304 @@ c"))
     (check-equal (%string-contains-p shell "'hello world'") t)
     (check-equal (%string-contains-p shell "'a'\\''b'") t)))
 
+(deftest test-taffish-scalar-substitution-remains-text ()
+  (let ((code (format nil "ARGS~%<!(--/-i)input>~%RUN~%<shell>~%arg-dump ::input::~%arg-dump ~S~%"
+                      "::input::")))
+    (dolist (value '("sample A.fa" "$HOME" "a'b" "say \"hello\""))
+      (let ((shell (taffish.core:taffish-to-shell
+                    code (list "taf-demo" "--input" value) (%default-test-context))))
+        (check-true (%string-contains-p shell (format nil "arg-dump ~A~%" value)))
+        (check-true (%string-contains-p shell (format nil "arg-dump \"~A\"~%" value)))))))
+
+(deftest test-taffish-block-token-encoding-preserves-literal-quotes ()
+  ;; Empty token encoding is a helper property, not CLI empty-argv support.
+  (dolist (pair '(("--input" . "--input")
+                  ("sample A.fa" . "'sample A.fa'")
+                  ("$HOME" . "'$HOME'")
+                  ("\"$threads\"" . "'\"$threads\"'")
+                  ("a'b" . "'a'\\''b'")
+                  ("both ' and \"" . "'both '\\'' and \"'")
+                  ("$(printf marker)" . "'$(printf marker)'")
+                  ("a;b*?" . "'a;b*?'")
+                  ("back\\slash" . "'back\\slash'")
+                  ("" . "''")))
+    (let ((token (han.args:make-arg-token :kind :value :text (car pair))))
+      (check-equal (taffish.core::%resolve-arg-value-for-shell (list token))
+                   (cdr pair)))))
+
+(deftest test-taffish-block-quoted-display-retains-encoding ()
+  (let* ((code (format nil "ARGS~%<(@:)step>~%RUN~%<shell>~%arg-dump \"::(@:)step::\"~%"))
+         (shell (taffish.core:taffish-to-shell
+                 code '("taf-demo" "@step:" "--out" "hello world" "a'b")
+                 (%default-test-context))))
+    (check-equal (%line-containing shell "arg-dump")
+                 "arg-dump \"--out 'hello world' 'a'\\''b'\"")))
+
+(deftest test-taffish-argv-is-joined-text-in-both-quote-contexts ()
+  (let* ((code (format nil "<shell>~%raw ::*ARGV*::~%display \"::*ARGV*::\"~%"))
+         (argv '("sample A.fa" "out dir"))
+         (shell (taffish.core:taffish-to-shell
+                 code (cons "taf-demo" argv) (%default-test-context nil argv))))
+    (check-equal (%line-containing shell "raw ") "raw sample A.fa out dir")
+    (check-equal (%line-containing shell "display ") "display \"sample A.fa out dir\"")))
+
+(deftest test-taffish-argv-explicit-shell-syntax-is-not-reencoded ()
+  (let* ((argv '("'sample A.fa'" "\"$threads\"" "''"))
+         (shell (taffish.core:taffish-to-shell
+                 (format nil "<shell>~%arg-dump ::*ARGV*::~%")
+                 (cons "taf-demo" argv) (%default-test-context nil argv))))
+    (check-equal (%line-containing shell "arg-dump")
+                 "arg-dump 'sample A.fa' \"$threads\" ''")))
+
+(deftest test-taffish-empty-argv-text-differs-from-quoted-empty-text ()
+  (let ((shell (taffish.core:taffish-to-shell
+                (format nil "<shell>~%raw ::*ARGV*::~%display \"::*ARGV*::\"~%")
+                '("taf-demo") (%default-test-context))))
+    (check-equal (string-right-trim " " (%line-containing shell "raw")) "raw")
+    (check-equal (%line-containing shell "display") "display \"\"")))
+
+(deftest test-taffish-command-mode-remains-shell-text-without-argv-token ()
+  (let ((code (format nil "<taf-app:shell>~%echo DEFAULT~%")))
+    (dolist (argv '(("arg-dump" "sample A.fa")
+                    ("arg-dump" "'sample A.fa'" "\"$threads\"" "''")))
+      (let ((shell (taffish.core:taffish-to-shell
+                    code (cons "taf-demo" argv) (%default-test-context nil argv))))
+        (check-equal (%line-containing shell "arg-dump")
+                     (format nil "~{~A~^ ~}" argv))
+        (check-equal (%string-contains-p shell "DEFAULT") nil)))))
+
+(deftest test-taffish-inline-command-retains-delayed-expression ()
+  (let* ((code (format nil "<taffish>~%threads=7~%export threads~%[[taf: taf-child echo '\"$threads\"' ]]~%"))
+         (shell (taffish.core:taffish-to-shell code '("taf-demo") (%default-test-context))))
+    (check-true (%string-contains-p shell "taf-child --compile echo '\"$threads\"'"))
+    (check-true (< (search "taf-child --compile" shell) (search "threads=7" shell)))))
+
+(deftest test-taffish-inline-horizontal-whitespace-keeps-compile-first ()
+  (let ((arguments "'sample A.fa' '' '\"$threads\"'"))
+    (dolist (separator (list " " (string #\Tab) (format nil " ~C " #\Tab)))
+      (dolist (explicit-compile '(nil t))
+        (let* ((command (if explicit-compile
+                            (format nil "taf-child~A--compile~A~A"
+                                    separator separator arguments)
+                            (format nil "taf-child~A~A" separator arguments)))
+               (expected (if explicit-compile command
+                             (format nil "taf-child --compile ~A" arguments)))
+               (shell (taffish.core:taffish-to-shell
+                       (format nil "<taffish>~%[[taf: ~A]]~%" command)
+                       '("taf-demo") (%default-test-context))))
+          (check-equal (%line-containing shell "if taf-child")
+                       (format nil "if ~A > \"$taffish_step_1\" ; then" expected)))))))
+
+(deftest test-taffish-inline-source-comments-are-inert ()
+  (dolist (comment (list "# [[taf: taf-hidden ignored]]"
+                         (format nil " ~C# [[taf: taf-hidden ignored]]" #\Tab)
+                         "# [[taf: ]]"
+                         "# [[taf: taf-hidden unfinished"
+                         "# \\[[taf: ::unknown:: ]]"))
+    (let ((shell (taffish.core:taffish-to-shell
+                  (format nil "<taffish>~%~A~%[[taf: taf-live arg]]~%" comment)
+                  '("taf-demo") (%default-test-context))))
+      (check-equal (%line-containing shell comment) comment)
+      (check-true (search "if taf-live --compile arg" shell))
+      (check-equal (search "if taf-hidden" shell) nil)
+      (check-equal (search "taffish_step_2=" shell) nil))))
+
+(deftest test-taffish-inline-comment-classification-remains-source-based ()
+  (let ((shell (taffish.core:taffish-to-shell
+                (format nil "<taffish>~%::(--/-p)prefix::[[taf: taf-live arg]]~%")
+                '("taf-demo" "--prefix" "#") (%default-test-context))))
+    ;; A parameter's text cannot reclassify the source line as a comment.
+    (check-true (search "if taf-live --compile arg" shell))
+    (check-true (search "#\"$taffish_step_1\"" shell))))
+
+(deftest test-taffish-inline-legacy-comments-are-inert ()
+  (let ((result (taffish.core:bind-taf
+                 (taffish.core:parse-taf (format nil "<shell>~%echo default~%"))
+                 '("taf-demo") (%default-test-context))))
+    (dolist (comment (list "# [[taf: taf-hidden ignored]]"
+                           (format nil "~C# [[taf: ]]" #\Tab)
+                           "# \\[[taf: unfinished"))
+      (let ((shell (taffish.core:emit-block
+                    "taffish" (list (list :line comment :number 1)) result)))
+        (check-true (search comment shell))
+        (check-equal (search "taffish_step_1=" shell) nil)))))
+
+(deftest test-taffish-inline-comment-metadata-is-still-validated ()
+  (let* ((program (taffish.core:parse-taf
+                   (format nil "<taffish>~%# [[taf: unfinished~%echo done~%")))
+         (result (taffish.core:bind-taf program '("taf-demo") (%default-test-context)))
+         (line (taffish.core::%resolve-taf-line
+                (second (first (taffish.core:taf-program-body program)))
+                (taffish.core:taf-result-args-result result))))
+    (dolist (key '(:source-line :resolved-parts))
+      (let ((partial (copy-list line)))
+        (remf partial key)
+        (check-true (%taffish-signal-error-p
+                     (lambda () (taffish.core:emit-block "taffish" (list partial) result))))))
+    (setf (getf line :line) "# changed")
+    (check-true (%taffish-signal-error-p
+                 (lambda () (taffish.core:emit-block "taffish" (list line) result))))))
+
+(deftest test-taffish-empty-input-does-not-change-text-contracts ()
+  (dolist (entry '(("<shell>" "arg-dump ::*ARGV*::" (""))
+                   ("<shell>" "arg-dump ::(--/-i)input::" ("--input" ""))
+                   ("<shell>" "arg-dump ::(@:)step::" ("@step:" ""))
+                   ("<taf-app:shell>" "arg-dump DEFAULT" ("arg-dump" ""))))
+    (destructuring-bind (tag body argv) entry
+      (let ((shell (taffish.core:taffish-to-shell
+                    (format nil "~A~%~A~%" tag body) (cons "taf-demo" argv)
+                    (%default-test-context nil argv))))
+        (check-true (stringp shell))
+        (check-equal (string-right-trim " " (%line-containing shell "arg-dump"))
+                     (if (search "(@:)" body) "arg-dump ''" "arg-dump"))))))
+
+(deftest test-taffish-resolved-parts-are-single-pass-and-read-only ()
+  (let* ((program (taffish.core:parse-taf
+                   (format nil "<shell>~%echo ::(--/-x)x:: ::(--/-y)y::~%# comment~%~%")))
+         (line (second (first (taffish.core:taf-program-body program))))
+         (original-values (%taf-token-values line))
+         (resolver (symbol-function 'taffish.core::%resolve-taf-token))
+         (calls 0))
+    (unwind-protect
+         (progn
+           (setf (symbol-function 'taffish.core::%resolve-taf-token)
+                 (lambda (token args)
+                   (incf calls)
+                   (funcall resolver token args)))
+           (dolist (value '("a]]b" "other value"))
+             (let* ((result (taffish.core:bind-taf
+                            program (list "taf-demo" "--x" value "--y" "")
+                            (%default-test-context)))
+                    (resolved (taffish.core::%resolve-taf-line
+                               line (taffish.core:taf-result-args-result result))))
+               (check-true (eq line (getf resolved :source-line)))
+               (check-equal (getf resolved :line) (format nil "echo ~A " value))
+               (check-equal
+                (format nil "~{~A~}" (mapcar (lambda (part) (getf part :text))
+                                             (getf resolved :resolved-parts)))
+                (getf resolved :line))))
+           (check-equal calls (* 2 (length (taffish.core:taf-line-tokens line))))
+           (check-equal (%taf-token-values line) original-values))
+      (setf (symbol-function 'taffish.core::%resolve-taf-token) resolver))))
+
+(deftest test-taffish-inline-parameter-delimiters-are-data ()
+  (dolist (value '("sample]].fa" "[[taf: taf-fake hi]]" "a\"b" "a\\]b"))
+    (let ((shell (taffish.core:taffish-to-shell
+                  (format nil "<taffish>~%[[taf: taf-child ::(--/-i)input:: ]]~%")
+                  (list "taf-demo" "--input" value) (%default-test-context))))
+      (check-true (search (format nil "if taf-child --compile ~A " value) shell))
+      (check-equal (search "taffish_step_2=" shell) nil))))
+
+(deftest test-taffish-inline-parameters-cannot-create-markers ()
+  (dolist (entry '(("::(--/-i)input::" "[[taf: taf-child hello]]")
+                    ("[::(--/-i)input::[taf: taf-child hello]]" "")
+                    ("::(--/-i)input::[[taf: taf-child hello]]" "\\")))
+    (destructuring-bind (body value) entry
+      (let ((shell (taffish.core:taffish-to-shell
+                    (format nil "<taffish>~%~A~%" body)
+                    (list "taf-demo" "--input" value) (%default-test-context))))
+        (if (string= value "\\")
+            (check-true (search "if taf-child --compile hello" shell))
+            (check-equal (search "taffish_step_1=" shell) nil))))))
+
+(deftest test-taffish-inline-source-quoted-close-and-multiple-calls ()
+  (let ((shell (taffish.core:taffish-to-shell
+                (format nil "<taffish>~%echo start | [[taf: taf-a 'x]] [[taf: taf-fake y]]' ]] | [[taf: taf-b \"z]]\" ]] > out~%")
+                '("taf-demo") (%default-test-context))))
+    (check-true (search "if taf-a --compile 'x]] [[taf: taf-fake y]]'" shell))
+    (check-true (search "if taf-b --compile \"z]]\"" shell))
+    (check-equal (search "taffish_step_3=" shell) nil)
+    (check-true (search "echo start | \"$taffish_step_1\" | \"$taffish_step_2\" > out" shell))))
+
+(deftest test-taffish-inline-default-is-opaque ()
+  (let ((shell (taffish.core:taffish-to-shell
+                (format nil "<taffish>~%[[taf: taf-child ::(--/-i)input='x]] [[taf: taf-fake y]]':: ]]~%")
+                '("taf-demo") (%default-test-context))))
+    (check-true (search "if taf-child --compile 'x]] [[taf: taf-fake y]]'" shell))
+    (check-equal (search "taffish_step_2=" shell) nil)))
+
+(deftest test-taffish-inline-text-escape-compatibility ()
+  (dolist (entry '(("echo ::(--/-i)input::" "a\\]b" "echo a]b")
+                    ("echo \\\\::(--/-i)input::" "]x" "echo ]x")))
+    (destructuring-bind (body value expected) entry
+      (let ((shell (taffish.core:taffish-to-shell
+                    (format nil "<taffish>~%~A~%" body)
+                    (list "taf-demo" "--input" value) (%default-test-context))))
+        (check-true (search expected shell))))))
+
+(deftest test-taffish-inline-legacy-lines-remain-supported ()
+  (let* ((result (taffish.core:bind-taf
+                  (taffish.core:parse-taf (format nil "<shell>~%echo default~%"))
+                  '("taf-demo") (%default-test-context)))
+         (shell (taffish.core:emit-block
+                 "taffish" '((:line "[[taf: taf-child 'a]]b' ]]" :number 0)) result)))
+    (check-true (search "if taf-child --compile 'a]]b'" shell))))
+
+(deftest test-taffish-inline-rejects-stale-origin-metadata ()
+  (let* ((program (taffish.core:parse-taf (format nil "<taffish>~%echo hello~%")))
+         (result (taffish.core:bind-taf program '("taf-demo") (%default-test-context)))
+         (line (taffish.core::%resolve-taf-line
+                (second (first (taffish.core:taf-program-body program)))
+                (taffish.core:taf-result-args-result result))))
+    (setf (getf line :line) "echo changed")
+    (check-true (%taffish-signal-error-p
+                 (lambda () (taffish.core:emit-block "taffish" (list line) result))))))
+
+(deftest test-taffish-inline-data-cannot-close-unclosed-source ()
+  (dolist (body '("[[taf: taf-child ::(--/-i)input::"
+                  "[[taf: taf-child 'unfinished ::(--/-i)input:: ]]"))
+    (check-true
+     (%taffish-signal-error-p
+      (lambda ()
+        (taffish.core:taffish-to-shell
+         (format nil "<taffish>~%~A~%" body)
+         '("taf-demo" "--input" "']] [[taf: taf-fake]]") (%default-test-context)))))))
+
+(deftest test-taffish-inline-metadata-cannot-be-partial-or-forged ()
+  (let* ((program (taffish.core:parse-taf (format nil "<taffish>~%echo hello~%")))
+         (result (taffish.core:bind-taf program '("taf-demo") (%default-test-context)))
+         (line (taffish.core::%resolve-taf-line
+                (second (first (taffish.core:taf-program-body program)))
+                (taffish.core:taf-result-args-result result))))
+    (dolist (missing '(:source-line :resolved-parts))
+      (let ((partial (copy-list line)))
+        (remf partial missing)
+        (check-true (%taffish-signal-error-p
+                     (lambda () (taffish.core:emit-block "taffish" (list partial) result))))))
+    (let ((forged (copy-list line)))
+      (setf (getf forged :resolved-parts) (list (list :kind :arg :text "echo hello")))
+      (check-true (%taffish-signal-error-p
+                   (lambda () (taffish.core:emit-block "taffish" (list forged) result)))))))
+
+(deftest test-taffish-inline-argument-command-is-still-resolved ()
+  (dolist (value '("taf-child" "not-an-app" ""))
+    (let ((code (format nil "<taffish>~%[[taf: ::(--/-c)command:: ]]~%")))
+      (if (string= value "taf-child")
+          (check-true (search "if taf-child --compile"
+                              (taffish.core:taffish-to-shell
+                               code (list "taf-demo" "--command" value)
+                               (%default-test-context))))
+          (check-true (%taffish-signal-error-p
+                       (lambda () (taffish.core:taffish-to-shell
+                                   code (list "taf-demo" "--command" value)
+                                   (%default-test-context)))))))))
+
+(deftest test-taffish-inline-source-escapes-and-diagnostics ()
+  (let ((shell (taffish.core:taffish-to-shell
+                (format nil "<taffish>~%[[taf: taf-child a\\]]b \"x\\\"y]]z\" ]]~%")
+                '("taf-demo") (%default-test-context))))
+    (check-true (search "if taf-child --compile a\\]]b \"x\\\"y]]z\"" shell))
+    (check-true (search "printf '%s\\n' '[TAFFISH] failed to compile taf step:" shell))
+    (check-equal nil (search "echo \"[TAFFISH] failed" shell))))
+
+(deftest test-taffish-command-mode-keeps-legacy-dynamic-inline ()
+  (let* ((argv '("[[taf:" "taf-child" "echo" "'\"$threads\"'" "]]"))
+         (shell (taffish.core:taffish-to-shell
+                 (format nil "<taf-app:taffish>~%echo default~%")
+                 (cons "taf-demo" argv) (%default-test-context nil argv))))
+    (check-true (search "if taf-child --compile echo '\"$threads\"'" shell))
+    (check-equal nil (search "echo default" shell))))
+
 (deftest test-taffish-to-shell-unknown-tag-error ()
   (let ((code (format nil
                       "RUN~%<unknown>~%  echo hello~%")))

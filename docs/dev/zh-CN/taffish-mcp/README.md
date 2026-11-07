@@ -12,6 +12,14 @@
 
 它不应该变成项目系统、Hub 系统或编译器的第二套实现。如果某条规则属于 TAFFISH 本身，它应该放在 `taffish-core` 或 `taf-core`；MCP 只负责调用它并整理结果。
 
+## 编译边界
+
+源码、文件、项目及已安装 app 的编译共享核心内联边界规则，见
+[参数替换、转发与展示](../../../standards/zh-CN/argument-passing.md)。compiler 的源码/
+片段元信息保留在内部，不改变 tool schema 或 JSON 结构。摘要中列出包含 `[[taf:`
+的源码行，只表示文本候选，不等于已解析的依赖或确定会执行的调用。MCP 编译不会
+执行生成的 shell 或子 app。
+
 ## 人类 CLI Help 与机器语言边界
 
 `taffish-mcp -h`、`taffish-mcp --help` 和 `taffish-mcp help` 属于人类 CLI 表面，

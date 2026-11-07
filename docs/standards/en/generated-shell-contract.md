@@ -34,7 +34,21 @@ The most fragile parts of shell output are quoting, paths, and spaces. Be especi
 5. temporary script paths.
 6. arguments passed to Docker, Podman, or Apptainer.
 
-Values from users or external environment should not be directly concatenated into shell.
+Do not assume that substitution automatically escapes user or environment values.
+Ordinary parameters, `*ARGV*`, and taf-app command mode currently insert shell
+text; supplied block-token lists are encoded per argument. Authors must distinguish
+source text from data and choose an appropriate insertion context. See
+[Argument Substitution, Forwarding, And Display](argument-passing.md) for examples
+and empty-argument behavior. Source-compiled `<taffish>` calls use source-only
+inline boundaries; command validation still uses resolved text. Diagnostic
+messages quote command text independently. These rules do not add automatic
+quoting to ordinary parameters, `*ARGV*`, or taf-app command mode.
+
+In `<taffish>`, full-line source comments are preserved without creating inline
+child steps. For an active inline call, SPACE and TAB both separate the command
+name from its arguments; the child is invoked with `--compile` as its first
+option. These child-compilation commands belong to the generated shell's
+prelude. Compiling TAF or building its wrapper does not execute that prelude.
 
 ## Container Runtime Contract
 

@@ -12,6 +12,11 @@ Build is the step that turns a project directory into installable artifacts. It 
 4. Optional container image.
 5. Dependency synchronization for flow projects.
 
+Flow synchronization uses the same source-only inline boundaries as `taf check`
+and the compiler. Quoted closing markers and parameter defaults cannot create
+extra dependencies. Version normalization and `[dependencies]` rewriting retain
+their existing rules; see [Project Check](project-check.md).
+
 ## Artifact Naming
 
 Artifact name:

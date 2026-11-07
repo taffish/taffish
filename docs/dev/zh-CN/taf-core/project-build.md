@@ -12,6 +12,10 @@ build 是把项目目录变成可安装 artifact 的步骤。它输出：
 4. 可选容器镜像。
 5. 对 flow 项目的 dependencies 同步。
 
+flow 依赖同步与 `taf check` 和编译器使用同一套源码内联边界。引号内的结束标记和
+参数默认值不会产生额外依赖。版本规范化和 `[dependencies]` 写回仍沿用既有规则，
+见[项目检查](project-check.md)。
+
 ## artifact 命名
 
 artifact 名称为：

@@ -57,12 +57,20 @@ Current tagged TAFFISH releases publish manually built binary payloads under
 `TAFFISH-RELEASE-KEY.asc`. This provides signed checksum verification, but it
 is not a reproducible-build or GitHub Actions provenance guarantee.
 
-The current raw installers require every selected official GitHub/Gitee binary
-to match `SHA256SUMS` before replacing a command. In default `auto` mode they
-also verify the signed manifest against the fixed TAFFISH release-key
-fingerprint when `gpg` and `gpgv` are available; strict `sha256` and `gpg`
-modes are available. Custom sources without verification material remain
-explicitly marked unverified in compatible `auto` mode.
+For official GitHub/Gitee raw downloads, the default `--verify auto` requires
+every selected binary to match `SHA256SUMS`. If the detached signature,
+release public key, `gpg`, and `gpgv` are all available, it also verifies the
+manifest signature against the pinned TAFFISH key fingerprint. If the default
+signature or key cannot be fetched, or either tool is missing, the receipt
+records `sha256`. If a checksum, fingerprint, or signature check fails, the
+installer stops.
+
+`--verify sha256` requires the manifest and matching binary hashes.
+`--verify gpg` also requires the detached signature, release public key,
+`gpg`, and `gpgv`, and stops if it cannot verify the signature.
+Custom sources without a manifest can be
+installed in `auto` mode with a warning and a verification level of `none`.
+`--verify none` explicitly disables payload verification.
 
 Payload verification does not independently authenticate an installer script
 obtained through `curl | sh`. High-security deployments should obtain and

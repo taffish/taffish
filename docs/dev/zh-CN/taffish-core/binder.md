@@ -25,12 +25,16 @@ binder 的职责就是：
 | `*HOMEDIR*` | `taf-context-homedir` |
 | `*WORKDIR*` | `taf-context-workdir` |
 | `*LOADDIR*` | `taf-context-loaddir` |
-| `*ARGV*` | `taf-context-argv` |
+| `*ARGV*` | 将 `taf-context-argv` 用空格连接，不进行 shell 编码 |
 | `*CMD*` | `taf-context-cmd` |
 | `*CPUS*` | `taf-context-cpus` |
 | `*CONTAINER*` | `taf-context-container` |
 
 list 类型的 context 值会被空格连接成字符串，其他非字符串值会通过 `format` 转成字符串。
+
+因此 `*ARGV*` 是 shell 文本，不是无损的 argv 数组。`"::*ARGV*::"` 用于展示连接后
+的字符串，不等于逐参数转发，其中的 shell 展开仍然有效。它与 block token 编码的
+区别见[参数替换、转发与展示](../../../standards/zh-CN/argument-passing.md)。
 
 ## taf-app 命令模式
 

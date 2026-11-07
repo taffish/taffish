@@ -144,11 +144,8 @@ curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffis
 curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sh -s -- --version 0.11.0 --user
 ```
 
-本地 tarball：
-
-```sh
-sh install/install-taffish.sh --user --archive ./taffish-0.11.0-target.tar.gz
-```
+离线安装使用同一发布 tag 的安装脚本和原始 tar.gz 归档。按
+[离线安装步骤](../README-CN.md#本地或离线安装)校验签名并跳过在线索引更新。
 
 显式 bundle URL：
 

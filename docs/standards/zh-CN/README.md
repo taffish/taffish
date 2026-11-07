@@ -12,6 +12,7 @@
 - [TAF 语言契约](taf-language-contract.md)
 - [TAF 语言规范草案](taf-language-spec.md)
 - [生成 shell 契约](generated-shell-contract.md)
+- [参数替换、转发与展示](argument-passing.md)
 - [TAFFISH 项目规范](taffish-project-spec.md)
 - [TAFFISH home 与系统布局规范](system-home-spec.md)
 - [TAFFISH 配置规范](system-config-spec.md)

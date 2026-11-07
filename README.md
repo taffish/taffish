@@ -126,7 +126,7 @@ Current binary assets:
 
 | Platform | Asset suffix | Build backend | Notes |
 | --- | --- | --- | --- |
-| macOS Apple Silicon | `darwin-arm64` | SBCL | Requires Homebrew `zstd` runtime library. |
+| macOS Apple Silicon | `darwin-arm64` | SBCL | macOS 15.0 or later; requires Homebrew `zstd` runtime library. |
 | Linux x86_64 | `linux-amd64` | LispWorks | Very small runtime dependency surface; requires glibc-based Linux. |
 
 Not currently provided:
@@ -179,10 +179,11 @@ files are pinned to the selected git tag:
 curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sh -s -- --version 0.11.0 --user
 ```
 
-Official installs default to `--verify auto`: selected binaries must match the
-tag's `SHA256SUMS`, and the signed manifest is also checked when GPG tooling is
-available. Preview resolved paths, policy, and verification without network or
-writes by downloading the installer and running it with `--dry-run`.
+Official installs default to `--verify auto`. Each selected binary must match the
+tag's `SHA256SUMS`. The installer also verifies the manifest signature if it can
+obtain the signature and release public key and find both `gpg` and `gpgv`.
+Use `--verify gpg` to require a valid signature. Once downloaded, the installer
+can preview paths and verification settings with `--dry-run` without network access or writes.
 
 ### For Users in China
 
@@ -252,7 +253,16 @@ can normally use `--system` without `sudo` when the system home is readable.
 
 ### Verify Installation
 
-After a user install, verify:
+User installs have two command directories: `~/.local/bin` contains the three
+TAFFISH core commands, while `~/.local/share/taffish/bin` contains commands
+installed later by `taf install`. Run this line in your current shell and add
+it to your shell profile for future sessions:
+
+```sh
+export PATH="$HOME/.local/bin:$HOME/.local/share/taffish/bin:$PATH"
+```
+
+Check that all three commands report the installed version, then check the user scope:
 
 ```sh
 taf --version
@@ -260,16 +270,6 @@ taffish --version
 taffish-mcp --version
 taf doctor --user
 ```
-
-User installs have two command directories: `~/.local/bin` contains the three
-TAFFISH core commands, while `~/.local/share/taffish/bin` contains commands
-installed later by `taf install`. Add both to your shell profile:
-
-```sh
-export PATH="$HOME/.local/bin:$HOME/.local/share/taffish/bin:$PATH"
-```
-
-Then open a new shell or run `source ~/.zshrc` / `source ~/.bashrc`.
 
 After a system install, verify the system scope explicitly:
 
@@ -338,8 +338,8 @@ For online installation it also needs one downloader:
 curl or wget
 ```
 
-`gpg` and `gpgv` are optional in default `--verify auto` mode and enable signed
-manifest verification. Both are required when `--verify gpg` is selected.
+`gpg` and `gpgv` are optional in `auto` mode. To require a signed manifest, use
+`--verify gpg` and make both tools, the signature, and the release public key available.
 
 `taf update` downloads the TAFFISH index from GitHub by default. In networks
 where GitHub raw content is blocked or unstable, installation can still finish,
@@ -356,6 +356,11 @@ taf update --url INDEX_URL
 ```
 
 ### macOS Dependencies
+
+The current `darwin-arm64` binaries declare macOS 15.0 as their minimum OS
+version in Mach-O metadata. Older macOS versions are outside this prebuilt
+binary baseline; this is a build requirement, not a claim of testing on every
+supported OS version.
 
 The current macOS binary is built with SBCL and dynamically links Homebrew's
 `zstd` library:
@@ -651,11 +656,12 @@ and the same TAFFISH index schema.
 ```
 
 In `auto` verification mode, official GitHub/Gitee payloads must match
-`SHA256SUMS` before any core command is replaced. If `gpg` and `gpgv` are
-available, the signed manifest is also checked against the built-in TAFFISH
-release-key fingerprint. Custom sources without a manifest remain usable in
-`auto` mode but are explicitly reported as unverified; use `--verify sha256`
-or `--verify gpg` to require a specific level.
+`SHA256SUMS` before any core command is replaced. When the signature, release
+public key, `gpg`, and `gpgv` are all available, the installer also verifies the
+signature against the built-in TAFFISH key fingerprint. If any are unavailable,
+official installs can proceed with SHA256 alone. Custom sources without a
+manifest are reported as unverified in `auto` mode. Use `--verify sha256` or
+`--verify gpg` to require that level of verification.
 
 The installer uses an install lock, candidate `--version` smoke tests, and a
 transactional replacement of the three core binaries. It refuses unrelated
@@ -704,22 +710,38 @@ index, config, log, or cached image data that should be retained.
 
 ## Local or Offline Install
 
-From a downloaded release bundle:
+On a connected machine, download **Source code (tar.gz)** for the `v0.11.0` tag
+once it is published. The archive includes the installer, binaries, and signed checksum manifest:
 
 ```sh
-sh install/install-taffish.sh --archive ./taffish-0.11.0-target.tar.gz --user
+curl -fL -o taffish-0.11.0.tar.gz https://github.com/taffish/taffish/archive/refs/tags/v0.11.0.tar.gz
 ```
 
-From an explicit bundle URL:
+Copy `taffish-0.11.0.tar.gz` to an empty directory on the offline machine. From
+that directory, extract the installer and point it at the original archive:
 
 ```sh
-sh install/install-taffish.sh --url https://example.org/taffish.tar.gz --user
+tar -xzf taffish-0.11.0.tar.gz taffish-0.11.0/install/install-taffish.sh
+sh taffish-0.11.0/install/install-taffish.sh --user --archive ./taffish-0.11.0.tar.gz --no-update --verify gpg
+```
+
+`--no-update` skips the network index update. `--verify gpg` requires local
+`gpg` and `gpgv` and verifies the signed manifest from the archive. After
+installation, follow [Verify Installation](#verify-installation).
+
+For online installation from an explicit bundle URL, the same installer accepts `--url`:
+
+```sh
+sh taffish-0.11.0/install/install-taffish.sh --url https://example.org/taffish.tar.gz --user
 ```
 
 Bundle layout:
 
 ```text
 target/
+  SHA256SUMS
+  SHA256SUMS.asc
+  TAFFISH-RELEASE-KEY.asc
   taf-<os>-<arch>-<version>
   taffish-<os>-<arch>-<version>
   taffish-mcp-<os>-<arch>-<version>
@@ -1618,10 +1640,10 @@ Version-specific changes, compatibility notes, validation results, and binary
 checksums are in the [v0.11.0 release notes](docs/releases/v0.11.0.md).
 
 The v0.11.0 raw installers verify every selected official binary against
-`SHA256SUMS` before installation. In default `auto` mode they also verify the
-signed manifest against the built-in release-key fingerprint when `gpg` and
-`gpgv` are available; use `--verify gpg` to require this step or
-`--verify sha256` to require checksums without GPG.
+`SHA256SUMS` by default. In `auto` mode they also verify the signature against
+the built-in release-key fingerprint when the signature, public key, `gpg`, and
+`gpgv` are all available. Use `--verify gpg` to require a valid signature or
+`--verify sha256` to require checksums alone.
 
 This payload check does not independently authenticate an installer script
 fetched through `curl | sh`. For a high-security bootstrap, first obtain and

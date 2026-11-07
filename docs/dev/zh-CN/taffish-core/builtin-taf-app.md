@@ -34,6 +34,11 @@ blastn ...
 
 则 `taf-app` 认为这是 command mode。此时它不会使用原 block 的 lines，而是把整个 argv 拼成一行，交给 `next-tag`。
 
+这里是空格连接，不会逐参数添加引号；即使原内容没有 `*ARGV*` token 也会如此。
+argv 中字面的 shell 引号或变量引用可以有意变成 shell 语法；仅在调用端加普通引号，
+不能保证含空格值通过这次拼接后仍是一个参数。示例与限制见
+[参数替换、转发与展示](../../../standards/zh-CN/argument-passing.md)。
+
 这和 `binder.lisp` 中忽略 missing-required 的逻辑配合使用：
 
 1. binder 判断是否存在 `<taf-app:...>` block。

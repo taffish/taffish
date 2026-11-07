@@ -4,7 +4,7 @@
 
 ## Role
 
-The compiler no longer understands user input or TAF source structure. It receives the result already prepared by the binder and does three things:
+The compiler consumes the binder's result without reparsing CLI input or TAF source. It does three things:
 
 1. Resolve `::arg::` tokens to actual values.
 2. Convert the RUN block into resolved blocks.
@@ -26,8 +26,20 @@ When an arg value is `nil`, it outputs an empty string.
 The compiler internally represents resolved lines as plists:
 
 ```lisp
-(:line <line-string> :number <line-number>)
+(:line <line-string> :number <line-number>
+ :source-line <original-taf-line> :resolved-parts <parts>)
 ```
+
+Each part records `:kind`, `:token` (the original token), and resolved `:text`.
+Comments and empty lines use one text part without a token. The parts are
+produced in the same pass as `:line`; parameter queries are not repeated, and
+the original program is not mutated. Concatenating part texts equals `:line`.
+
+Only the `<taffish>` inline boundary scanner consumes this origin information.
+Other emitters can continue reading `:line/:number`. Tag selection and parameter
+formatting still use the resolved values. The extra fields are internal,
+read-only metadata, not a new MCP/JSON field or a replacement for the existing
+two-field `emit-block` input. See [Emitter API](../api/emitter-api.md).
 
 Resolved block structure:
 

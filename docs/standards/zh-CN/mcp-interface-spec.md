@@ -11,10 +11,10 @@
 1. 版本和帮助元数据。
 2. source/file 的验证、摘要和编译到 shell。
 3. 已安装 taf-app 的查找、检查、用法摘要、trust/smoke 元数据暴露和 invocation compile。
-4. 当前项目的 check、inspection、用法摘要、trust/smoke 元数据暴露、compile 和安全 build planning。
+4. 当前项目的 check、inspection、用法摘要、trust/smoke 元数据暴露、compile、项目创建和本地 command wrapper 构建。
 5. Hub search/info/list/which/update 操作。
 6. config、environment 和 history 查询操作。
-7. dry-run install/uninstall helper。
+7. 默认 dry-run、允许显式实施本地变更的 install/uninstall helper。
 
 该接口必须不暴露：
 
@@ -46,6 +46,23 @@
 | Hub | `taffish_search_apps`、`taffish_install_app` |
 | system | `taffish_check_environment`、`taffish_get_config` |
 
+## 本地写操作与 Dry-Run 默认值
+
+server 采取保守边界，但并非全部只读。既有写工具的边界如下：
+
+| Tool | 本地影响 |
+| --- | --- |
+| `taffish_update_index` | 下载并写入本地 index cache。 |
+| `taffish_create_project` | 在 server 当前工作目录下创建项目文件。 |
+| `taffish_build_project` | 构建项目 command wrapper 和冻结源码 snapshot；不构建镜像，也不运行项目。 |
+| `taffish_install_app` | 默认 `dryRun: true`；显式 `dryRun: false` 安装本地 app，并在未禁用依赖安装时安装其依赖。 |
+| `taffish_uninstall_app` | 默认 `dryRun: true`；显式 `dryRun: false` 删除选定的本地安装。 |
+
+`taffish_plan_install_all`、`taffish_plan_upgrade` 和 `taffish_plan_prune` 仍然只做
+规划，不执行建议的变更；它们与允许显式写入的 install/uninstall helper 不同。
+创建 Dockerfile 或镜像 workflow 不会执行 workflow，也不会构建容器镜像。
+客户端应区分预览结果和写操作，并在调用写工具前确认该动作属于用户当前任务的授权范围。
+
 ## 结构化结果
 
 规范性：返回结构化数据的成功操作应包含足够字段，让 AI 客户端不需要解析自然语言也能继续工作。
@@ -73,6 +90,10 @@
 app invocation compile 应使用和正常 TAFFISH 编译相同的底层参数绑定逻辑校验参数。它是面向 AI 客户端的安全预览路径，不是运行时。
 
 容器后端可用性可以被探测并放入 compiler context，但 MCP compile 操作不能拉取镜像或启动容器。
+
+生成的 `<taffish>` block 仅在该 shell 后续被执行时才编译内联子步骤；返回 shell 或
+构建 wrapper 不会启动这些子命令。完整源码注释行不会产生子命令编译步骤，见
+[参数替换、转发与展示](argument-passing.md)。
 
 对于接收 `containerBackend` 的工具，有效强制 backend 的优先级是：
 

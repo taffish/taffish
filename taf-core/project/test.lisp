@@ -890,6 +890,37 @@ echo after")
           (taf.core:project-check (han.os:current-directory) nil)))
        t))))
 
+(deftest test-taf-project-dependencies-share-source-inline-boundaries ()
+  (dolist (entry '(("[[taf: taf-a 'x]] [[taf: taf-fake]]' ]] | [[taf: taf-b \"y]]\" ]]"
+                    ("taf-a" "taf-b"))
+                   ("[[taf: taf-a ::(--/-i)input='x]] [[taf: taf-fake]]':: ]]" ("taf-a"))
+                   ("::(--/-i)input='[[taf: taf-fake]]'::" nil)
+                   ("[::(--/-i)input::[taf: taf-fake]]" nil)
+                   ("echo \\[[taf: taf-fake]]; [[taf: taf-a a\\]]b ]]" ("taf-a"))
+                   ("[[taf: taf-a '\"$threads\"' ]]" ("taf-a"))
+                   ("" nil)))
+    (destructuring-bind (line expected) entry
+      (check-equal expected (taf.core::%scan-taf-dependency-queries-in-line line))
+      (check-equal expected
+                   (taf.core::%flow-dependency-queries-from-program
+                    (taffish.core:parse-taf (format nil "<taffish>~%~A~%echo end~%" line)))))))
+
+(deftest test-taf-project-dependency-errors-are-still-rejected ()
+  (dolist (line '("[[taf: ]]" "[[taf: not-an-app ]]" "[[taf: taf-a 'x]]'"
+                  "[[taf: taf-a ::(--/-i)input=']] '::"))
+    (check-true (%taf-project-signal-error-p
+                 (lambda () (taf.core::%scan-taf-dependency-queries-in-line line))))))
+
+(deftest test-taf-project-inline-comments-and-tabs-match-compilation ()
+  (let* ((source (format nil "<taffish>~%# [[taf: taf-hidden ignored]]~%~C# [[taf: ]]~%# [[taf: unfinished~%[[taf: taf-live~Carg]]~%"
+                         #\Tab #\Tab))
+         (program (taffish.core:parse-taf source))
+         (shell (taffish.core:taffish-to-shell source '("taf-demo") nil)))
+    (check-equal (taf.core::%flow-dependency-queries-from-program program) '("taf-live"))
+    (check-true (search "if taf-live --compile arg" shell))
+    (check-equal (search "if taf-hidden" shell) nil)
+    (check-equal (search "taffish_step_2=" shell) nil)))
+
 (deftest test-taf-project-check-flow-dependency-version-mismatch-error ()
   (with-taf-project-temp-dir (dir)
     (taf.core:project-new "demo-flow-dep-mismatch" nil)

@@ -4,7 +4,7 @@
 
 ## 作用
 
-compiler 不再理解用户输入或 TAF 源码结构。它接收 binder 已经整理好的结果，完成三件事：
+compiler 接收 binder 已经整理好的结果，不重新解析 CLI 输入或 TAF 源码，完成三件事：
 
 1. 把 `::arg::` token 解析为实际值。
 2. 把 RUN block 转换为 resolved block。
@@ -26,8 +26,18 @@ arg 值为 `nil` 时会输出空字符串。
 compiler 内部使用 plist 表示 resolved line：
 
 ```lisp
-(:line <line-string> :number <line-number>)
+(:line <line-string> :number <line-number>
+ :source-line <original-taf-line> :resolved-parts <parts>)
 ```
+
+每个片段记录 `:kind`、`:token`（原 token）和解析后的 `:text`。注释与空行使用
+一个不带 token 的文本片段。这些片段与 `:line` 在同一遍解析中产生，不重复查询参数，
+也不修改原 program。按顺序拼接所有片段的文本，结果等于 `:line`。
+
+目前只有 `<taffish>` 的内联边界扫描使用这些来源信息，其他 emitter 仍可读取
+`:line/:number`。标签选择和参数格式化仍使用解析后的值。新增字段是内部只读元信息，
+不是新的 MCP/JSON 字段，也不替代旧的双字段 `emit-block` 输入。见
+[Emitter API](../api/emitter-api.md)。
 
 resolved block 的结构是：
 

@@ -173,11 +173,9 @@ Pinned version:
 curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sh -s -- --version 0.11.0 --user
 ```
 
-Install from a local tarball:
-
-```sh
-sh install/install-taffish.sh --user --archive ./taffish-0.11.0-target.tar.gz
-```
+For an offline install, use the install script and original tarball from the same
+release tag. The [offline instructions](../README.md#local-or-offline-install)
+show how to verify the signed payload and skip the online index update.
 
 Install from an explicit URL:
 

@@ -11,10 +11,10 @@ The interface MAY expose:
 1. Version and help metadata.
 2. Source/file validation, summary, and compile-to-shell operations.
 3. Installed taf-app lookup, inspection, usage summary, trust/smoke metadata exposure, and invocation compile.
-4. Current project check, inspection, usage summary, trust/smoke metadata exposure, compile, and safe build planning.
+4. Current project check, inspection, usage summary, trust/smoke metadata exposure, compile, project creation, and local command-wrapper builds.
 5. Hub search/info/list/which/update operations.
 6. Config, environment, and history query operations.
-7. Dry-run install/uninstall helpers.
+7. Install/uninstall helpers that default to dry-run and allow explicit local changes.
 
 The interface MUST NOT expose:
 
@@ -46,6 +46,26 @@ Recommended domains:
 | Hub | `taffish_search_apps`, `taffish_install_app` |
 | system | `taffish_check_environment`, `taffish_get_config` |
 
+## Local Writes And Dry-Run Defaults
+
+The server is conservative, but not entirely read-only. Its existing write
+tools have these boundaries:
+
+| Tool | Local effect |
+| --- | --- |
+| `taffish_update_index` | Downloads and writes the local index cache. |
+| `taffish_create_project` | Creates project files under the server's current working directory. |
+| `taffish_build_project` | Builds the project's command wrapper and frozen source snapshot; it does not build images or run the project. |
+| `taffish_install_app` | Defaults to `dryRun: true`; explicit `dryRun: false` installs local apps and, unless disabled, their dependencies. |
+| `taffish_uninstall_app` | Defaults to `dryRun: true`; explicit `dryRun: false` removes the selected local installs. |
+
+`taffish_plan_install_all`, `taffish_plan_upgrade`, and `taffish_plan_prune`
+remain planning tools and do not perform their proposed changes. These tools
+are distinct from the explicit install/uninstall helpers. Creating a Dockerfile
+or image workflow does not execute that workflow or build a container image.
+Clients must distinguish preview results from writes and obtain authorization
+appropriate to the user's requested task before invoking a write tool.
+
 ## Structured Results
 
 Normative: successful operations that return structured data should include enough fields for an AI client to proceed without parsing prose.
@@ -73,6 +93,11 @@ Normative: source, file, project, and app invocation compile tools may return sh
 App invocation compile should validate arguments using the same underlying argument-binding logic as normal TAFFISH compilation. The result is a safer preview path for AI clients, not a runtime.
 
 Container backend availability may be detected and included in compiler context, but MCP compile operations must not pull images or start containers.
+
+Inline child compilation in a generated `<taffish>` block happens only when
+that shell is later executed. Returning shell or building a wrapper does not
+start those child commands. Full-line source comments do not create child
+compilation steps; see [Argument Passing](argument-passing.md).
 
 For tools that accept `containerBackend`, the effective forced backend priority is:
 

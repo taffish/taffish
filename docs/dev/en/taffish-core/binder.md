@@ -25,12 +25,17 @@ The binder is responsible for:
 | `*HOMEDIR*` | `taf-context-homedir` |
 | `*WORKDIR*` | `taf-context-workdir` |
 | `*LOADDIR*` | `taf-context-loaddir` |
-| `*ARGV*` | `taf-context-argv` |
+| `*ARGV*` | `taf-context-argv` joined with spaces, without shell encoding |
 | `*CMD*` | `taf-context-cmd` |
 | `*CPUS*` | `taf-context-cpus` |
 | `*CONTAINER*` | `taf-context-container` |
 
 List context values are joined with spaces; other non-string values are converted to strings with `format`.
+
+`*ARGV*` is therefore shell text, not a lossless argv array. Quoting the whole
+`"::*ARGV*::"` gives a joined display string, not per-argument forwarding; shell
+expansion still applies. Compare this with block-token encoding in
+[Argument Passing](../../../standards/en/argument-passing.md).
 
 ## taf-app Command Mode
 
