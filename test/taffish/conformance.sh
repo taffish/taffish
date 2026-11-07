@@ -1,6 +1,8 @@
 # External conformance tests for the taffish binary.
 # This file is sourced by test/run-tests.sh.
 
+. "$TAFFISH_TEST_REPO_ROOT/test/lib/compile-backends.sh"
+
 _taffish_final_run_args() {
   printf '%s\n' "$1" | sed -n 's/^# FINAL RUN ARGS: //p' | head -n 1
 }
@@ -264,7 +266,7 @@ _taffish_case_legacy_container_args_compile() {
 echo legacy
 TAF
 
-  shell=$($TAFFISH_BIN "$file") || return 1
+  shell=$(compile_with_test_backends "$dir" "$TAFFISH_BIN" "$file") || return 1
   assert_contains "$shell" "--pull=never --network host" "legacy container args" || return 1
   assert_contains "$shell" "docker run" "legacy explicit docker backend" || return 1
 }
@@ -278,7 +280,7 @@ _taffish_case_structured_container_args_docker_compile() {
 echo docker structured
 TAF
 
-  shell=$($TAFFISH_BIN "$file") || return 1
+  shell=$(compile_with_test_backends "$dir" "$TAFFISH_BIN" "$file") || return 1
   final_args=$(_taffish_final_run_args "$shell")
   assert_contains "$final_args" "--pull=never" "structured all args for docker" || return 1
   assert_contains "$final_args" "--gpus all" "structured docker args" || return 1
@@ -295,7 +297,7 @@ _taffish_case_structured_container_args_combo_compile() {
 echo combo structured
 TAF
 
-  shell=$($TAFFISH_BIN "$file") || return 1
+  shell=$(compile_with_test_backends "$dir" "$TAFFISH_BIN" "$file") || return 1
   final_args=$(_taffish_final_run_args "$shell")
   assert_contains "$final_args" "--network host" "structured container alias args" || return 1
   assert_contains "$final_args" "--security-opt=label=disable" "structured docker/podman combo args" || return 1
@@ -311,7 +313,7 @@ _taffish_case_structured_container_args_escape_compile() {
 echo escaped bracket
 TAF
 
-  shell=$($TAFFISH_BIN "$file") || return 1
+  shell=$(compile_with_test_backends "$dir" "$TAFFISH_BIN" "$file") || return 1
   assert_contains "$shell" "--label note=a]b" "escaped right bracket in structured args" || return 1
 }
 
@@ -324,7 +326,8 @@ _taffish_case_container_env_run_args_compile() {
 echo env args
 TAF
 
-  shell=$(TAFFISH_DOCKER_RUN_ARGS="--env TAFFISH_EXTERNAL_TEST=1" "$TAFFISH_BIN" "$file") || return 1
+  shell=$(TAFFISH_DOCKER_RUN_ARGS="--env TAFFISH_EXTERNAL_TEST=1" \
+    compile_with_test_backends "$dir" "$TAFFISH_BIN" "$file") || return 1
   assert_contains "$shell" "--pull=never" "structured args with env" || return 1
   assert_contains "$shell" "--env TAFFISH_EXTERNAL_TEST=1" "env container run args" || return 1
 }
@@ -332,15 +335,6 @@ TAF
 _taffish_case_structured_generic_backend_selection() {
   dir=$TAFFISH_TEST_TMP_ROOT/taffish-container-generic-selection
   mkdir -p "$dir"
-  shim_dir=$dir/bin
-  mkdir -p "$shim_dir"
-  for backend in docker podman apptainer; do
-    cat > "$shim_dir/$backend" <<'SH'
-#!/bin/sh
-exit 0
-SH
-    chmod +x "$shim_dir/$backend"
-  done
 
   file=$dir/container-generic-selection.taf
   cat > "$file" <<'TAF'
@@ -348,21 +342,24 @@ SH
 echo generic structured
 TAF
 
-  docker_shell=$(PATH="$shim_dir:$PATH" TAFFISH_CONTAINER_BACKEND=docker "$TAFFISH_BIN" "$file") || return 1
+  docker_shell=$(TAFFISH_CONTAINER_BACKEND=docker \
+    compile_with_test_backends "$dir" "$TAFFISH_BIN" "$file") || return 1
   docker_args=$(_taffish_final_run_args "$docker_shell")
   assert_contains "$docker_args" "--pull=never" "generic docker gets all args" || return 1
   assert_contains "$docker_args" "--gpus all" "generic docker gets docker args" || return 1
   assert_not_contains "$docker_args" "--device nvidia.com/gpu=all" "generic docker excludes podman args" || return 1
   assert_not_contains "$docker_args" " --nv" "generic docker excludes apptainer args" || return 1
 
-  podman_shell=$(PATH="$shim_dir:$PATH" TAFFISH_CONTAINER_BACKEND=podman "$TAFFISH_BIN" "$file") || return 1
+  podman_shell=$(TAFFISH_CONTAINER_BACKEND=podman \
+    compile_with_test_backends "$dir" "$TAFFISH_BIN" "$file") || return 1
   podman_args=$(_taffish_final_run_args "$podman_shell")
   assert_contains "$podman_args" "--pull=never" "generic podman gets all args" || return 1
   assert_contains "$podman_args" "--device nvidia.com/gpu=all" "generic podman gets podman args" || return 1
   assert_not_contains "$podman_args" "--gpus all" "generic podman excludes docker args" || return 1
   assert_not_contains "$podman_args" " --nv" "generic podman excludes apptainer args" || return 1
 
-  apptainer_shell=$(PATH="$shim_dir:$PATH" TAFFISH_CONTAINER_BACKEND=apptainer "$TAFFISH_BIN" "$file") || return 1
+  apptainer_shell=$(TAFFISH_CONTAINER_BACKEND=apptainer \
+    compile_with_test_backends "$dir" "$TAFFISH_BIN" "$file") || return 1
   apptainer_args=$(_taffish_final_run_args "$apptainer_shell")
   assert_contains "$apptainer_args" "--pull=never" "generic apptainer gets all args" || return 1
   assert_contains "$apptainer_args" " --nv" "generic apptainer gets apptainer args" || return 1
@@ -484,7 +481,7 @@ TAF
 <docker:alpine:latest$@[docker: --label note=你好]>
 echo unicode container args
 TAF
-  container_shell=$(env LC_ALL="$TAFFISH_TEST_UTF8_LOCALE" \
+  container_shell=$(compile_with_test_backends "$dir" env LC_ALL="$TAFFISH_TEST_UTF8_LOCALE" \
     LANG="$TAFFISH_TEST_UTF8_LOCALE" "$TAFFISH_BIN" "$container_file") || return 1
   assert_contains "$container_shell" "--label note=你好" \
     "Unicode structured container args" || return 1

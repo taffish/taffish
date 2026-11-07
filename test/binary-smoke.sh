@@ -44,6 +44,7 @@ contains() {
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 REPO_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
+. "$SCRIPT_DIR/lib/compile-backends.sh"
 
 VERSION=
 TARGET_DIR=$REPO_ROOT/target
@@ -176,7 +177,7 @@ EOF
 
 container_shell=$(
   TAFFISH_DOCKER_RUN_ARGS="--env TAFFISH_BINARY_SMOKE=1" \
-    "$TAFFISH_BIN" "$TMP_ROOT/container-args.taf"
+    compile_with_test_backends "$TMP_ROOT" "$TAFFISH_BIN" "$TMP_ROOT/container-args.taf"
 )
 contains "$container_shell" "--pull=never" "structured container args"
 contains "$container_shell" "--gpus all" "docker-specific container args"

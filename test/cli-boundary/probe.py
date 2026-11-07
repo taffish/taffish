@@ -152,6 +152,10 @@ def startup():
                     failures += 1
                     assert code == 1 and not streams["stdout"]
                     assert PREFIX[app] in streams["terminal" if terminal else "stderr"]
+                    if app == "taffish-mcp" and not terminal:
+                        # Keep stdout observable if reporting this same error fails.
+                        failure(app, ["--help"], env={"TAFFISH_USER_HOME": home},
+                                read_only=(2,))
         assert failures >= 2, "did not exercise a startup pathname failure"
 
 
@@ -181,20 +185,32 @@ def unwritable_stderr():
                 assert not streams["stderr"] or PREFIX[app] in streams["stderr"]
                 assert not streams["terminal"] or PREFIX[app] in streams["terminal"]
     failure("taf", ["unknown-boundary-command"], close=(2,))
+    # A valid ping requires a reply. Writing it to a pipe with no reader
+    # forces a transport error regardless of the runtime's input decoder.
+    stderr_faults = [{"read_only": (2,)}, {"close": (2,)}]
+    if sys.platform.startswith("linux"):
+        stderr_faults.append({"full": (2,)})
+    for fault in stderr_faults:
+        streams = failure("taffish-mcp", data=rpc("ping"), broken=True, **fault)
+        if "close" in fault:
+            assert not streams["stderr"] or PREFIX["taffish-mcp"] in streams["stderr"]
+            assert not streams["terminal"] or PREFIX["taffish-mcp"] in streams["terminal"]
+        else:
+            assert not streams["stderr"] and not streams["terminal"]
     if sys.platform.startswith("linux"):
         source = ROOT / "invalid.taf"
         source.write_bytes(b"\xff\n")
         for destinations in ({"close": (2,)}, {"full": (2,)}):
             failure("taf", ["unknown-boundary-command"], **destinations)
             failure("taffish", [str(source)], **destinations)
-            failure("taffish-mcp", data=b"\xff\n", **destinations)
 
 
 def broken_stdout():
     for app in BINS:
         streams = failure(app, ["--help"], broken=True)
         assert PREFIX[app] in streams["stderr"]
-    failure("taffish-mcp", data=rpc("ping"), broken=True)
+    streams = failure("taffish-mcp", data=rpc("ping"), broken=True)
+    assert PREFIX["taffish-mcp"] in streams["stderr"]
 
 
 def interrupt():

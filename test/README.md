@@ -75,6 +75,11 @@ closing stdout/stderr before startup is not a portable write-failure fixture:
 the runtime may reuse those descriptor numbers when opening its terminal.
 Closed-stderr help probes therefore also force an independent stdout pipe failure;
 they still require failure exit, no stdout pollution, and no debugger output.
+The MCP transport probe sends a valid `ping` with no reader on its response
+pipe. It checks exit status 1 with read-only or closed stderr, and with stderr
+on `/dev/full` on Linux. A separate startup failure keeps stdout open and
+checks it stays empty when stderr is read-only. The session recovery test
+sends a second request after malformed JSON.
 Tests do not run containers or contact a remote service. They require rebuilt
 binaries containing the error-boundary fix; old binaries intentionally fail.
 
@@ -111,9 +116,11 @@ Current suites:
   project, and MCP startup smoke checks.
 - `taffish/conformance.sh`: real `taffish` source/stdin compilation behavior,
   argument binding, error paths, and container runtime-argument compilation.
-  It includes generic `<container:...>` backend-selection checks for structured
-  `$@[...]` arguments across Docker, Podman, and Apptainer using local command
-  shims for deterministic backend discovery, plus concurrent delivered-binary
+  Tests that inspect generated container commands, including binary smoke, put
+  temporary Docker, Podman, and Apptainer commands on the compiler's `PATH`.
+  The test fails if the compiler calls one. Coverage includes generic
+  `<container:...>` backend selection for structured `$@[...]` arguments,
+  plus concurrent delivered-binary
   compilation to catch temporary-file collisions and process cross-talk.
   `taffish/argument-contract.py` adds offline compiler cases for scalar text, block
   token forwarding/display, raw and quoted `*ARGV*`, command-mode shell text,
