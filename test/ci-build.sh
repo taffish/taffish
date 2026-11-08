@@ -10,18 +10,18 @@ fail() {
 
 [ "$#" -eq 1 ] || fail 'usage: sh test/ci-build.sh /absolute/empty/output-directory'
 command -v sbcl >/dev/null 2>&1 || fail 'sbcl is required'
-SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
-REPO_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd -P)
+SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
+REPO_ROOT=$(CDPATH='' cd -- "$SCRIPT_DIR/.." && pwd -P)
 
 case "$1" in
   /*) ;;
   *) fail 'output directory must be absolute' ;;
 esac
 if [ -d "$1" ]; then
-  BUILD_DIR=$(CDPATH= cd -- "$1" && pwd -P)
+  BUILD_DIR=$(CDPATH='' cd -- "$1" && pwd -P)
 else
   # Require an existing parent, so validation never creates a source directory.
-  BUILD_PARENT=$(CDPATH= cd -- "$(dirname -- "$1")" && pwd -P) || \
+  BUILD_PARENT=$(CDPATH='' cd -- "$(dirname -- "$1")" && pwd -P) || \
     fail 'output parent directory must already exist'
   BUILD_NAME=$(basename -- "$1")
   case "$BUILD_NAME" in ''|.|..) fail 'invalid output directory name' ;; esac
