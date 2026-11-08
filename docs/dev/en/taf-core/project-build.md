@@ -94,10 +94,14 @@ The wrapper records runtime history to JSONL, asynchronously by default. Environ
 
 | Variable | Role |
 | --- | --- |
-| `TAFFISH` | Specify taffish compiler path. |
-| `TAF_HISTORY_MODE` | `async`, `sync`, or `off`. |
+| `TAFFISH` | Path to the matching `taffish` executable for compilation and runtime history. |
+| `TAF_HISTORY_MODE` | `async` (default), `sync`, or `off`. `0` also disables recording. |
 | `TAF_HISTORY_FILE` | Specify history file. |
 | `TAFFISH_USER_HOME` | Default history home. |
+
+The async branch redirects the background subshell's standard streams before calling
+the recorder. This lets a caller finish reading the tool's output while the recorder
+waits for the history lock. [History specification](../../../standards/en/history-spec.md)
 
 ## Flow Dependency Synchronization
 

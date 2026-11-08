@@ -195,6 +195,9 @@ tag 获取 completion 和 Vim 文件。可以通过 `--provider`、`--raw-base-u
 成功后，`<TAFFISH_HOME>/install-receipt.toml` 会记录版本、scope、source kind、实际
 校验等级、SIF 策略、asset 名和 SHA256，但不会保存 URL、token、密码或凭据。
 
+已有收据必须是普通文件。无论首次安装还是重复安装，如果收据路径是符号链接，
+即使其目标不存在，安装器也会停止。
+
 默认会尝试运行 `taf update`。网络失败只会产生 warning，不会回滚已经校验并提交的核心
 安装。system 安装的 post-install 使用明确的 system scope。
 

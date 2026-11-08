@@ -18,9 +18,10 @@ cwd、backend、exit code、extra metadata 和 taf version。project 会展开�
 name、kind、version、release、command、root、main path、repository URL 和
 container image。默认 `safe t`，写入失败返回 nil，不中断主流程。
 
-每个事件都会获得包含进程信息的唯一 ID，并通过 `han.host` 作为一条完整 UTF-8 JSONL
-记录追加。多个 `taf` 进程并发时不会复用 ID，也不会互相覆盖记录；多个首次写入进程
-同时创建 history 目录的情况也属于该保证范围。
+wrapper 以 NUL 分隔字段，将原始参数及其数量交给配套的 `taffish`。接收端核对参数数量，
+编码成一行 UTF-8 JSONL，ID 保留 wrapper 的 PID。原生 `taf` 和 wrapper 共用
+`%history-append-line`。独立锁文件在清空历史后保留，确保 `--clear` 与随后打开历史文件
+的写入进程使用同一把锁。详见[历史记录规范](../../../standards/zh-CN/history-spec.md)。
 
 `system-history` 支持：
 

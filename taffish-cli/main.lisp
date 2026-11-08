@@ -206,15 +206,18 @@
 (defun %main (raw-argv)
   (handler-case
       (progn
-        (multiple-value-bind (input-source core-args core-context)
-            (%parse-raw-args raw-argv)
-          (case input-source
-            (:help
-             (run-taffish-help))
-            (:version
-             (run-taffish-version))
-            (t
-             (run-taffish-cli input-source core-args core-context))))
+        ;; Require both signals so an ordinary compiler invocation can still
+        ;; pass the same token as a positional argument to a TAF program.
+        (let ((history-file (and (equal (rest raw-argv) '("--taffish-wrapper-history"))
+                                 (han.host:getenv "TAFFISH_INTERNAL_HISTORY_FILE"))))
+          (if (and history-file (plusp (length history-file)))
+              (taf.core:system-record-wrapper-history history-file *standard-input*)
+              (multiple-value-bind (input-source core-args core-context)
+                  (%parse-raw-args raw-argv)
+                (case input-source
+                  (:help (run-taffish-help))
+                  (:version (run-taffish-version))
+                  (t (run-taffish-cli input-source core-args core-context))))))
         (han.host:quit 0))
     (taffish.core:taffish-error (c)
       (%print-taffish-error c)

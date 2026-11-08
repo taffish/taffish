@@ -604,6 +604,30 @@ _installer_case_collision_lock_and_rollback() {
     "$dir/collision-output/bin" "$dir/collision-output/home" --force >/dev/null || exit 1
   "$dir/collision-output/bin/taf" --version | grep -F "$TAFFISH_TEST_VERSION" >/dev/null || exit 1
 
+  # New binaries take the receipt backup path; matching binaries go straight
+  # to the receipt writer. Neither path may replace a symlink.
+  for receipt_case in fresh matching; do
+    receipt_root=$dir/receipt-link-$receipt_case
+    mkdir -p "$receipt_root/home"
+    if [ "$receipt_case" = matching ]; then
+      _installer_run_archive "$archive" "$receipt_root/bin" "$receipt_root/home" >/dev/null || exit 1
+      mv "$receipt_root/home/install-receipt.toml" "$receipt_root/home/saved-receipt" || exit 1
+      saved_receipt_hash=$(_installer_sha256 "$receipt_root/home/saved-receipt") || exit 1
+    fi
+    ln -s saved-receipt "$receipt_root/home/install-receipt.toml" || exit 1
+    capture_command _installer_run_archive "$archive" "$receipt_root/bin" "$receipt_root/home"
+    assert_capture_failure "installer $receipt_case symlink receipt" || exit 1
+    assert_contains "$TAFFISH_CAPTURE_OUTPUT" 'refusing to replace non-regular install receipt' \
+      "installer $receipt_case symlink receipt" || exit 1
+    [ -L "$receipt_root/home/install-receipt.toml" ] || exit 1
+    if [ "$receipt_case" = matching ]; then
+      assert_eq "$saved_receipt_hash" "$(_installer_sha256 "$receipt_root/home/saved-receipt")" \
+        'installer preserves linked receipt' || exit 1
+    else
+      [ ! -e "$receipt_root/home/saved-receipt" ] || exit 1
+    fi
+  done
+
   mkdir -p "$dir/rollback-output/bin" "$dir/mv-wrapper"
   for name in taf taffish taffish-mcp; do
     _installer_write_fake_binary "$dir/rollback-output/bin/$name" \

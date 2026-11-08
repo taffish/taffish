@@ -20,10 +20,11 @@ expanded into name, kind, version, release, command, root, main path,
 repository URL, and container image. With the default `safe t`, a history
 write failure returns nil instead of interrupting execution.
 
-Each event receives a process-aware unique ID and is appended as one UTF-8
-JSONL record through `han.host`. Concurrent `taf` processes therefore do not
-reuse IDs or overwrite one another's records, including when several first
-writers race to create the history directory.
+The wrapper sends NUL-delimited fields and its original argument count to the matching
+`taffish` executable. The receiver checks the count and encodes one UTF-8 JSONL event;
+the ID retains the wrapper PID. Native `taf` events and wrapper events both use
+`%history-append-line`. The persistent sidecar lock also coordinates `--clear` with
+writers that are about to open the data file. See the [history contract](../../../standards/en/history-spec.md).
 
 `system-history` supports:
 

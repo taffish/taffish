@@ -1423,6 +1423,12 @@ Repeated `taf build` is idempotent for the versioned command wrapper and frozen
 source snapshot: unchanged valid artifacts are verified and not rewritten.
 Explicit container image builds remain separate operations.
 
+After upgrading `taf` and `taffish` to v0.11.0, run `taf build` in each app
+source project that still uses an older wrapper. The regenerated wrapper uses
+the same history lock as `taf`, and its background writer releases the output
+pipes so callers can finish reading as soon as the tool exits.
+[Wrapper history](docs/standards/en/history-spec.md)
+
 Publish with release notes:
 
 ```sh

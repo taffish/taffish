@@ -328,6 +328,38 @@
     (check-true (integerp pid))
     (check-true (> pid 0))))
 
+(deftest test-host-exclusive-file-lock ()
+  (let* ((root (%han-host-test-directory))
+         (file (merge-pathnames "logs/记录.lock" root))
+         (entered-again nil))
+    (unwind-protect
+         (progn
+           (check-equal
+            '(:first :second)
+            (multiple-value-list
+             (han.host:call-with-exclusive-file-lock
+              file
+              (lambda ()
+                ;; A separately opened descriptor must contend even in this process.
+                (check-true
+                 (signal-error-p
+                  (lambda ()
+                    (han.host:call-with-exclusive-file-lock
+                     file (lambda () (setf entered-again t)) :timeout 0))))
+                (check-false entered-again)
+                (values :first :second)))))
+           (check-equal
+            :unwound
+            (catch 'escape
+              (han.host:call-with-exclusive-file-lock
+               file (lambda () (throw 'escape :unwound)) :timeout 0)))
+           (check-true (han.host:file-exists-p file))
+           (check-equal :reacquired
+                        (han.host:call-with-exclusive-file-lock
+                         file (lambda () :reacquired) :timeout 0)))
+      (when (han.host:directory-exists-p root)
+        (han.host:delete-directory-tree root)))))
+
 (deftest test-host-append-utf8-line ()
   (let* ((root (%han-host-test-directory))
          (file (merge-pathnames "logs/history.jsonl" root))
@@ -349,6 +381,25 @@
       (ignore-errors
         (when (han.host:directory-exists-p root)
           (han.host:delete-directory-tree root))))))
+
+(deftest test-host-lock-and-append-literal-os-path ()
+  (let* ((root (%han-host-test-directory))
+         (path (concatenate 'string (namestring root) "dir[*]\\?/bad[.jsonl"))
+         (lock (concatenate 'string path ".lock")))
+    (unwind-protect
+         (progn
+           (han.host:call-with-exclusive-file-lock
+            lock (lambda () (han.host:append-utf8-line path "literal")))
+           ;; Read via the OS, independently of either Lisp's pathname parser.
+           (multiple-value-bind (out err code)
+               (han.host:run-program-sync (list "/bin/cat" path))
+             (check-equal 0 code)
+             (check-equal "" err)
+             (check-equal (format nil "literal~%") out))
+           (check-equal 0 (nth-value 2 (han.host:run-program-sync
+                                        (list "/bin/test" "-f" lock)))))
+      (when (han.host:directory-exists-p root)
+        (han.host:delete-directory-tree root)))))
 
 (deftest test-host-run-program-sync-unicode-path-argument ()
   (let* ((root (%han-host-test-directory))

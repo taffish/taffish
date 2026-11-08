@@ -46,6 +46,46 @@
     ((file (:pointer :void)))
   :result-type :int)
 
+(defun %literal-file-pathname (path)
+  ;; On Unix LispWorks removes a backslash escape when a CL pathname is
+  ;; passed to the OS, and rejects empty intermediate directory components.
+  (pathname
+   (with-character-output-to-string (out)
+     (loop for index below (length path)
+           for char = (char path index)
+           unless (and (char= char #\/) (plusp index)
+                       (char= (char path (1- index)) #\/))
+             do (when (find char "\\*:")
+                  (write-char #\\ out))
+                (write-char char out)))))
+
+#+(or darwin macosx linux)
+(progn
+  (fli:define-foreign-function (%lispworks-open-lock "open")
+      ((path (:pointer :void)) (flags :int) (mode :int))
+    :variadic-num-of-fixed 2
+    :result-type :int)
+
+  (fli:define-foreign-function (%lispworks-flock "flock")
+      ((fd :int) (operation :int))
+    :result-type :int)
+
+  (fli:define-foreign-function (%close-lock-file "close") ((fd :int))
+    :result-type :int)
+
+  (defun %open-lock-file (path flags)
+    (fli:with-dynamic-foreign-objects ()
+      (let* ((cstring (fli:convert-to-dynamic-foreign-string
+                       path :external-format :utf-8))
+             (fd (%lispworks-open-lock cstring flags #o666)))
+        (if (minusp fd)
+            (values nil (lw:errno-value))
+            fd))))
+
+  (defun %try-exclusive-file-lock (fd)
+    (unless (zerop (%lispworks-flock fd (logior 2 4))) ; LOCK_EX | LOCK_NB
+      (lw:errno-value))))
+
 (defclass %lispworks-utf8-output-stream
     (stream:fundamental-character-output-stream)
   ((file-descriptor
@@ -89,10 +129,9 @@
 
 (defun append-utf8-line (path line)
   "Append LINE and one newline to PATH using C append mode and UTF-8 bytes."
-  (let* ((file-path (%->pathname path))
-         (path-string (namestring file-path))
+  (let* ((file-path (%prepare-native-file path))
+         (path-string (%native-open-name path))
          (text (%utf8-line-string line)))
-    (%ensure-parent-directories-for-file file-path)
     (fli:with-dynamic-foreign-objects ()
       (multiple-value-bind (path-pointer path-characters path-bytes)
           (fli:convert-to-dynamic-foreign-string

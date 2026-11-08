@@ -237,6 +237,9 @@ kind, actual verification level, SIF policy, selected asset names, and SHA256
 values. It intentionally does not record download URLs, credentials, tokens, or
 passwords.
 
+An existing receipt must be a regular file. The installer refuses a symlink at
+the receipt path, including a dangling symlink, during both installation and reinstallation.
+
 `taf update` is attempted by default after installation. If it fails because
 of network problems, the installer prints a warning but does not roll back the
 installation.

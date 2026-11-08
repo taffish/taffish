@@ -1120,8 +1120,9 @@ taffish_install_binaries_transactionally() {
 
     TAFFISH_INSTALL_RECEIPT_PATH=$TAFFISH_INSTALL_HOME/install-receipt.toml
     if [ -e "$TAFFISH_INSTALL_RECEIPT_PATH" ] || [ -L "$TAFFISH_INSTALL_RECEIPT_PATH" ]; then
-        [ -f "$TAFFISH_INSTALL_RECEIPT_PATH" ] && [ ! -L "$TAFFISH_INSTALL_RECEIPT_PATH" ] || \
+        if [ ! -f "$TAFFISH_INSTALL_RECEIPT_PATH" ] || [ -L "$TAFFISH_INSTALL_RECEIPT_PATH" ]; then
             taffish_die "refusing to replace non-regular install receipt: $TAFFISH_INSTALL_RECEIPT_PATH"
+        fi
         cp "$TAFFISH_INSTALL_RECEIPT_PATH" \
             "$TAFFISH_INSTALL_TRANSACTION_DIR/backup-install-receipt.toml" || \
             taffish_die "failed to back up existing install receipt"
@@ -1178,8 +1179,9 @@ taffish_receipt_value() {
 taffish_write_install_receipt() {
     TAFFISH_INSTALL_RECEIPT_PATH=$TAFFISH_INSTALL_HOME/install-receipt.toml
     if [ -e "$TAFFISH_INSTALL_RECEIPT_PATH" ] || [ -L "$TAFFISH_INSTALL_RECEIPT_PATH" ]; then
-        [ -f "$TAFFISH_INSTALL_RECEIPT_PATH" ] && [ ! -L "$TAFFISH_INSTALL_RECEIPT_PATH" ] || \
+        if [ ! -f "$TAFFISH_INSTALL_RECEIPT_PATH" ] || [ -L "$TAFFISH_INSTALL_RECEIPT_PATH" ]; then
             taffish_die "refusing to replace non-regular install receipt: $TAFFISH_INSTALL_RECEIPT_PATH"
+        fi
     fi
     _taf_receipt_tmp=$(mktemp "$TAFFISH_INSTALL_HOME/.install-receipt.XXXXXX") || \
         taffish_die "failed to create install receipt staging file"

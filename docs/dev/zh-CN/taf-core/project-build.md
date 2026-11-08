@@ -88,10 +88,13 @@ wrapper 会记录运行历史到 JSONL，默认异步写入。可通过环境变
 
 | 变量 | 作用 |
 | --- | --- |
-| `TAFFISH` | 指定 taffish 编译器路径。 |
-| `TAF_HISTORY_MODE` | `async`、`sync`、`off`。 |
+| `TAFFISH` | 指定配套的 `taffish` 可执行程序路径，供编译和运行历史写入使用。 |
+| `TAF_HISTORY_MODE` | `async`（默认）、`sync` 或 `off`。设为 `0` 也会关闭记录。 |
 | `TAF_HISTORY_FILE` | 指定 history 文件。 |
 | `TAFFISH_USER_HOME` | 默认 history home。 |
+
+异步分支先重定向后台子 shell 的标准流，再调用记录函数。这样，即使记录器正在等锁，
+调用方也能读完工具输出。详见[历史记录规范](../../../standards/zh-CN/history-spec.md)。
 
 ## flow dependency 同步
 

@@ -22,17 +22,34 @@
   "Return the operating-system process ID of the current Lisp process."
   (sb-unix:unix-getpid))
 
+(defun %literal-file-pathname (path)
+  (sb-ext:parse-native-namestring path))
+
+#+(or darwin linux)
+(progn
+  (sb-alien:define-alien-routine ("flock" %sbcl-flock) sb-alien:int
+    (fd sb-alien:int) (operation sb-alien:int))
+
+  (defun %open-lock-file (path flags)
+    (sb-unix:unix-open (coerce path 'simple-string) flags #o666))
+
+  (defun %try-exclusive-file-lock (fd)
+    (unless (zerop (%sbcl-flock fd (logior 2 4))) ; LOCK_EX | LOCK_NB
+      (sb-alien:get-errno)))
+
+  (defun %close-lock-file (fd)
+    (sb-unix:unix-close fd)))
+
 (defun append-utf8-line (path line)
   "Append LINE and one newline to PATH using O_APPEND and UTF-8 bytes."
-  (let* ((file (%->pathname path))
+  (let* ((file (%prepare-native-file path))
          (text (%utf8-line-string line))
          (octets (sb-ext:string-to-octets text :external-format :utf-8))
          (flags (logior sb-unix:o_wronly
                         sb-unix:o_creat
                         sb-unix:o_append)))
-    (%ensure-parent-directories-for-file file)
     (multiple-value-bind (file-descriptor open-error)
-        (sb-unix:unix-open (coerce (namestring file) 'simple-string)
+        (sb-unix:unix-open (coerce (%native-open-name path) 'simple-string)
                            flags #o666)
       (unless file-descriptor
         (error "open(2) failed for append path ~A (errno ~A)."

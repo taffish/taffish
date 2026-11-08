@@ -50,7 +50,9 @@
         (#\Newline (write-string "\\n" out))
         (#\Return (write-string "\\r" out))
         (#\Tab (write-string "\\t" out))
-        (t (write-char char out))))))
+        (t (if (< (char-code char) 32)
+               (format out "\\u~4,'0X" (char-code char))
+               (write-char char out)))))))
 
 (defun %history-plist-p (value)
   (and (listp value)
@@ -64,6 +66,9 @@
     ((null value) "null")
     ((stringp value)
      (%history-format-character-string "\"~A\"" (%history-json-escape value)))
+    ((vectorp value)
+     (%history-format-character-string "[~{~A~^,~}]"
+                                      (map 'list #'%history-json-value value)))
     ((or (integerp value) (floatp value))
      (princ-to-string value))
     ((or (keywordp value) (symbolp value))
@@ -105,8 +110,44 @@
         (push value out)))
     (nreverse out)))
 
+(defun %call-with-history-lock (file function)
+  ;; --clear can unlink FILE. The stable sidecar survives clear and recreation.
+  (let ((lock (etypecase file
+                (string (concatenate 'string file ".lock"))
+                (pathname (pathname (concatenate 'string (namestring file) ".lock"))))))
+    (han.host:call-with-exclusive-file-lock lock function)))
+
 (defun %history-append-line (file line)
-  (han.host:append-utf8-line file line))
+  (%call-with-history-lock file (lambda () (han.host:append-utf8-line file line))))
+
+(defun %read-wrapper-history-fields (stream)
+  ;; EOF is only valid between fields. A NUL by itself denotes an empty field.
+  (loop while (peek-char nil stream nil nil)
+        collect (with-output-to-string (out nil :element-type 'character)
+                  (loop for char = (read-char stream)
+                        until (zerop (char-code char))
+                        do (write-char char out)))))
+
+(defun system-record-wrapper-history (file stream)
+  "Read the generated wrapper's private field stream and append one exec event."
+  (destructuring-bind (pid cwd command name kind version release project-command
+                       root main repository image status exit stage argc &rest args)
+      (%read-wrapper-history-fields stream)
+    (unless (= (parse-integer argc) (length args))
+      (error "Incomplete wrapper history arguments."))
+    (let* ((time (%history-timestamp))
+           (id (concatenate 'string (remove-if (lambda (c) (find c "-:Z")) time)
+                            "-" pid))
+           (event (list :id id :time time :event "exec" :status status
+                        :command command :args (coerce args 'simple-vector)
+                        :cwd cwd :exit-code (parse-integer exit)
+                        :project-name name :project-kind kind :project-version version
+                        :project-release release :project-command project-command
+                        :project-root root :project-main main
+                        :repository-url (unless (zerop (length repository)) repository)
+                        :container-image (unless (zerop (length image)) image)
+                        :stage stage :snapshot-root root :history-backend "shell-wrapper")))
+      (%history-append-line file (%history-json-object event)))))
 
 (defun system-record-history-event
     (&key event
@@ -236,9 +277,12 @@
        (list :file (han.path:->namestring file)
              :path-p t))
       (clear-p
-       (let ((existed-p (not (null (han.path:file-exists-p file)))))
-         (when existed-p
-           (delete-file file))
+       (let ((existed-p
+               (and (han.path:file-exists-p file)
+                    (%call-with-history-lock
+                     file (lambda () (when (han.path:file-exists-p file)
+                                       (delete-file file)
+                                       t))))))
          (when verbose
            (format t "~A~%"
                    (%history-message

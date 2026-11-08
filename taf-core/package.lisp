@@ -43,4 +43,5 @@
 	   :system-doctor
 	   :system-history
 	   :system-record-history-event
+	   :system-record-wrapper-history
    ))

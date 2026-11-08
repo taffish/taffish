@@ -472,6 +472,10 @@ Role: append a history event.
 
 Default `safe t` means write failure returns nil and does not interrupt the main flow.
 
+The internal adapter `system-record-wrapper-history` accepts a destination path
+and the generated wrapper's field stream. It uses the same locked append as
+native events. See the [history contract](../../../standards/en/history-spec.md).
+
 ## API Call Safety Table
 
 | API | Main side effects |

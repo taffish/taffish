@@ -183,43 +183,9 @@ _taf_project_case_wrapper_history_concurrency() {
 TAF
     TAF_HISTORY_MODE=off "$TAF_BIN" build >/dev/null || exit 1
     wrapper=$PWD/target/taf-history-tool-v0.1.0-r1
-    history_file=$dir/history.jsonl
     assert_executable "$wrapper" || exit 1
-
-    pids=
-    for worker in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 \
-                  17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32
-    do
-      (
-        TAF_HISTORY_MODE=sync TAF_HISTORY_FILE="$history_file" \
-          "$wrapper" printf 'worker-%s\n' "$worker"
-      ) >"$dir/history-worker-$worker.log" 2>&1 &
-      pids="$pids $!"
-    done
-
-    failed=0
-    for pid in $pids
-    do
-      wait "$pid" || failed=1
-    done
-    [ "$failed" -eq 0 ] || harness_fail "one or more history workers failed"
-
-    python3 - "$history_file" <<'PY'
-import json
-import sys
-
-path = sys.argv[1]
-with open(path, "r", encoding="utf-8") as handle:
-    lines = [line.rstrip("\n") for line in handle if line.strip()]
-
-assert len(lines) == 32, (len(lines), lines)
-records = [json.loads(line) for line in lines]
-assert all(record.get("event") == "exec" for record in records), records
-assert all(record.get("history_backend") == "shell-wrapper" for record in records), records
-ids = [record.get("id") for record in records]
-assert all(ids), ids
-assert len(set(ids)) == len(ids), ids
-PY
+    env LC_ALL="$TAFFISH_TEST_UTF8_LOCALE" LANG="$TAFFISH_TEST_UTF8_LOCALE" \
+      python3 "$TAFFISH_TEST_REPO_ROOT/test/taf-project/history-concurrency.py" "$wrapper" "$dir"
   )
 }
 

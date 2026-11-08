@@ -47,18 +47,6 @@
 
 
    ;; -------------------------
-   ;; taffish-cli (可执行入口相关)
-   ;; -------------------------
-   (:module "taffish-cli"
-    :serial t
-    :components
-    ((:file "package")
-     (:file "i18n")
-     (:file "run")
-     (:file "main")))
-
-
-   ;; -------------------------
    ;; taf-core
    ;; -------------------------
    (:module "taf-core"
@@ -103,6 +91,18 @@
       (:file "history")
       (:file "doctor-i18n")
       (:file "doctor")))))
+
+
+   ;; -------------------------
+   ;; taffish-cli (可执行入口相关)
+   ;; -------------------------
+   (:module "taffish-cli"
+    :serial t
+    :components
+    ((:file "package")
+     (:file "i18n")
+     (:file "run")
+     (:file "main")))
 
 
    ;; -------------------------

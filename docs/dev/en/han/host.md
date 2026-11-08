@@ -37,7 +37,8 @@ Unsupported implementations load `unsupported.lisp`; calling related functions s
 | `configure-runtime-io` | Configure implementation-specific character I/O before a delivered CLI handles user text. LispWorks selects UTF-8 console I/O; SBCL currently needs no extra setup. |
 | `standard-input-terminal-p` | Report whether file descriptor 0 is a terminal, so commands can distinguish interactive stdin from an actual pipe. |
 | `standard-error-terminal-p` | Query whether process stderr (file descriptor 2) is a terminal, without reading, writing or spawning a process. |
-| `append-utf8-line` | Append one complete UTF-8 line with host-native append semantics so concurrent processes do not overwrite earlier records. |
+| `append-utf8-line` | Append UTF-8 bytes and a newline, retrying short writes. |
+| `call-with-exclusive-file-lock` | Hold an OS lock on the given stable path while running a zero-argument function. The default wait is five seconds. |
 
 These functions are host-specific by design. Upper layers must not reproduce
 SBCL/LispWorks terminal checks or console encoding setup directly.
@@ -51,9 +52,9 @@ redirected logs use rate-limited lines. JSON/MCP callers suppress human progress
 The LispWorks UTF-8 output stream implements `interactive-stream-p` from its
 live descriptor; a terminal, pipe, and closed stream must remain distinguishable.
 
-`append-utf8-line` is intentionally narrow. It provides the one-record append
-boundary used by JSONL logs; it is not a general transaction or file-lock API.
-It creates a missing parent directory and tolerates the specific race where
+Concurrent JSONL writers hold the same exclusive lock across the complete
+`append-utf8-line` call, including any short writes.
+The append helper creates a missing parent directory and tolerates the specific race where
 another process creates that same parent first. Other path and permission
 errors still propagate from directory preparation or the append operation.
 

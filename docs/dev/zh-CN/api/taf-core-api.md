@@ -448,6 +448,9 @@ scope init 需要 root。它不修改 shell/editor 配置或权限，不启动�
 
 默认 `safe t`，写入失败返回 nil，不中断主流程。
 
+内部适配入口 `system-record-wrapper-history` 接收目标路径和生成的 wrapper 字段流，
+与原生事件共用同一套持锁追加逻辑。详见[历史记录规范](../../../standards/zh-CN/history-spec.md)。
+
 ## API 调用安全表
 
 | API | 主要副作用 |

@@ -22,6 +22,13 @@ History uses JSON Lines. Each line is a JSON object.
 
 Every record should be independently parseable. Append failure must not affect the main command execution.
 
+Current wrappers and native `taf` writers prepare the complete record before acquiring an
+exclusive lock on `<history-file>.lock`. They open and append to the data file while holding
+that lock. `taf history --clear` uses the same lock and leaves the lock file in place.
+The lock covers only history I/O. Commands can run concurrently. After five seconds of
+contention the writer skips its event and the tool keeps its own exit code. Configure processes
+sharing history to use the same history path on a filesystem that supports advisory locks.
+
 ## Time And ID
 
 `time` uses UTC:
@@ -33,7 +40,7 @@ YYYY-MM-DDTHH:MM:SSZ
 IDs written by internal Lisp code look like:
 
 ```text
-<compact-time>-<random-hex>
+<compact-time>-<pid-base36>-<process-counter-base36>
 ```
 
 IDs written by wrapper shell look like:
@@ -91,6 +98,9 @@ The command wrapper produced by build writes these fields during execution:
 | `history_backend` | Fixed to `shell-wrapper`. |
 
 The wrapper attempts to record history on compile failure, chmod failure, and after command execution.
+It passes its original PID, metadata and arguments to the matching `taffish` executable through
+a private pipe. After upgrading `taf` and `taffish`, run `taf build` in existing source projects
+to regenerate their wrappers. Older generated scripts still use their original writer.
 
 ## Control Variables
 
@@ -102,7 +112,10 @@ The wrapper recognizes:
 | `TAFFISH_USER_HOME` | Default history home. |
 | `TAF_HISTORY_FILE` | Overrides the concrete history file path. |
 
-In `async` mode, history is written in the background and does not block the main command. `sync` mode is for debugging or for cases that require write completion before exit.
+In `async` mode, the background writer detaches from the caller's standard streams.
+Even while the writer waits for the history lock, a caller capturing stdout and stderr
+can read both to EOF and receive the tool's exit status. The record can appear after
+the wrapper exits. Use `sync` to wait for the write attempt before exit.
 
 ## Read Behavior
 

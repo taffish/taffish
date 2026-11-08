@@ -154,6 +154,7 @@ host 是低层适配 API。普通 TAFFISH 代码优先用 `han.os`。
 (han.host:standard-error-terminal-p)
 (han.host:current-process-id)
 (han.host:append-utf8-line path line)
+(han.host:call-with-exclusive-file-lock lock-path function :timeout 5)
 (han.host:file-exists-p path)
 (han.host:directory-exists-p path)
 (han.host:run-program-sync command)

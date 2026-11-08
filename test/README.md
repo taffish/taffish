@@ -149,9 +149,18 @@ Current suites:
   workflows, built-wrapper behavior, concurrent wrapper pipelines, `taf run`
   stdin forwarding, exact build idempotency including dotless version strings,
   and offline publish transaction recovery at each remote boundary. Fake
-  Git/GitHub commands record mutations,
-  exit status, stdout/stderr, and before/after state snapshots without
-  contacting a remote service.
+  Git/GitHub commands record mutations, exit status, stdout/stderr, and
+  before/after state snapshots without contacting a remote service.
+  `--filter taf-project/wrapper-history-concurrency` runs 32 instances of a
+  generated wrapper and eight native history writers against one file. It matches
+  each wrapper's PID, original arguments (including long UTF-8 strings), working directory and
+  exit code to its record. It also holds the history lock during append and
+  clear, then checks that operations resume after the lock holder is killed.
+  While holding the history lock, the caller checks the exit status of both a
+  successful tool and a failing tool and reads their stdout and stderr to EOF.
+  After unlocking, it checks the corresponding asynchronous records, including
+  the original arguments and exit status. It also checks disabled recording and
+  history paths containing literal shell and pathname metacharacters.
 - `taf-hub/conformance.sh`: real local Hub package-maintenance workflows,
   including `install --all`, `outdated`, `upgrade --prune-old`, and `prune`
   against a temporary local index and local source projects. It also checks

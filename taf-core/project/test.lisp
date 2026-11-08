@@ -1165,10 +1165,8 @@ echo after")
         (check-equal (%taf-project-string-contains-p wrapper "TAF_HISTORY_MODE") t)
         (check-equal (%taf-project-string-contains-p wrapper "TAF_HISTORY_FILE") t)
         (check-equal (%taf-project-string-contains-p wrapper "history.jsonl") t)
-        (check-equal (%taf-project-string-contains-p wrapper "taf_json_string") t)
         (check-equal (%taf-project-string-contains-p wrapper "taf_record_history_call") t)
         (check-equal (%taf-project-string-contains-p wrapper "taf_record_history()") t)
-        (check-equal (%taf-project-string-contains-p wrapper "taf_record_history_call \"$@\" &") t)
         (check-equal (%taf-project-string-contains-p wrapper "history --record-exec") nil)
         (check-equal (%taf-project-string-contains-p wrapper "exec \"$taf_shell\"") nil)
         (check-equal (%taf-project-string-contains-p wrapper "exit \"$taf_exit\"") t)
@@ -1433,6 +1431,9 @@ echo changed")
         (%taf-project-write-string
          fake-taffish
          "#!/bin/sh
+if [ \"${1:-}\" = --taffish-wrapper-history ]; then
+    exec cat > \"$TAFFISH_INTERNAL_HISTORY_FILE.fields\"
+fi
 cat <<'EOF'
 #!/bin/sh
 echo fake-app-output
@@ -1458,6 +1459,11 @@ EOF
                      (uiop:escape-sh-token command-file))
              :lines nil)
           (declare (ignore err))
+          ;; Capture the actual private pipe from the generated wrapper and
+          ;; hand it to the same reader used by the delivered taffish command.
+          (with-open-file (fields (concatenate 'string (namestring record-file) ".fields")
+                                  :direction :input :external-format :utf-8)
+            (taf.core:system-record-wrapper-history record-file fields))
           (let ((record (han.os:load-string record-file)))
             (check-equal code 0)
             (check-equal (%taf-project-string-contains-p out "fake-app-output") t)
@@ -1475,22 +1481,67 @@ EOF
             (check-equal (%taf-project-string-contains-p record "--alpha") t)
             (check-equal (%taf-project-string-contains-p record "beta") t)))))))
 
-(deftest test-taf-project-build-wrapper-appends-one-history-record ()
-  (let ((wrapper
-          (taf.core::%make-build-wrapper-string
-           (list :name "atomic-history"
-                 :kind "tool"
-                 :version "0.1.0"
-                 :release "1"
-                 :command-name "taf-atomic-history"
-                 :repository-url "https://github.com/taffish/atomic-history")
-           ".taf-atomic-history-v0.1.0-r1"
-           "src/main.taf"
-           "taf-atomic-history-v0.1.0-r1")))
-    (check-true (search "taf_history_record=$(" wrapper :test #'char=))
-    (check-true
-     (search "printf '%s\\n' \"$taf_history_record\" >> \"$taf_history_file\""
-             wrapper :test #'char=))))
+(deftest test-taf-project-async-history-releases-wrapper-output ()
+  (with-taf-project-temp-dir (dir)
+    (taf.core:project-new "async-history" nil)
+    (let* ((build (taf.core:project-build :start-dir (%taf-project-dir "async-history")
+                                         :verbose nil))
+           (wrapper (getf (getf build :command) :command-file))
+           (fake-taffish (han.path:join-path dir "fake-taffish"))
+           (result (han.path:join-path dir "recorder-result")))
+      (%taf-project-write-string
+       fake-taffish
+       "#!/bin/sh
+if [ \"${1:-}\" != --taffish-wrapper-history ]; then
+    printf '%s\\n' '#!/bin/sh' 'echo tool-output'
+    exit 0
+fi
+cat >/dev/null
+outcome=timeout
+attempts=0
+while [ \"$attempts\" -lt 200 ]; do
+    if [ -f \"$TAFFISH_INTERNAL_HISTORY_FILE.eof\" ]; then
+        outcome=received-eof
+        break
+    fi
+    sleep 0.05
+    attempts=$((attempts + 1))
+done
+printf '%s' \"$outcome\" > \"$TAFFISH_INTERNAL_HISTORY_FILE.tmp\"
+mv \"$TAFFISH_INTERNAL_HISTORY_FILE.tmp\" \"$TAFFISH_INTERNAL_HISTORY_FILE\"
+")
+      (%taf-project-chmod-executable fake-taffish)
+      ;; cat keeps the caller waiting until both wrapper output descriptors close.
+      (multiple-value-bind (out err code)
+          (han.os:run-shell-command
+           (format nil "TAFFISH=~A TAF_HISTORY_MODE=async TAF_HISTORY_FILE=~A ~A 2>&1 | cat"
+                   (uiop:escape-sh-token (han.path:->namestring fake-taffish))
+                   (uiop:escape-sh-token (han.path:->namestring result))
+                   (uiop:escape-sh-token wrapper)))
+        (declare (ignore err))
+        (%taf-project-write-string (han.path:join-path dir "recorder-result.eof") "")
+        (check-equal 0 code)
+        (check-equal '("tool-output") out))
+      (loop repeat 200 until (probe-file result) do (sleep 0.05))
+      (check-true (probe-file result))
+      (check-equal "received-eof" (han.os:load-string result)))))
+
+(deftest test-taf-project-truncated-wrapper-history-is-not-appended ()
+  (with-taf-project-temp-dir (dir)
+    (let ((file (han.path:join-path dir "history.jsonl")))
+      (dolist (input (list "unterminated"
+                           (with-output-to-string (out)
+                             (dolist (field '("42" "/tmp" "taf-tool" "tool" "tool" "1.0" "1"
+                                              "taf-tool" "/root" "/main" "" "" "success"
+                                              "0" "run" "2" "only-one-argument"))
+                               (write-string field out)
+                               (write-char (code-char 0) out)))))
+        (check-true (handler-case
+                        (with-input-from-string (stream input)
+                          (taf.core:system-record-wrapper-history file stream)
+                          nil)
+                      (error () t)))
+        (check-false (probe-file file))))))
 
 (deftest test-taf-project-build-flow-syncs-toml-dependencies ()
   (with-taf-project-temp-dir (dir)

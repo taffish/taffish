@@ -440,97 +440,19 @@ project_container_image=~A
 taf_launcher_name=\"${TAF_LAUNCHER_NAME:-$artifact_name}\"
 taf_launcher_artifact=\"${TAF_LAUNCHER_ARTIFACT:-$artifact_name}\"
 
-taf_json_escape() {
-    printf '%s' \"$1\" | awk '
-        BEGIN {
-            ORS = \"\"
-            tab = sprintf(\"%c\", 9)
-            cr = sprintf(\"%c\", 13)
-        }
-        {
-            gsub(/\\\\/, \"\\\\\\\\\")
-            gsub(/\"/, \"\\\\\\\"\")
-            gsub(tab, \"\\\\t\")
-            gsub(cr, \"\\\\r\")
-            if (NR > 1) {
-                printf \"\\\\n\"
-            }
-            printf \"%s\", $0
-        }
-    '
-}
-
-taf_json_string() {
-    printf '\"%s\"' \"$(taf_json_escape \"$1\")\"
-}
-
-taf_json_nullable_string() {
-    if [ -n \"$1\" ]; then
-        taf_json_string \"$1\"
-    else
-        printf 'null'
-    fi
-}
-
-taf_history_args_json() {
-    taf_first=1
-    printf '['
-    for taf_arg do
-        if [ \"$taf_first\" = 1 ]; then
-            taf_first=0
-        else
-            printf ','
-        fi
-        taf_json_string \"$taf_arg\"
-    done
-    printf ']'
-}
-
 taf_record_history_call() {
     taf_status=\"$1\"
     taf_exit=\"$2\"
     taf_stage=\"$3\"
     shift 3
 
-    if [ -z \"$taf_history_file\" ]; then
-        return 0
-    fi
-
-    taf_history_dir=$(dirname \"$taf_history_file\") || return 0
-    mkdir -p \"$taf_history_dir\" 2>/dev/null || return 0
-
-    taf_time=$(date -u '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date '+%Y-%m-%dT%H:%M:%SZ')
-    taf_id=\"$(date -u '+%Y%m%dT%H%M%S' 2>/dev/null || date '+%Y%m%dT%H%M%S')-$$\"
-    taf_cwd=$(pwd)
-    taf_args_json=$(taf_history_args_json \"$@\")
-
-    taf_history_record=$(
-      {
-        printf '{'
-        printf '\"id\":'; taf_json_string \"$taf_id\"; printf ','
-        printf '\"time\":'; taf_json_string \"$taf_time\"; printf ','
-        printf '\"event\":\"exec\",'
-        printf '\"status\":'; taf_json_string \"$taf_status\"; printf ','
-        printf '\"command\":'; taf_json_string \"$artifact_name\"; printf ','
-        printf '\"args\":%s,' \"$taf_args_json\"
-        printf '\"cwd\":'; taf_json_string \"$taf_cwd\"; printf ','
-        printf '\"exit_code\":%s,' \"$taf_exit\"
-        printf '\"project_name\":'; taf_json_string \"$project_name\"; printf ','
-        printf '\"project_kind\":'; taf_json_string \"$project_kind\"; printf ','
-        printf '\"project_version\":'; taf_json_string \"$project_version\"; printf ','
-        printf '\"project_release\":'; taf_json_string \"$project_release\"; printf ','
-        printf '\"project_command\":'; taf_json_string \"$project_command\"; printf ','
-        printf '\"project_root\":'; taf_json_string \"$snapshot_root\"; printf ','
-        printf '\"project_main\":'; taf_json_string \"$taf_main\"; printf ','
-        printf '\"repository_url\":'; taf_json_nullable_string \"$project_repository_url\"; printf ','
-        printf '\"container_image\":'; taf_json_nullable_string \"$project_container_image\"; printf ','
-        printf '\"stage\":'; taf_json_string \"$taf_stage\"; printf ','
-        printf '\"snapshot_root\":'; taf_json_string \"$snapshot_root\"; printf ','
-        printf '\"history_backend\":\"shell-wrapper\"'
-        printf '}'
-      }
-    ) || return 0
-    printf '%s\\n' \"$taf_history_record\" >> \"$taf_history_file\" 2>/dev/null || true
+    # NUL-delimited fields keep empty arguments, quotes, and newlines intact.
+    printf '%s\\000' \"$$\" \"$(pwd)\" \"$artifact_name\" \"$project_name\" \"$project_kind\" \\
+        \"$project_version\" \"$project_release\" \"$project_command\" \"$snapshot_root\" \\
+        \"$taf_main\" \"$project_repository_url\" \"$project_container_image\" \\
+        \"$taf_status\" \"$taf_exit\" \"$taf_stage\" \"$#\" \"$@\" |
+        TAFFISH_INTERNAL_HISTORY_FILE=\"$taf_history_file\" \\
+        \"$taffish_bin\" --taffish-wrapper-history || :
 }
 
 taf_record_history() {
@@ -538,9 +460,13 @@ taf_record_history() {
         return 0
     fi
     if [ \"$taf_history_mode\" = \"sync\" ]; then
-        taf_record_history_call \"$@\"
+        taf_record_history_call \"$@\" </dev/null >/dev/null 2>&1
     else
-        taf_record_history_call \"$@\" &
+        (
+            # Redirect the subshell itself: dash saves fds for function-local redirections.
+            exec </dev/null >/dev/null 2>&1
+            taf_record_history_call \"$@\"
+        ) &
     fi
 }
 

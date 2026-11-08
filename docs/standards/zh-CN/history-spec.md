@@ -22,6 +22,11 @@ history 使用 JSON Lines，每一行是一个 JSON object。
 
 每条记录应独立可解析。追加失败不应影响主命令运行。
 
+当前 wrapper 和原生 `taf` 写入端先准备完整记录，再取得 `<历史文件>.lock` 的独占锁，
+随后打开历史文件并追加整行。`taf history --clear` 使用同一把锁，清空后保留锁文件。
+持锁范围仅限历史文件操作，工具可以并行运行。等待锁超过 5 秒时跳过本条记录，工具
+保留自身退出码。共享历史的各进程应使用同一历史文件路径，文件系统须支持进程间文件锁。
+
 ## 时间与 ID
 
 `time` 使用 UTC：
@@ -33,7 +38,7 @@ YYYY-MM-DDTHH:MM:SSZ
 内部 Lisp 写入的 `id` 形如：
 
 ```text
-<compact-time>-<random-hex>
+<compact-time>-<PID 的 36 进制表示>-<进程内计数的 36 进制表示>
 ```
 
 wrapper shell 写入的 `id` 形如：
@@ -91,6 +96,9 @@ build 生成的 command wrapper 在执行时会写入：
 | `history_backend` | 固定为 `shell-wrapper`。 |
 
 wrapper 在编译失败、chmod 失败和运行结束时都会尝试记录 history。
+它通过私有管道将原进程 PID、项目字段和参数交给配套的 `taffish` 可执行程序。
+升级 `taf` 和 `taffish` 后，在已有源码项目中运行 `taf build` 重新生成 wrapper。
+旧的生成脚本仍使用构建时的写入方式。
 
 ## 控制变量
 
@@ -102,7 +110,9 @@ wrapper 识别：
 | `TAFFISH_USER_HOME` | 默认 history home。 |
 | `TAF_HISTORY_FILE` | 覆盖具体 history 文件路径。 |
 
-`async` 模式下 history 写入在后台执行，不阻塞主命令。`sync` 模式用于调试或需要确定写入完成的场景。
+`async` 模式下，后台写入进程会断开与调用方标准流的连接。即使它正在等待历史文件锁，
+调用方也能把 stdout 和 stderr 读到 EOF，并取得工具的退出码。历史记录可能在 wrapper
+退出后才出现。需要在退出前等待本次写入尝试结束时，使用 `sync`。
 
 ## 读取行为
 

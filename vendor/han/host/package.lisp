@@ -20,6 +20,7 @@
 	   :standard-error-terminal-p
 	   :current-process-id
 	   :append-utf8-line
+	   :call-with-exclusive-file-lock
 	   :cwd
 	   :file-exists-p
 	   :directory-exists-p
@@ -69,6 +70,7 @@ Common usage:
 	  (han.host:standard-error-terminal-p)
 	  (han.host:current-process-id)
 	  (han.host:append-utf8-line path line)
+	  (han.host:call-with-exclusive-file-lock lock-path function :timeout 5)
 	  (han.host:file-exists-p path)
 	  (han.host:escape-sh-token token)
 	  (han.host:run-program \"/bin/sh\" :arguments '(\"-c\" \"echo hi\"))
@@ -80,7 +82,8 @@ Terminal query:
   or start a subprocess. A non-terminal or closed stderr returns NIL.
 
 Process API:
-	  append-utf8-line    append one UTF-8 line without cross-process overwrite
+	  append-utf8-line    append UTF-8 bytes and one newline
+	  call-with-exclusive-file-lock  serialize cooperating processes on one lock file
 	  run-program          start a child process
 	  run-program-sync     run a command and wait for output/status
 	  process-wait         wait for process completion

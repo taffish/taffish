@@ -130,6 +130,51 @@
             (error condition)))))
     file))
 
+(defun %prepare-native-file (path)
+  ;; String inputs come from OS interfaces such as argv and environment
+  ;; variables. Do not parse their metacharacters as CL pathname patterns.
+  (let ((file (etypecase path
+                (pathname path)
+                (string (%literal-file-pathname path)))))
+    (%ensure-parent-directories-for-file file)))
+
+(defun %native-open-name (path)
+  (etypecase path
+    (string path)
+    (pathname (namestring path))))
+
+(defun call-with-exclusive-file-lock (lock-path function &key (timeout 5))
+  "Call FUNCTION with no arguments while holding an exclusive flock on LOCK-PATH.
+All cooperating processes must keep and use the same lock file. Return the
+callback's values. On contention, wait at most TIMEOUT seconds before
+signaling an error. Zero makes a single nonblocking attempt."
+  (check-type timeout (real 0))
+  #+(and (or sbcl lispworks) (or darwin macosx linux))
+  (let* ((file (%prepare-native-file lock-path))
+         ;; O_WRONLY | O_CREAT | O_NONBLOCK | O_CLOEXEC (Darwin and Linux
+         ;; x86-64/arm64 ABIs). Never truncate or unlink this stable inode.
+         (flags #+(or darwin macosx) (logior 1 #x200 #x4 #x1000000)
+                #+linux (logior 1 #o100 #o4000 #o2000000)))
+    (multiple-value-bind (fd open-error) (%open-lock-file (%native-open-name lock-path) flags)
+      (unless fd
+        (error "Cannot open lock file ~A (errno ~D)." file open-error))
+      (unwind-protect
+           (loop with deadline = (+ (get-internal-real-time)
+                                    (ceiling (* timeout internal-time-units-per-second)))
+                 for errno = (%try-exclusive-file-lock fd)
+                 when (null errno) return (funcall function)
+                 ;; EINTR or EWOULDBLOCK can be retried until the deadline.
+                 unless (member errno '(4 #+(or darwin macosx) 35 #+linux 11))
+                   do (error "Cannot lock ~A (errno ~D)." file errno)
+                 do (let ((remaining (- deadline (get-internal-real-time))))
+                      (when (<= remaining 0)
+                        (error "Timed out waiting for lock ~A." file))
+                      (sleep (min 1/100 (/ remaining internal-time-units-per-second)))))
+        (%close-lock-file fd))))
+  #-(and (or sbcl lispworks) (or darwin macosx linux))
+  (error "File locking is unsupported on ~A/~A (lock ~A for ~S)."
+         (lisp-implementation-type) (software-type) lock-path function))
+
 (defun %safe-probe-file (path)
   (ignore-errors
     (probe-file path)))

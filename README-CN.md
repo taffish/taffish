@@ -1288,6 +1288,11 @@ taf build
 对于带版本 command wrapper 与冻结 source snapshot，重复执行 `taf build` 是幂等的：
 未变化且有效的产物只会被校验，不会被重写。显式 container image build 仍是独立操作。
 
+将 `taf` 和 `taffish` 升级到 v0.11.0 后，请在仍使用旧 wrapper 的 app 源码项目中运行
+`taf build`。新生成的 wrapper 与 `taf` 使用同一把历史文件锁。后台写入进程会释放输出管道，
+调用方在工具退出时就能读完输出。
+详见[wrapper 历史记录规范](docs/standards/zh-CN/history-spec.md)。
+
 带发布说明发布：
 
 ```sh
