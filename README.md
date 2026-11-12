@@ -35,7 +35,7 @@ Choose [GitHub](#github), [Gitee](#gitee) or [local/offline installation](#local
 | <a name="macos-dependencies"></a>Apple Silicon macOS 15 or later | `taffish-0.12.0-darwin-arm64.tar.xz` | Built with SBCL 2.4.9 without the zstd dependency; the commands link only to macOS system libraries. The system tar unpacks the archive without Homebrew or a separate `xz` command. |
 | <a name="linux-dependencies"></a>glibc-based Linux x86-64 | `taffish-0.12.0-linux-amd64.tar.gz` | Built with LispWorks. The installer uses `tar` and `gzip`. |
 
-Linux installation displays the LispWorks runtime terms for confirmation. For unattended installation, read them first and add `--accept-runtime-license`. [Read and accept the runtime terms](install/README.md#runtime-licenses)
+The installation commands below include `--accept-runtime-license`. On Linux, this explicitly accepts the [LispWorks runtime terms](licenses/LISPWORKS-RUNTIME.txt) without an interactive `yes` prompt; read and accept the terms before running a command. Omit the option if you prefer to confirm during installation. macOS does not require this confirmation and ignores the option.
 
 <a name="macos-says-libzstd1dylib-is-missing"></a><a name="project-status"></a>
 
@@ -43,12 +43,20 @@ Linux installation displays the LispWorks runtime terms for confirmation. For un
 
 <a name="standard-install"></a>
 
+Choose either a personal or a system-wide installation. System-wide installation requires administrator access; `sudo` may prompt for your password.
+
 ### GitHub
 
-Install for the current user with the default online installer.
+**Personal installation:**
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sh -s -- --user
+curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sh -s -- --user --accept-runtime-license
+```
+
+**System-wide installation:**
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sudo sh -s -- --system --accept-runtime-license
 ```
 
 <a name="for-users-in-china"></a>
@@ -59,28 +67,52 @@ Use the China mirror to download the package and initialize a new installation w
 
 On macOS, this installer downloads and reassembles archive parts automatically; GitHub and Linux downloads use complete archives.
 
+**Personal installation:**
+
 ```sh
-curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffish.gitee.sh | sh -s -- --user
+curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffish.gitee.sh | sh -s -- --user --accept-runtime-license
+```
+
+**System-wide installation:**
+
+```sh
+curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffish.gitee.sh | sudo sh -s -- --system --accept-runtime-license
 ```
 
 <a name="choose-user-or-system-scope"></a><a name="install-paths"></a><a name="installer-options"></a>
 
-For a shared installation, replace `sh -s -- --user` with `sudo sh -s -- --system`. To pin the installer and package to the same version, fetch the installer from that release tag. [Pinned installations](install/README.md#install-from-raw-installer) · [Shared servers and install paths](install/README.md#default-paths-and-scopes)
+To pin the installer and package to the same version, fetch the installer from that release tag. [Pinned installations](install/README.md#install-from-raw-installer) · [Shared servers and install paths](install/README.md#default-paths-and-scopes)
 
 ### Local or Offline Install
 
-If you have a 0.12.0 checkout containing the signed platform packages, run the installer from its root.
+If you have a 0.12.0 checkout containing the signed platform packages, choose one of these commands and run it from the checkout root.
+
+**Personal installation:**
 
 ```sh
-sh install/install-taffish.sh --local
+sh install/install-taffish.sh --local --user --accept-runtime-license
+```
+
+**System-wide installation:**
+
+```sh
+sudo sh install/install-taffish.sh --local --system --accept-runtime-license
 ```
 
 <a name="release-interface"></a>
 
-For an offline machine, place these **five files from the same version** in one directory. Take the [installer](install/install-taffish.sh), your complete platform archive, `ARCHIVE-SHA256SUMS`, `ARCHIVE-SHA256SUMS.asc` and `TAFFISH-RELEASE-KEY.asc`. The archive and its three verification files are in the [package directory](target/packages-0.12.0/). If you have only macOS download parts, [reassemble the complete archive first](install/README.md#local-installation-with-0120-and-later). Run the following command from the copied directory.
+For an offline machine, place these **five files from the same version** in one directory. Take the [installer](install/install-taffish.sh), your complete platform archive, `ARCHIVE-SHA256SUMS`, `ARCHIVE-SHA256SUMS.asc` and `TAFFISH-RELEASE-KEY.asc`. The archive and its three verification files are in the [package directory](target/packages-0.12.0/). If you have only macOS download parts, [reassemble the complete archive first](install/README.md#local-installation-with-0120-and-later). Choose one of these commands and run it from the copied directory.
+
+**Personal installation:**
 
 ```sh
-sh install-taffish.sh --local
+sh install-taffish.sh --local --user --accept-runtime-license
+```
+
+**System-wide installation:**
+
+```sh
+sudo sh install-taffish.sh --local --system --accept-runtime-license
 ```
 
 Local mode checks beside the installer first, then in `../target/packages-0.12.0/` relative to the installer. It skips the network index update. For a moved or renamed archive, add `--archive /path/to/package` and keep its verification files beside it. An offline run of a containerized app also needs the app, its dependencies and its image available locally. [Offline installation options](install/README.md#local-installation-with-0120-and-later)

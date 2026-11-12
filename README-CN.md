@@ -41,14 +41,22 @@ taf-fastqc-v0.12.1-r1 fastqc reads.fq.gz
 
 <a name="标准安装"></a>
 
-Linux 安装会显示 LispWorks 运行时条款并请求确认。无人值守安装请先阅读，再添加 `--accept-runtime-license`。[阅读与接受运行时条款](install/README-CN.md#运行时许可)
+以下安装命令包含 `--accept-runtime-license`：在 Linux 上表示你明确接受 [LispWorks 运行时条款](licenses/LISPWORKS-RUNTIME.txt)，无需中途输入 `yes`；请先阅读并接受条款再执行。如希望安装时手动确认，去掉该参数即可。macOS 无需此确认，会忽略该参数。
+
+按需要选择个人或全局安装，执行其中一种即可。全局安装需要管理员权限，`sudo` 仍可能要求输入密码。
 
 ### GitHub
 
-使用默认在线入口，为当前用户安装。
+**个人安装：**
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sh -s -- --user
+curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sh -s -- --user --accept-runtime-license
+```
+
+**全局安装：**
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sudo sh -s -- --system --accept-runtime-license
 ```
 
 <a name="中国地区用户"></a>
@@ -59,28 +67,52 @@ curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/instal
 
 macOS 安装时会自动下载并合并压缩包分片；GitHub 和 Linux 下载仍使用完整压缩包。
 
+**个人安装：**
+
 ```sh
-curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffish.gitee.sh | sh -s -- --user
+curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffish.gitee.sh | sh -s -- --user --accept-runtime-license
+```
+
+**全局安装：**
+
+```sh
+curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffish.gitee.sh | sudo sh -s -- --system --accept-runtime-license
 ```
 
 <a name="选择用户级或系统级-scope"></a><a name="安装路径"></a><a name="安装器选项"></a>
 
-需要为所有用户安装时，将上面任选一条命令末尾的 `sh -s -- --user` 换成 `sudo sh -s -- --system`。要固定安装器和平台包的版本，从同一发行标签下载安装脚本。[固定版本安装](install/README-CN.md#安装入口) · [共享服务器与安装路径](install/README-CN.md#默认路径和-scope)
+要固定安装器和平台包的版本，从同一发行标签下载安装脚本。[固定版本安装](install/README-CN.md#安装入口) · [共享服务器与安装路径](install/README-CN.md#默认路径和-scope)
 
 ### 本地或离线安装
 
-如果已有带签名平台包的 0.12.0 仓库副本，在仓库根目录运行以下命令。
+如果已有带签名平台包的 0.12.0 仓库副本，在仓库根目录选择以下一种方式安装。
+
+**个人安装：**
 
 ```sh
-sh install/install-taffish.sh --local
+sh install/install-taffish.sh --local --user --accept-runtime-license
+```
+
+**全局安装：**
+
+```sh
+sudo sh install/install-taffish.sh --local --system --accept-runtime-license
 ```
 
 <a name="release-接口"></a>
 
-只给离线机器拷贝安装材料时，从同一版本取 **五个文件**，放进同一个目录。需要[安装脚本](install/install-taffish.sh)、本机平台的完整压缩包、`ARCHIVE-SHA256SUMS`、`ARCHIVE-SHA256SUMS.asc` 和 `TAFFISH-RELEASE-KEY.asc`。压缩包和后三个文件都在[平台包目录](target/packages-0.12.0/)中。如果拿到的只有 macOS 下载分片，请先[合并成完整压缩包](install/README-CN.md#0120-起的本地安装)。进入复制好的目录后运行以下命令。
+只给离线机器拷贝安装材料时，从同一版本取 **五个文件**，放进同一个目录。需要[安装脚本](install/install-taffish.sh)、本机平台的完整压缩包、`ARCHIVE-SHA256SUMS`、`ARCHIVE-SHA256SUMS.asc` 和 `TAFFISH-RELEASE-KEY.asc`。压缩包和后三个文件都在[平台包目录](target/packages-0.12.0/)中。如果拿到的只有 macOS 下载分片，请先[合并成完整压缩包](install/README-CN.md#0120-起的本地安装)。进入复制好的目录后，选择以下一种方式安装。
+
+**个人安装：**
 
 ```sh
-sh install-taffish.sh --local
+sh install-taffish.sh --local --user --accept-runtime-license
+```
+
+**全局安装：**
+
+```sh
+sudo sh install-taffish.sh --local --system --accept-runtime-license
 ```
 
 `--local` 先在安装脚本旁找包，再查找相对于脚本的 `../target/packages-0.12.0/`，并跳过联网更新索引。如果压缩包已移动或改名，加 `--archive /实际路径/包文件`，三个验签文件留在包旁。要在离线环境运行容器化 app，还需提前准备好相应的 app、依赖和容器镜像。[离线安装选项](install/README-CN.md#0120-起的本地安装)
