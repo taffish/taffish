@@ -30,10 +30,10 @@ For AI clients, `taffish-mcp` exposes app inspection, argument handling and comp
 
 Choose [GitHub](#github), [Gitee](#gitee) or [local/offline installation](#local-or-offline-install). The official 0.12.0 packages contain `taf`, `taffish` and `taffish-mcp`, built with Han Lisp 0.3.0. You can install and check these commands without installing Lisp or a container backend. [0.12.0 release notes](docs/releases/v0.12.0.md)
 
-| <a name="supported-platforms"></a><a name="system-requirements"></a>Platform | Package | What you need |
-| --- | --- | --- |
-| <a name="macos-dependencies"></a>Apple Silicon macOS 15 or later | `taffish-0.12.0-darwin-arm64.tar.xz` | Built with SBCL 2.4.9 without the zstd dependency; the commands link only to macOS system libraries. The system tar unpacks the archive without Homebrew or a separate `xz` command. |
-| <a name="linux-dependencies"></a>glibc-based Linux x86-64 | `taffish-0.12.0-linux-amd64.tar.gz` | Built with LispWorks. The installer uses `tar` and `gzip`. |
+| <a name="supported-platforms"></a><a name="system-requirements"></a>Platform | Package | Additional requirements | Build implementation |
+| --- | --- | --- | --- |
+| <a name="macos-dependencies"></a>Apple Silicon macOS 15 or later | `taffish-0.12.0-darwin-arm64.tar.xz` | None | [SBCL](https://www.sbcl.org/) 2.4.9 |
+| <a name="linux-dependencies"></a>glibc-based Linux x86-64 | `taffish-0.12.0-linux-amd64.tar.gz` | `tar`, `gzip` | [LispWorks](https://www.lispworks.com/) |
 
 The installation commands below include `--accept-runtime-license`. On Linux, this explicitly accepts the [LispWorks runtime terms](licenses/LISPWORKS-RUNTIME.txt) without an interactive `yes` prompt; read and accept the terms before running a command. Omit the option if you prefer to confirm during installation. macOS does not require this confirmation and ignores the option.
 

@@ -30,10 +30,10 @@ taf-fastqc-v0.12.1-r1 fastqc reads.fq.gz
 
 按网络条件选择 [GitHub](#github)、[Gitee](#gitee) 或[本地离线安装](#本地或离线安装)。0.12.0 的官方平台包包含 `taf`、`taffish` 和 `taffish-mcp`，构建时已包含 Han Lisp 0.3.0。安装和验证这三个命令无需另装 Lisp 或容器后端。[0.12.0 发布说明（英文）](docs/releases/v0.12.0.md)
 
-| <a name="支持平台"></a><a name="系统需求"></a>平台 | 安装包 | 运行与解包依赖 |
-| --- | --- | --- |
-| <a name="macos-依赖"></a>Apple Silicon Mac，macOS 15 及以上 | `taffish-0.12.0-darwin-arm64.tar.xz` | 由不依赖 zstd 的 SBCL 2.4.9 构建，三个命令只链接 macOS 系统库。系统自带的 tar 即可解包，无需安装 Homebrew 或单独的 `xz`。 |
-| <a name="linux-依赖"></a>使用 glibc 的 Linux x86-64 | `taffish-0.12.0-linux-amd64.tar.gz` | 由 LispWorks 构建，安装时需要 `tar` 和 `gzip`。 |
+| <a name="支持平台"></a><a name="系统需求"></a>平台 | 安装包 | 需额外准备 | 构建实现 |
+| --- | --- | --- | --- |
+| <a name="macos-依赖"></a>Apple Silicon Mac，macOS 15 及以上 | `taffish-0.12.0-darwin-arm64.tar.xz` | 无 | [SBCL](https://www.sbcl.org/) 2.4.9 |
+| <a name="linux-依赖"></a>使用 glibc 的 Linux x86-64 | `taffish-0.12.0-linux-amd64.tar.gz` | `tar`、`gzip` | [LispWorks](https://www.lispworks.com/) |
 
 <a name="macos-提示缺少-libzstd1dylib"></a><a name="项目状态"></a>
 
