@@ -94,7 +94,7 @@ for program in taf taffish taffish-mcp; do
   reported=$("$exe" --version | awk 'NR == 1 && NF == 2 {print $1, $2}')
   [[ $reported == "$program $version" ]]
   if [[ $platform == darwin-arm64 ]]; then
-    lipo -verify_arch arm64 "$exe"
+    lipo "$exe" -verify_arch arm64
     otool -L "$exe" | awk '
       NR > 1 && $1 !~ /^\/(usr\/lib|System\/Library)\// {print "Unexpected runtime dependency:", $0; bad=1}
       END {exit (bad || NR < 2)}

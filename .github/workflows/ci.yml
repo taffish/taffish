@@ -161,7 +161,7 @@ jobs:
         working-directory: ${{ runner.temp }}/taffish-ccl-build/bin
         run: |
           for exe in taf taffish taffish-mcp; do
-            lipo -verify_arch arm64 "$exe"
+            lipo "$exe" -verify_arch arm64
             otool -L "$exe" | awk '
               NR > 1 && $1 !~ /^\/(usr\/lib|System\/Library)\// {
                 print "Unexpected runtime dependency:", $0

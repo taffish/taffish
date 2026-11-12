@@ -69,7 +69,9 @@ fi
 for program in $programs; do
     for platform in $platforms; do
         file=$inputs/$program-$platform-$version
-        [ -f "$file" ] && [ ! -L "$file" ] || fail "expected a regular program file: $file"
+        if [ ! -f "$file" ] || [ -L "$file" ]; then
+            fail "expected a regular program file: $file"
+        fi
     done
 done
 
@@ -80,7 +82,9 @@ sign_programs() (
     for program in $programs; do
         for platform in $platforms; do
             file=$program-$platform-$version
-            [ -f "$file" ] && [ ! -L "$file" ] || fail "expected a regular program file: $file"
+            if [ ! -f "$file" ] || [ -L "$file" ]; then
+                fail "expected a regular program file: $file"
+            fi
             set -- "$@" "$file"
         done
     done
@@ -143,7 +147,9 @@ if [ "$#" -eq 3 ]; then
     esac
 fi
 output=$parent/$output_name
-[ ! -e "$output" ] && [ ! -L "$output" ] || fail "output already exists: $output"
+if [ -e "$output" ] || [ -L "$output" ]; then
+    fail "output already exists: $output"
+fi
 
 # Stage on the destination filesystem. Concurrent invocations share this reservation.
 work=$parent/.$output_name.package-lock
@@ -155,7 +161,9 @@ mkdir -p "$tree/target" "$out"
 mkdir -m 700 "$work/gnupg"
 
 copy_file() {
-    [ -f "$1" ] && [ ! -L "$1" ] || fail "expected a regular file: $1"
+    if [ ! -f "$1" ] || [ -L "$1" ]; then
+        fail "expected a regular file: $1"
+    fi
     mkdir -p "$(dirname "$tree/$2")"
     cp "$1" "$tree/$2"
     chmod "$3" "$tree/$2"
@@ -168,14 +176,17 @@ vim-highlight/README.md vim-highlight/ftdetect/taf.vim vim-highlight/syntax/old-
 key=TAFFISH-RELEASE-KEY.asc
 for tool in gpg gpgv shasum tar split cmp; do command -v "$tool" >/dev/null 2>&1 || fail "missing tool: $tool"; done
 for file in $resources licenses/SBCL-NOTICES.txt licenses/LISPWORKS-RUNTIME.txt scripts/sign-release-archives.sh.in scripts/split-release-archive.sh; do
-    [ -f "$repo/$file" ] && [ ! -L "$repo/$file" ] && [ -s "$repo/$file" ] ||
+    if [ ! -f "$repo/$file" ] || [ -L "$repo/$file" ] || [ ! -s "$repo/$file" ]; then
         fail "missing or invalid release resource: $file"
+    fi
 done
 copy_file "$inputs/$key" "target/$key" 0644
 
 # Pin the same primary key as the installer and authenticate the staged manifest.
 pin=$(sed -n 's/^TAFFISH_RELEASE_KEY_FINGERPRINT=\([0-9A-F]*\)$/\1/p' "$repo/install/install-taffish.template.sh")
-[ "${#pin}" -eq 40 ] && [ "$pin" = "$fingerprint" ] || fail 'invalid or mismatched installer fingerprint'
+if [ "${#pin}" -ne 40 ] || [ "$pin" != "$fingerprint" ]; then
+    fail 'invalid or mismatched installer fingerprint'
+fi
 gpg --batch --no-options --no-autostart --homedir "$work/gnupg" --with-colons \
     --show-keys "$tree/target/$key" > "$work/key-info"
 awk -F: -v pin="$pin" '$1=="pub" {pub++} $1=="fpr" && !first {first=$10}
@@ -260,6 +271,8 @@ cp "$tree/target/$key" "$out/$key"
 sed -e "s/@VERSION@/$version/g" -e "s/@FINGERPRINT@/$pin/g" \
     "$repo/scripts/sign-release-archives.sh.in" > "$out/make-sha-asc.sh"
 chmod 0755 "$out/make-sha-asc.sh"
-[ ! -e "$output" ] && [ ! -L "$output" ] || fail "output already exists: $output"
+if [ -e "$output" ] || [ -L "$output" ]; then
+    fail "output already exists: $output"
+fi
 mv "$out" "$output"
 printf 'Prepared %s\nRun ./make-sha-asc.sh in that directory to sign both archives.\n' "$output"

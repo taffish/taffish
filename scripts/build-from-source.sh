@@ -120,7 +120,9 @@ case "$impl" in
 esac
 for name in $programs; do
     exe=$stage/bin/$name
-    [ -f "$exe" ] && [ ! -L "$exe" ] && [ -x "$exe" ] || fail "expected an executable: $exe"
+    if [ ! -f "$exe" ] || [ -L "$exe" ] || [ ! -x "$exe" ]; then
+        fail "expected an executable: $exe"
+    fi
     "$exe" --version
 done
 

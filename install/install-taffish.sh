@@ -413,8 +413,9 @@ taffish_download_archive_parts() (
         taffish_info "downloading archive part $_taf_parts_index/$_taf_parts_count"
         taffish_download_file "${_taf_parts_url%/*}/$_taf_parts_name" "$_taf_parts_file"
         _taf_parts_size=$(wc -c < "$_taf_parts_file")
-        [ "$_taf_parts_size" -gt 0 ] && [ "$_taf_parts_size" -le 8388608 ] || \
+        if [ "$_taf_parts_size" -le 0 ] || [ "$_taf_parts_size" -gt 8388608 ]; then
             taffish_die "invalid archive part size: $_taf_parts_name"
+        fi
         if [ "$_taf_parts_index" -lt "$_taf_parts_count" ] && [ "$_taf_parts_size" -ne 8388608 ]; then
             taffish_die "incomplete non-final archive part: $_taf_parts_name"
         fi
@@ -1646,10 +1647,11 @@ taffish_prepare_runtime_license() {
     fi
     [ -n "$TAFFISH_RUNTIME_NOTICE" ] || taffish_die "no runtime notice defined for this platform"
     for _taf_license in LICENSE vendor/han/LICENSE "licenses/$TAFFISH_RUNTIME_NOTICE"; do
-        [ -f "$_taf_license_root/$_taf_license" ] &&
-            [ ! -L "$_taf_license_root/$_taf_license" ] &&
-            [ -s "$_taf_license_root/$_taf_license" ] ||
+        if [ ! -f "$_taf_license_root/$_taf_license" ] ||
+           [ -L "$_taf_license_root/$_taf_license" ] ||
+           [ ! -s "$_taf_license_root/$_taf_license" ]; then
             taffish_die "missing or invalid license file: $_taf_license"
+        fi
     done
     TAFFISH_LICENSE_SOURCE=$_taf_license_root
     _taf_terms=$_taf_license_root/licenses/$TAFFISH_RUNTIME_NOTICE
@@ -1697,8 +1699,9 @@ taffish_install_license_files() {
     for _taf_name in TAFFISH-LICENSE.txt HAN-LICENSE.txt CCL-NOTICES.txt SBCL-NOTICES.txt LISPWORKS-RUNTIME.txt; do
         _taf_path=$TAFFISH_LICENSE_TRANSACTION/new/$_taf_name
         if [ -e "$_taf_path" ] || [ -L "$_taf_path" ]; then
-            [ -f "$_taf_path" ] && [ ! -L "$_taf_path" ] ||
+            if [ ! -f "$_taf_path" ] || [ -L "$_taf_path" ]; then
                 taffish_die "refusing non-regular installed license: $_taf_name"
+            fi
             rm -f "$_taf_path"
         fi
     done
