@@ -2,7 +2,7 @@
   :description "Han foundational Common Lisp utilities"
   :author "Kaiyuan Han"
   :license "MIT"
-  :version "0.1.0"
+  :version "0.3.0"
   :serial t
   :components
   ((:module "test"
@@ -14,13 +14,19 @@
     :serial t
     :components
     ((:file "package")
+     (:file "characters")
      (:file "common")
      (:file "parameters")
      #+lispworks
      (:file "lispworks")
      #+sbcl
      (:file "sbcl")
-     #-(or lispworks sbcl)
+     #+(and ecl unicode (or darwin linux))
+     (:file "ecl")
+     #+(and ccl 64-bit-target (or darwin linux))
+     (:file "ccl")
+     #-(or lispworks sbcl (and ecl unicode (or darwin linux))
+           (and ccl 64-bit-target (or darwin linux)))
      (:file "unsupported")))
    (:module "source"
     :serial t

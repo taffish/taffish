@@ -11,8 +11,10 @@ TAFFISH 要构建二进制命令行工具，不能让上层到处出现 `#+sbcl`
 当前声明支持：
 
 ```text
-SBCL, LispWorks
+SBCL, LispWorks, ECL, CCL
 ```
+
+ECL 后端要求 macOS 或 Linux 上的 Unicode ECL，CCL 后端要求这两个系统上的 64 位 Clozure CL。各平台的官方构建实现见[源码构建指南](../build-from-source.md)。
 
 不支持的实现会加载 `unsupported.lisp`，调用相关函数时抛出 `unsupported-host-function`。
 
@@ -34,10 +36,11 @@ SBCL, LispWorks
 
 | API | 作用 |
 | --- | --- |
-| `configure-runtime-io` | delivered CLI 处理用户文本前配置实现相关字符 I/O。LispWorks 会选择 UTF-8 console I/O；SBCL 当前不需要额外设置。 |
+| `configure-runtime-io` | delivered CLI 处理用户文本前配置实现相关字符 I/O。LispWorks 会选择 UTF-8 控制台 I/O。SBCL、CCL 和 ECL 无需在这里额外设置。 |
 | `standard-input-terminal-p` | 判断文件描述符 0 是否为终端，使命令可以区分交互式 stdin 与真实管道输入。 |
 | `standard-error-terminal-p` | 查询进程 stderr（文件描述符 2）是否为终端，不读写、不启动子进程。 |
 | `append-utf8-line` | 追加 UTF-8 字节和换行，遇到短写时继续写入剩余部分。 |
+| `atomic-replace-file` | 将已写完的普通文件在同一文件系统内原子切换到指定名称。参数依次为源和目标的字面路径字符串。成功返回 `T`；跨文件系统或目标为目录时发出 `file-error`。 |
 | `call-with-exclusive-file-lock` | 在给定的固定路径上持操作系统独占锁，调用零参函数。默认最多等待五秒。 |
 
 这些函数刻意属于 host 层。上层不能直接重复 SBCL/LispWorks 的终端检测或 console encoding
@@ -123,7 +126,7 @@ LispWorks 使用：
 修改 host 层时要非常谨慎：
 
 1. 不要引入 TAFFISH 业务逻辑。
-2. 同步检查 SBCL 和 LispWorks。
+2. 验证受影响的后端及两个正式构建环境。
 3. process 返回值语义必须保持。
 4. 删除目录的安全校验不能削弱。
 5. shell escaping 的行为会影响整个 TAFFISH 的安全性。

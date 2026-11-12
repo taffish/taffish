@@ -38,7 +38,7 @@
 (in-package :han.source)
 
 (defun %get-help-string ()
-  "han.source v0.1.0
+  "han.source v0.3.0
 
 Purpose:
   Character source abstraction for lexers and parsers.
@@ -76,7 +76,7 @@ Example:
     text))
 
 (defun version (&optional (stream *standard-output*))
-  (let ((version "0.1.0"))
+  (let ((version "0.3.0"))
     (when stream
       (format stream "han.source v~A~%" version))
     version))

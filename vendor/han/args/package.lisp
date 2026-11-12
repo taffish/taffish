@@ -103,7 +103,7 @@
 (in-package :han.args)
 
 (defun %get-help-string ()
-  "han.args v0.1.0
+  "han.args v0.3.0
 
 Purpose:
   Parse command-line-like argv, describe argument specs, and bind input
@@ -149,7 +149,7 @@ Example:
     text))
 
 (defun version (&optional (stream *standard-output*))
-  (let ((version "0.1.0"))
+  (let ((version "0.3.0"))
     (when stream
       (format stream "han.args v~A~%" version))
     version))

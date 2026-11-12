@@ -1,79 +1,56 @@
 (in-package :han.path)
 
-(defun %normalize-directory-list (dir &optional (default-kind :relative))
-  "Normalize DIR into a CL pathname directory list.
-If DIR is NIL, return a default relative/absolute root according to DEFAULT-KIND.
-If DIR already begins with a recognized keyword, return it unchanged.
-Otherwise treat it as a relative directory list."
-  (cond
-    ((null dir)
-     (list default-kind))
-    ((and (consp dir)
-          (keywordp (first dir)))
-     dir)
-    (t
-     (cons default-kind dir))))
-
 (defun ->pathname (x)
   "Convert X to pathname. Accepts pathname or string."
   (let ((p (etypecase x
              (pathname x)
              (string (pathname x)))))
-    (make-pathname
-     :host (pathname-host p)
-     :device (pathname-device p)
-     :directory (%normalize-directory-list (pathname-directory p))
-     :name (pathname-name p)
-     :type (pathname-type p)
-     :version (pathname-version p)
-     :defaults p)))
+    (if (pathname-directory p)
+        p
+        (make-pathname :directory (han.host:pathname-directory-list p) :defaults p))))
+
+(define-condition no-namestring (file-error) ()
+  (:report "The host cannot express this pathname as a namestring."))
 
 (defun ->namestring (x)
-  "Convert X to namestring. Accepts pathname or string."
-  (namestring (->pathname x)))
+  "Return the host spelling of X, or signal a FILE-ERROR with its pathname."
+  (let ((path (->pathname x)))
+    (or (ignore-errors (namestring path))
+        ;; An explicit :UNSPECIFIC type also denotes an extensionless filename.
+        (and (eq (pathname-type path) :unspecific)
+             (stringp (pathname-name path))
+             (not (typep path 'logical-pathname))
+             (ignore-errors (namestring (make-pathname :type nil :defaults path))))
+        (error 'no-namestring :pathname path))))
 
 (defun directory-pathname-p (x)
   "Return T if X looks like a directory pathname."
-  (let* ((p (->pathname x))
-         (dir (%normalize-directory-list (pathname-directory p))))
-    (and dir
-         (null (pathname-name p))
-         (null (pathname-type p)))))
+  (let ((p (->pathname x)))
+    (and (member (pathname-name p) '(nil :unspecific))
+         (member (pathname-type p) '(nil :unspecific))
+         t)))
 
 (defun directory-pathname (x)
   "Convert X to a directory pathname."
-  (let* ((p (->pathname x))
-         (dir (%normalize-directory-list (pathname-directory p))))
-    (if (directory-pathname-p p)
+  (let ((p (->pathname x)))
+    (if (and (null (pathname-name p)) (null (pathname-type p)))
         p
-        (let ((last (file-namestring p)))
+        (let ((file (unless (directory-pathname-p p) (file-namestring p))))
           (make-pathname
-           :host (pathname-host p)
-           :device (pathname-device p)
-           :directory (append dir
-                              (if (and last (not (string= last "")))
-                                  (list last)
-                                  '()))
+           :directory (if (plusp (length file))
+                          (append (han.host:pathname-directory-list p) (list file))
+                          (pathname-directory p))
            :name nil
            :type nil
            :version nil
            :defaults p)))))
 
 (defun parent-directory-pathname (x)
-  "Return the parent directory pathname of X.
-If X is already a directory pathname, return it unchanged."
-  (let* ((p (->pathname x))
-         (dir (%normalize-directory-list (pathname-directory p))))
-    (if (directory-pathname-p p)
+  "Return X's directory with the file name and type cleared."
+  (let ((p (->pathname x)))
+    (if (and (null (pathname-name p)) (null (pathname-type p)))
         p
-        (make-pathname
-         :host (pathname-host p)
-         :device (pathname-device p)
-         :directory dir
-         :name nil
-         :type nil
-         :version nil
-         :defaults p))))
+        (make-pathname :name nil :type nil :version nil :defaults p))))
 
 (defun %join-path-2 (base child)
   "Join BASE and CHILD into one pathname."
@@ -89,20 +66,19 @@ If X is already a directory pathname, return it unchanged."
 
 (defun absolute-pathname-p (x)
   "Return T if X is an absolute pathname."
-  (let* ((p (->pathname x))
-         (dir (%normalize-directory-list (pathname-directory p))))
-    (and (consp dir)
-         (eq (first dir) :absolute))))
+  (let ((directory (pathname-directory (->pathname x))))
+    (or (stringp directory)
+        (eq directory :wild)
+        (and (consp directory) (eq (first directory) :absolute)))))
 
-(defun absolute-pathname (x &optional (base (truename ".")))
+(defun absolute-pathname (x &optional (base nil base-supplied-p))
   "Return an absolute pathname for X relative to BASE."
   (let ((p (->pathname x)))
     (if (absolute-pathname-p p)
         p
-        (merge-pathnames p (directory-pathname base)))))
-
-(defun %pathname-directory-list (p)
-  (%normalize-directory-list (pathname-directory (->pathname p))))
+        (merge-pathnames
+         p (directory-pathname
+            (if base-supplied-p base (han.host:working-directory-pathname)))))))
 
 (defun %common-prefix-length (a b)
   (loop for x in a
@@ -110,27 +86,29 @@ If X is already a directory pathname, return it unchanged."
         while (equal x y)
         count 1))
 
-(defun relative-path (target &optional (base (truename ".")))
+(defun relative-path (target &optional (base (han.host:working-directory-pathname)))
   "Return TARGET as a pathname relative to BASE when possible."
   (let* ((target-p (absolute-pathname target))
-         (base-p   (directory-pathname (absolute-pathname base)))
-         (target-dir (%pathname-directory-list target-p))
-         (base-dir   (%pathname-directory-list base-p)))
+         (base-p   (directory-pathname (absolute-pathname base))))
     (if (or (not (equal (pathname-host target-p) (pathname-host base-p)))
             (not (equal (pathname-device target-p) (pathname-device base-p))))
-        ;; 如果 host/device 都不一样，就没法好好相对化，直接返回 target
         target-p
-        (let* ((common-len (%common-prefix-length target-dir base-dir))
+        (let* ((target-dir (han.host:pathname-directory-list target-p))
+               (base-dir (han.host:pathname-directory-list base-p))
+               (common-len (%common-prefix-length target-dir base-dir))
                (target-rest (nthcdr common-len target-dir))
-               (base-rest   (nthcdr common-len base-dir))
-               (up-list (make-list (length base-rest) :initial-element :up))
-               (new-dir (cons :relative
-                              (append up-list target-rest))))
-          (make-pathname
-           :directory new-dir
-           :name (pathname-name target-p)
-           :type (pathname-type target-p)
-           :version (pathname-version target-p))))))
+               (base-rest   (nthcdr common-len base-dir)))
+          ;; Logical namestrings have no spelling for a parent step.
+          (if (and base-rest (typep target-p 'logical-pathname))
+              target-p
+              (make-pathname
+               :directory (cons :relative
+                                (append (make-list (length base-rest) :initial-element :up)
+                                        target-rest))
+               :name (pathname-name target-p)
+               :type (pathname-type target-p)
+               :version (pathname-version target-p)
+               :defaults target-p))))))
 
 (defun file-exists-p (path)
   "Return the truename/pathname of PATH when it names an existing file, else NIL."

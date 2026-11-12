@@ -524,7 +524,7 @@ the positional pool."
       (bbb 0 (args-input-raw-cmd args-input))
       (bbb "*ARGV*" (format nil "~{~A~^ ~}" raw-argv))
       (bbb "*USER*" (han.os:current-user))
-      (bbb "*WORKDIR*" (%sure-string (truename ".")))
+      (bbb "*WORKDIR*" (%sure-string (han.host:working-directory-pathname)))
 	      (bbb "*LOADDIR*" (%sure-string (ignore-errors
 	                                      (let ((file
 	                                              (han.host:file-exists-p

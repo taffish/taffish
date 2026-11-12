@@ -22,11 +22,11 @@ RUN
 printf '%s:%s\n' "::name::" "::count::"
 TAF
 
-  shell=$($TAFFISH_BIN "$file") || return 1
+  shell=$("$TAFFISH_BIN" "$file") || return 1
   output=$(printf '%s\n' "$shell" | sh) || return 1
   assert_eq "world:1" "$output" "default args output" || return 1
 
-  shell=$($TAFFISH_BIN "$file" --name codex --count 3) || return 1
+  shell=$("$TAFFISH_BIN" "$file" --name codex --count 3) || return 1
   output=$(printf '%s\n' "$shell" | sh) || return 1
   assert_eq "codex:3" "$output" "explicit args output" || return 1
 }
@@ -50,7 +50,7 @@ _taffish_case_minimal_and_auto_run() {
   cat > "$plain_file" <<'TAF'
 echo plain-auto-run
 TAF
-  shell=$($TAFFISH_BIN "$plain_file") || return 1
+  shell=$("$TAFFISH_BIN" "$plain_file") || return 1
   output=$(printf '%s\n' "$shell" | sh) || return 1
   assert_eq "plain-auto-run" "$output" "plain code auto RUN/<taffish>" || return 1
 
@@ -59,7 +59,7 @@ TAF
 <shell>
 echo shell-auto-run
 TAF
-  shell=$($TAFFISH_BIN "$shell_file") || return 1
+  shell=$("$TAFFISH_BIN" "$shell_file") || return 1
   output=$(printf '%s\n' "$shell" | sh) || return 1
   assert_eq "shell-auto-run" "$output" "subtag auto RUN" || return 1
 }
@@ -77,7 +77,7 @@ cat "::input::"
 TAF
 
   set +e
-  output=$($TAFFISH_BIN "$file" 2>&1)
+  output=$("$TAFFISH_BIN" "$file" 2>&1)
   status=$?
   set -e
   [ "$status" -ne 0 ] || harness_fail "required arg compile unexpectedly succeeded"
@@ -108,7 +108,7 @@ printf '%s\n' "pos=::$1::->::$2::"
 printf '%s\n' '\: \< \# \\ \@'
 TAF
 
-  shell=$($TAFFISH_BIN "$file" input.fa output.txt --verbose) || return 1
+  shell=$("$TAFFISH_BIN" "$file" input.fa output.txt --verbose) || return 1
   output=$(printf '%s\n' "$shell" | sh) || return 1
   expected=$(cat <<'OUT'
 prefix=out-demo
@@ -137,11 +137,11 @@ RUN
 printf '%s\n' "::message::"
 TAF
 
-  shell=$($TAFFISH_BIN "$file") || return 1
+  shell=$("$TAFFISH_BIN" "$file") || return 1
   output=$(printf '%s\n' "$shell" | sh) || return 1
   assert_eq "hello, Ada" "$output" "block arg query default" || return 1
 
-  shell=$($TAFFISH_BIN "$file" --name Grace) || return 1
+  shell=$("$TAFFISH_BIN" "$file" --name Grace) || return 1
   output=$(printf '%s\n' "$shell" | sh) || return 1
   assert_eq "hello, Grace" "$output" "block arg query override" || return 1
 }
@@ -158,7 +158,7 @@ RUN
 printf '<%s>\n' ::(@:)only-step::
 TAF
 
-  shell=$($TAFFISH_BIN "$file" @only-step: --xxx 123 "hello world") || return 1
+  shell=$("$TAFFISH_BIN" "$file" @only-step: --xxx 123 "hello world") || return 1
   assert_not_contains "$shell" "ARG-TOKEN" "slot block args must not leak arg-token structs" || return 1
   assert_contains "$shell" "'hello world'" "slot block args quote spaces" || return 1
 
@@ -207,7 +207,7 @@ _taffish_case_taf_app_shell_arg_and_command_modes() {
 printf '<%s>\n' default ::*ARGV*::
 TAF
 
-  shell=$($TAFFISH_BIN "$file" --alpha 1) || return 1
+  shell=$("$TAFFISH_BIN" "$file" --alpha 1) || return 1
   output=$(printf '%s\n' "$shell" | sh) || return 1
   expected=$(cat <<'OUT'
 <default>
@@ -217,7 +217,7 @@ OUT
 )
   assert_eq "$expected" "$output" "taf-app shell arg mode" || return 1
 
-  shell=$($TAFFISH_BIN "$file" echo command-mode) || return 1
+  shell=$("$TAFFISH_BIN" "$file" echo command-mode) || return 1
   output=$(printf '%s\n' "$shell" | sh) || return 1
   assert_eq "command-mode" "$output" "taf-app shell command mode" || return 1
 }
@@ -377,7 +377,7 @@ echo invalid
 TAF
 
   set +e
-  output=$($TAFFISH_BIN "$file" 2>&1)
+  output=$("$TAFFISH_BIN" "$file" 2>&1)
   status=$?
   set -e
   [ "$status" -ne 0 ] || harness_fail "invalid structured args unexpectedly compiled"
@@ -394,7 +394,7 @@ _taffish_case_syntax_errors() {
 echo ::name
 TAF
   set +e
-  output=$($TAFFISH_BIN "$unclosed_arg" 2>&1)
+  output=$("$TAFFISH_BIN" "$unclosed_arg" 2>&1)
   status=$?
   set -e
   [ "$status" -ne 0 ] || harness_fail "unclosed arg unexpectedly compiled"
@@ -406,7 +406,7 @@ TAF
 [[taf: taf-demo-v0.1.0-r1 alpha
 TAF
   set +e
-  output=$($TAFFISH_BIN "$unclosed_taf" 2>&1)
+  output=$("$TAFFISH_BIN" "$unclosed_taf" 2>&1)
   status=$?
   set -e
   [ "$status" -ne 0 ] || harness_fail "unclosed embedded taf unexpectedly compiled"

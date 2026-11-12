@@ -2,6 +2,8 @@
 
 `han` 是 TAFFISH 内置的基础库，位于 `vendor/han/`。它不是独立业务层，而是为 TAFFISH 提供跨平台、解析、路径、JSON、命令行参数等基础能力。
 
+TAFFISH 内置 han-lisp v0.3.0，固定到提交 `bfec353dcb86919d0e7b753163cbe05c1bcc3a17`。收录的 39 个文件包括 ASDF 定义、加载器、Lisp 组件、单元测试和 MIT 许可。[上游发布说明](https://github.com/HermitHan/han-lisp/releases/tag/v0.3.0)
+
 ## 作用
 
 TAFFISH 需要在不同系统上稳定处理路径、环境变量、外部命令、JSON、参数规格和测试。这些能力如果散落在 `taffish-core` 与 `taf-core` 中，会让业务逻辑很快变得难以维护。
@@ -42,7 +44,7 @@ vendor/han
 
 ## han.host 的作用
 
-`han.host` 用于隔离 Common Lisp 实现差异。当前系统中有 SBCL、LispWorks 和 unsupported 的实现文件。TAFFISH 的主要目标是形成稳定命令行工具，所以宿主差异不能泄漏到上层业务逻辑。
+`han.host` 负责隔离 Common Lisp 实现差异。随仓库分发的库包含 SBCL、LispWorks、macOS/Linux 上的 Unicode ECL 和 64 位 Clozure CL 后端。TAFFISH 0.12.0 的 macOS arm64 官方构建使用关闭 core 压缩支持的 SBCL，Linux x86_64 使用 LispWorks；CCL 和 ECL 继续用于开发与兼容性测试。具体装配条件见 [han.asd](../../../../vendor/han/han.asd)。
 
 如果某个上层模块需要判断 Lisp 实现，优先考虑是否应该把判断下沉到 `han.host`。
 

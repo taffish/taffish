@@ -2,6 +2,8 @@
 
 `han` is TAFFISH's built-in base library, located at `vendor/han/`. It is not an independent business layer; it provides foundational capabilities for cross-platform behavior, parsing, paths, JSON, command-line arguments, and related utilities.
 
+TAFFISH vendors han-lisp v0.3.0 from commit `bfec353dcb86919d0e7b753163cbe05c1bcc3a17`. The 39 files include the ASDF systems, loaders, Lisp components, unit tests and MIT license. [Upstream release](https://github.com/HermitHan/han-lisp/releases/tag/v0.3.0)
+
 ## Role
 
 TAFFISH needs stable handling for paths, environment variables, external commands, JSON, argument specifications, and testing across systems. If these capabilities were scattered through `taffish-core` and `taf-core`, the business logic would quickly become hard to maintain.
@@ -42,7 +44,7 @@ This means:
 
 ## Role Of han.host
 
-`han.host` isolates differences between Common Lisp implementations. The current system has implementation files for SBCL, LispWorks, and unsupported hosts. TAFFISH aims to become a stable command-line tool, so host differences must not leak into upper business logic.
+`han.host` isolates Common Lisp implementation differences. The vendored library has backends for SBCL, LispWorks, Unicode ECL on macOS/Linux, and 64-bit Clozure CL on macOS/Linux. TAFFISH 0.12.0 uses SBCL built without core compression for the macOS arm64 release and LispWorks for Linux x86_64. CCL and ECL remain available for development and compatibility testing. The component selection is defined in [han.asd](../../../../vendor/han/han.asd).
 
 If an upper module needs to branch on Lisp implementation, first consider whether that branch should move down into `han.host`.
 

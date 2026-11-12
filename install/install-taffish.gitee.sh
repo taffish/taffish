@@ -21,7 +21,9 @@ TAFFISH_INSTALL_CONNECT_TIMEOUT=${TAFFISH_INSTALL_CONNECT_TIMEOUT:-15}
 TAFFISH_RELEASE_KEY_FINGERPRINT=F86333E60BD674F159A5651AB9193F30C4247BB2
 
 REPO=taffish-org/taffish
-VERSION=0.11.0
+VERSION=0.12.0
+DEFAULT_VERSION=$VERSION
+LOCAL_INSTALL=0
 ARCHIVE=
 URL=
 SHARE_URL=
@@ -49,6 +51,21 @@ TAFFISH_INSTALL_TRANSACTION_ACTIVE=0
 TAFFISH_INSTALL_TRANSACTION_DIR=
 TAFFISH_INSTALL_BINARY_ACTION=installed
 TAFFISH_INSTALL_SOURCE_KIND=raw
+TAFFISH_ACCEPT_RUNTIME_LICENSE=0
+TAFFISH_SHOW_RUNTIME_LICENSE=0
+TAFFISH_LICENSE_SOURCE=
+TAFFISH_RUNTIME_NOTICE=
+TAFFISH_RUNTIME_LICENSE_SHA256=
+TAFFISH_RUNTIME_LICENSE_ACCEPTANCE=
+TAFFISH_LICENSE_TRANSACTION=
+TAFFISH_LICENSE_DEST=
+TAFFISH_LICENSE_PLACED=0
+TAFFISH_PLATFORM_ARCHIVE=
+TAFFISH_ARCHIVE_PARTS=0
+TAFFISH_ARCHIVE_SHA256=
+TAFFISH_ARCHIVE_VERIFICATION=
+TAFFISH_SHARE_OVERRIDE_ROOT=
+TAFFISH_ARCHIVE_TAR=tar
 TAFFISH_INSTALL_RECEIPT_PATH=
 TAFFISH_INSTALL_RECEIPT_TMP=
 TAFFISH_INSTALL_SELECTED_ASSET_TAF=
@@ -118,6 +135,76 @@ taffish_should_install_mcp() {
         0.1|0.1.*|0.2|0.2.*|0.3|0.3.*) return 1 ;;
         *) return 0 ;;
     esac
+}
+
+taffish_platform_package_version_p() {
+    case "$1" in ''|*[!0-9A-Za-z.+-]*) return 1 ;; esac
+    printf '%s\n' "$1" | awk -F. '
+        /^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.+-]+)?$/ {
+            packaged = ($1 + 0 > 0 || $2 + 0 >= 12)
+        }
+        END { exit !packaged }
+    '
+}
+
+taffish_platform_archive_name() {
+    _taf_platform="$(taffish_detect_target_os)-$(taffish_detect_target_arch)"
+    case "$_taf_platform" in
+        darwin-arm64) _taf_extension=tar.xz ;;
+        linux-amd64)  _taf_extension=tar.gz ;;
+        *) taffish_die "no official platform package for $_taf_platform" ;;
+    esac
+    printf 'taffish-%s-%s.%s\n' "$(taffish_version_plain)" "$_taf_platform" "$_taf_extension"
+}
+
+taffish_package_directory() {
+    printf 'target/packages-%s\n' "$(taffish_version_plain)"
+}
+
+taffish_resolve_local_archive() {
+    taffish_platform_package_version_p "$(taffish_version_plain)" || \
+        taffish_die "--local requires a platform package (0.12.0 or later); use --archive FILE --no-update for an older release"
+    # Use the signed asset name even when the user renamed the file on disk.
+    TAFFISH_PLATFORM_ARCHIVE=$(taffish_platform_archive_name)
+    if [ -n "$ARCHIVE" ]; then
+        case "$ARCHIVE" in /*) ;; *) ARCHIVE="$PWD/$ARCHIVE" ;; esac
+        [ -f "$ARCHIVE" ] || taffish_die "archive does not exist: $ARCHIVE"
+        return
+    fi
+
+    [ -f "$0" ] || taffish_die "run a saved installer for --local discovery, or specify --local --archive FILE"
+    _taf_script_dir=$(CDPATH='' cd -P "$(dirname "$0")" && pwd -P)
+    _taf_adjacent="$_taf_script_dir/$TAFFISH_PLATFORM_ARCHIVE"
+    _taf_checkout="$_taf_script_dir/../$(taffish_package_directory)/$TAFFISH_PLATFORM_ARCHIVE"
+    for _taf_candidate in "$_taf_adjacent" "$_taf_checkout"; do
+        if [ -f "$_taf_candidate" ]; then
+            ARCHIVE=$_taf_candidate
+            return
+        fi
+    done
+    taffish_die "local package not found: tried $_taf_adjacent and $_taf_checkout; specify --local --archive FILE"
+}
+
+taffish_resolve_platform_archive() {
+    if [ -n "$ARCHIVE" ] || [ -n "$URL" ]; then
+        if [ -n "$ARCHIVE" ]; then
+            _taf_basename=${ARCHIVE##*/}
+        else
+            _taf_basename=$(taffish_url_basename "$URL")
+        fi
+        case "$_taf_basename" in
+            taffish-*-darwin-arm64.tar.xz) _taf_v=${_taf_basename%-darwin-arm64.tar.xz} ;;
+            taffish-*-linux-amd64.tar.gz)  _taf_v=${_taf_basename%-linux-amd64.tar.gz} ;;
+            *) return 0 ;; # Traditional or custom bundle.
+        esac
+        taffish_platform_package_version_p "${_taf_v#taffish-}" || return 0
+        TAFFISH_PLATFORM_ARCHIVE=$(taffish_platform_archive_name)
+        [ "$_taf_basename" = "$TAFFISH_PLATFORM_ARCHIVE" ] || \
+            taffish_die "expected $TAFFISH_PLATFORM_ARCHIVE for the requested --version, OS and architecture"
+    elif [ -z "$TAF_URL$TAFFISH_URL$TAFFISH_MCP_URL" ] && \
+         taffish_platform_package_version_p "$(taffish_version_plain)"; then
+        TAFFISH_PLATFORM_ARCHIVE=$(taffish_platform_archive_name)
+    fi
 }
 
 taffish_normalize_provider() {
@@ -295,6 +382,51 @@ taffish_verify_sha256_entry() {
     taffish_info "verified SHA256: $_taf_asset"
 }
 
+# Transport metadata is untrusted. Only canonical, sequential names are accepted;
+# the reconstructed archive still goes through the existing signed full checksum.
+taffish_download_archive_parts() (
+    _taf_parts_url=$1
+    _taf_parts_output=$2
+    _taf_parts_manifest=$TMPDIR_INSTALL/archive.parts
+    _taf_parts_rows=$TMPDIR_INSTALL/archive-parts-rows
+    taffish_download_file "$_taf_parts_url.parts" "$_taf_parts_manifest"
+    [ "$(wc -c < "$_taf_parts_manifest")" -le 16384 ] || \
+        taffish_die 'archive part manifest is too large'
+    LC_ALL=C awk -v archive="$TAFFISH_PLATFORM_ARCHIVE" '
+        {
+            hash=substr($0, 1, 64)
+            name=substr($0, 67)
+            suffix=sprintf("%c%c", 97+int((NR-1)/26), 97+(NR-1)%26)
+            if (NR>64 || length(hash)!=64 || hash~/[^0-9a-f]/ ||
+                substr($0, 65, 2)!="  " || name!=archive ".part-" suffix) exit 1
+            print hash "  " name
+        }
+        END {if (NR==0) exit 1}
+    ' "$_taf_parts_manifest" > "$_taf_parts_rows" || \
+        taffish_die 'invalid archive part manifest (expected sequential parts aa onward, at most 64)'
+    _taf_parts_count=$(awk 'END {print NR}' "$_taf_parts_rows")
+    _taf_parts_index=0
+    : > "$_taf_parts_output"
+    while read -r _taf_parts_hash _taf_parts_name; do
+        _taf_parts_index=$((_taf_parts_index + 1))
+        _taf_parts_file=$TMPDIR_INSTALL/archive-part
+        taffish_info "downloading archive part $_taf_parts_index/$_taf_parts_count"
+        taffish_download_file "${_taf_parts_url%/*}/$_taf_parts_name" "$_taf_parts_file"
+        _taf_parts_size=$(wc -c < "$_taf_parts_file")
+        [ "$_taf_parts_size" -gt 0 ] && [ "$_taf_parts_size" -le 8388608 ] || \
+            taffish_die "invalid archive part size: $_taf_parts_name"
+        if [ "$_taf_parts_index" -lt "$_taf_parts_count" ] && [ "$_taf_parts_size" -ne 8388608 ]; then
+            taffish_die "incomplete non-final archive part: $_taf_parts_name"
+        fi
+        _taf_parts_actual=$(taffish_sha256_file "$_taf_parts_file")
+        [ "$_taf_parts_actual" = "$_taf_parts_hash" ] || \
+            taffish_die "SHA256 mismatch for $_taf_parts_name (expected $_taf_parts_hash, got $_taf_parts_actual)"
+        taffish_info "verified SHA256: $_taf_parts_name"
+        cat "$_taf_parts_file" >> "$_taf_parts_output" || taffish_die 'could not assemble platform archive'
+        rm -f "$_taf_parts_file"
+    done < "$_taf_parts_rows"
+)
+
 taffish_normalize_fingerprint() {
     printf '%s' "$1" | tr -d '[:space:]' | tr '[:lower:]' '[:upper:]'
 }
@@ -452,7 +584,7 @@ taffish_prepare_stage_verification() {
         TAFFISH_VERIFY_MANIFEST=$TMPDIR_INSTALL/SHA256SUMS
     elif [ -f "$_taf_root/target/SHA256SUMS" ]; then
         TAFFISH_VERIFY_MANIFEST=$_taf_root/target/SHA256SUMS
-    elif [ "$TAFFISH_INSTALL_VERIFY" != "auto" ]; then
+    elif [ -n "$TAFFISH_PLATFORM_ARCHIVE" ] || [ "$TAFFISH_INSTALL_VERIFY" != "auto" ]; then
         taffish_die "verification mode $TAFFISH_INSTALL_VERIFY requires a checksum manifest"
     fi
 
@@ -529,7 +661,7 @@ taffish_validate_archive() {
     _taf_names=$TMPDIR_INSTALL/archive-names
     _taf_listing=$TMPDIR_INSTALL/archive-listing
 
-    tar -tzf "$_taf_archive" >"$_taf_names" || \
+    "$TAFFISH_ARCHIVE_TAR" "-t${2}f" "$_taf_archive" >"$_taf_names" || \
         taffish_die "failed to list archive: $_taf_archive"
     while IFS= read -r _taf_entry; do
         case "$_taf_entry" in
@@ -539,7 +671,7 @@ taffish_validate_archive() {
         esac
     done <"$_taf_names"
 
-    tar -tvzf "$_taf_archive" >"$_taf_listing" || \
+    "$TAFFISH_ARCHIVE_TAR" "-tv${2}f" "$_taf_archive" >"$_taf_listing" || \
         taffish_die "failed to inspect archive entry types: $_taf_archive"
     while IFS= read -r _taf_line; do
         _taf_type=$(printf '%s' "$_taf_line" | cut -c 1)
@@ -548,6 +680,51 @@ taffish_validate_archive() {
             *) taffish_die "unsafe archive entry type: $_taf_line" ;;
         esac
     done <"$_taf_listing"
+}
+
+taffish_unpack_archive() {
+    taffish_validate_archive "$1" "$3"
+    mkdir -p "$2" || taffish_die "failed to create archive staging directory"
+    "$TAFFISH_ARCHIVE_TAR" "-x${3}f" "$1" -C "$2" || taffish_die "failed to unpack archive: $1"
+}
+
+# Snapshot sidecars from the archive's own directory or URL before unpacking it.
+taffish_archive_sidecar() {
+    if [ -n "$ARCHIVE" ]; then
+        _taf_sidecar="$(dirname "$ARCHIVE")/$1"
+        [ -f "$_taf_sidecar" ] || return 1
+        cp "$_taf_sidecar" "$TMPDIR_INSTALL/$1" || taffish_die "failed to snapshot $_taf_sidecar"
+    else
+        _taf_archive_url=${URL%%\?*}
+        _taf_archive_url=${_taf_archive_url%%\#*}
+        taffish_try_download_file "${_taf_archive_url%/*}/$1" "$TMPDIR_INSTALL/$1" || return 1
+    fi
+}
+
+taffish_verify_platform_archive() {
+    if [ "$TAFFISH_INSTALL_VERIFY" != none ]; then
+        taffish_archive_sidecar ARCHIVE-SHA256SUMS || taffish_die "archive checksum manifest is unavailable"
+        _taf_outer_sig=
+        _taf_outer_key=
+        if [ "$TAFFISH_INSTALL_VERIFY" = gpg ] || [ "$TAFFISH_INSTALL_VERIFY" = auto ]; then
+            if taffish_archive_sidecar ARCHIVE-SHA256SUMS.asc; then
+                _taf_outer_sig=$TMPDIR_INSTALL/ARCHIVE-SHA256SUMS.asc
+            fi
+            if [ -n "$RELEASE_KEY_FILE" ]; then
+                cp "$RELEASE_KEY_FILE" "$TMPDIR_INSTALL/archive-key.asc" || taffish_die "failed to snapshot release key"
+                _taf_outer_key=$TMPDIR_INSTALL/archive-key.asc
+            elif [ -n "$RELEASE_KEY_URL" ]; then
+                taffish_download_file "$RELEASE_KEY_URL" "$TMPDIR_INSTALL/archive-key.asc"
+                _taf_outer_key=$TMPDIR_INSTALL/archive-key.asc
+            elif taffish_archive_sidecar TAFFISH-RELEASE-KEY.asc; then
+                _taf_outer_key=$TMPDIR_INSTALL/TAFFISH-RELEASE-KEY.asc
+            fi
+        fi
+        taffish_verify_payload "$TMPDIR_INSTALL/ARCHIVE-SHA256SUMS" "$_taf_outer_sig" "$_taf_outer_key" \
+            "$TAFFISH_PLATFORM_ARCHIVE" "$1"
+    fi
+    TAFFISH_ARCHIVE_VERIFICATION=$TAFFISH_INSTALL_VERIFICATION_LEVEL
+    TAFFISH_ARCHIVE_SHA256=$(taffish_sha256_file "$1")
 }
 
 taffish_download_file() {
@@ -651,6 +828,13 @@ taffish_select_target_binary() {
 
     _taf_os=$(taffish_detect_target_os)
     _taf_arch=$(taffish_detect_target_arch)
+
+    if [ -n "$TAFFISH_PLATFORM_ARCHIVE" ]; then
+        _taf_path="$_taf_target_dir/$_taf_name-$_taf_os-$_taf_arch-$(taffish_version_plain)"
+        [ -f "$_taf_path" ] || return 1
+        printf '%s\n' "$_taf_path"
+        return 0
+    fi
 
     for _taf_os_alias in $(taffish_target_os_aliases "$_taf_os"); do
         for _taf_arch_alias in $(taffish_target_arch_aliases "$_taf_arch"); do
@@ -890,6 +1074,9 @@ taffish_print_dry_run() {
     printf '  TAFFISH home      : %s\n' "$TAFFISH_INSTALL_HOME"
     printf '  provider          : %s\n' "$TAFFISH_INSTALL_PROVIDER"
     printf '  source tag        : %s\n' "$(taffish_version_tag)"
+    if [ -n "$TAFFISH_PLATFORM_ARCHIVE" ]; then
+        printf '  platform package  : %s\n' "${ARCHIVE:-$URL}"
+    fi
     printf '  SIF cache policy  : %s\n' "$TAFFISH_INSTALL_EFFECTIVE_SIF_POLICY"
     printf '  verification      : %s\n' "$TAFFISH_INSTALL_VERIFY"
     printf '  download retries  : %s\n' "$TAFFISH_INSTALL_RETRY"
@@ -966,6 +1153,12 @@ taffish_smoke_candidate() {
     _taf_smoke_output=$("$_taf_candidate" --version </dev/null 2>&1) || \
         taffish_die "candidate smoke test failed: $_taf_name --version"
     _taf_smoke_first=$(printf '%s\n' "$_taf_smoke_output" | sed -n '1p')
+    if [ -n "$TAFFISH_PLATFORM_ARCHIVE" ]; then
+        printf '%s\n' "$_taf_smoke_first" | awk -v name="$_taf_name" -v ver="$_taf_expected_version" \
+            'NF == 2 && $1 == name && $2 == ver { ok = 1 } END { exit !ok }' || \
+            taffish_die "candidate version mismatch for $_taf_name (expected $_taf_expected_version, got: $_taf_smoke_first)"
+        return 0
+    fi
     case "$_taf_smoke_first" in
         "$_taf_name"*"$_taf_expected_version"*) ;;
         *)
@@ -1231,6 +1424,16 @@ EOF
     then
         taffish_die "failed to write install receipt"
     fi
+    if [ -n "$TAFFISH_PLATFORM_ARCHIVE" ]; then
+        printf 'archive_asset = "%s"\narchive_sha256 = "%s"\narchive_verification = "%s"\n' \
+            "$TAFFISH_PLATFORM_ARCHIVE" "$TAFFISH_ARCHIVE_SHA256" "$TAFFISH_ARCHIVE_VERIFICATION" \
+            >>"$_taf_receipt_tmp" || taffish_die "failed to write archive receipt fields"
+    fi
+    if [ -n "$TAFFISH_RUNTIME_LICENSE_ACCEPTANCE" ]; then
+        printf 'runtime_license_file = "share/licenses/LISPWORKS-RUNTIME.txt"\nruntime_license_sha256 = "%s"\nruntime_license_acceptance = "%s"\n' \
+            "$TAFFISH_RUNTIME_LICENSE_SHA256" "$TAFFISH_RUNTIME_LICENSE_ACCEPTANCE" \
+            >>"$_taf_receipt_tmp" || taffish_die "failed to record runtime terms acceptance"
+    fi
     if ! chmod 0644 "$_taf_receipt_tmp"; then
         taffish_die "failed to protect install receipt"
     fi
@@ -1255,6 +1458,7 @@ taffish_stage_has_target_layout() {
 }
 
 taffish_stage_has_bin_layout() {
+    [ -z "$TAFFISH_PLATFORM_ARCHIVE" ] || return 1
     _taf_root=$1
     [ -f "$_taf_root/bin/taf" ] || return 1
     [ -f "$_taf_root/bin/taffish" ] || return 1
@@ -1416,17 +1620,138 @@ taffish_print_post_install_notes() {
             ;;
     esac
 
+    if [ -n "$TAFFISH_LICENSE_SOURCE" ]; then
+        taffish_info "licenses and runtime terms: $TAFFISH_INSTALL_HOME/share/licenses"
+    fi
     taffish_info "completion files installed under:"
     printf '  %s\n' "$TAFFISH_INSTALL_HOME/share/completions"
     taffish_info "vim files installed under:"
     printf '  %s\n' "$TAFFISH_INSTALL_HOME/share/vim"
 }
 
+taffish_prepare_runtime_license() {
+    _taf_license_root=$1
+    case "$(taffish_detect_target_os)" in
+        darwin) TAFFISH_RUNTIME_NOTICE=SBCL-NOTICES.txt ;;
+        linux) TAFFISH_RUNTIME_NOTICE=LISPWORKS-RUNTIME.txt ;;
+        *) TAFFISH_RUNTIME_NOTICE= ;;
+    esac
+    if [ -z "$TAFFISH_PLATFORM_ARCHIVE" ] &&
+       { [ -z "$TAFFISH_RUNTIME_NOTICE" ] ||
+         [ ! -e "$_taf_license_root/licenses/$TAFFISH_RUNTIME_NOTICE" ]; }; then
+        [ "$TAFFISH_SHOW_RUNTIME_LICENSE" = 0 ] ||
+            taffish_die "this custom bundle has no runtime notice; consult its distributor"
+        TAFFISH_RUNTIME_NOTICE=
+        return
+    fi
+    [ -n "$TAFFISH_RUNTIME_NOTICE" ] || taffish_die "no runtime notice defined for this platform"
+    for _taf_license in LICENSE vendor/han/LICENSE "licenses/$TAFFISH_RUNTIME_NOTICE"; do
+        [ -f "$_taf_license_root/$_taf_license" ] &&
+            [ ! -L "$_taf_license_root/$_taf_license" ] &&
+            [ -s "$_taf_license_root/$_taf_license" ] ||
+            taffish_die "missing or invalid license file: $_taf_license"
+    done
+    TAFFISH_LICENSE_SOURCE=$_taf_license_root
+    _taf_terms=$_taf_license_root/licenses/$TAFFISH_RUNTIME_NOTICE
+    if [ "$TAFFISH_SHOW_RUNTIME_LICENSE" = 1 ]; then
+        cat "$_taf_terms"
+        exit 0
+    fi
+    [ "$TAFFISH_RUNTIME_NOTICE" = LISPWORKS-RUNTIME.txt ] || return 0
+    TAFFISH_RUNTIME_LICENSE_SHA256=$(taffish_sha256_file "$_taf_terms")
+    if [ "$TAFFISH_ACCEPT_RUNTIME_LICENSE" = 1 ]; then
+        TAFFISH_RUNTIME_LICENSE_ACCEPTANCE=flag
+        taffish_info "LispWorks runtime terms accepted with --accept-runtime-license"
+        return
+    fi
+    if ! ( : </dev/tty ) 2>/dev/null; then
+        taffish_die "read the package terms with --show-runtime-license; after reading, add --accept-runtime-license to install the Linux LispWorks runtime"
+    fi
+    cat "$_taf_terms" >/dev/tty
+    printf '\nAccept these LispWorks runtime terms? Type yes to install: ' >/dev/tty
+    _taf_acceptance=
+    IFS= read -r _taf_acceptance </dev/tty || _taf_acceptance=
+    [ "$_taf_acceptance" = yes ] ||
+        taffish_die "LispWorks runtime terms were not accepted; installation stopped"
+    TAFFISH_RUNTIME_LICENSE_ACCEPTANCE=terminal
+}
+
+taffish_install_license_files() {
+    [ -n "$TAFFISH_LICENSE_SOURCE" ] || return 0
+    _taf_share=$TAFFISH_INSTALL_HOME/share
+    TAFFISH_LICENSE_DEST=$_taf_share/licenses
+    for _taf_path in "$_taf_share" "$TAFFISH_LICENSE_DEST"; do
+        [ ! -L "$_taf_path" ] || taffish_die "refusing symlink at license directory: $_taf_path"
+        if [ -e "$_taf_path" ] && [ ! -d "$_taf_path" ]; then
+            taffish_die "expected license directory: $_taf_path"
+        fi
+    done
+    mkdir -p "$_taf_share"
+    TAFFISH_LICENSE_TRANSACTION=$(mktemp -d "$_taf_share/.licenses-install.XXXXXX") ||
+        taffish_die "failed to stage license files"
+    mkdir -m 755 "$TAFFISH_LICENSE_TRANSACTION/new"
+    # Preserve files added by users, without following their symlinks.
+    if [ -d "$TAFFISH_LICENSE_DEST" ]; then
+        cp -RP "$TAFFISH_LICENSE_DEST/." "$TAFFISH_LICENSE_TRANSACTION/new"
+    fi
+    for _taf_name in TAFFISH-LICENSE.txt HAN-LICENSE.txt CCL-NOTICES.txt SBCL-NOTICES.txt LISPWORKS-RUNTIME.txt; do
+        _taf_path=$TAFFISH_LICENSE_TRANSACTION/new/$_taf_name
+        if [ -e "$_taf_path" ] || [ -L "$_taf_path" ]; then
+            [ -f "$_taf_path" ] && [ ! -L "$_taf_path" ] ||
+                taffish_die "refusing non-regular installed license: $_taf_name"
+            rm -f "$_taf_path"
+        fi
+    done
+    chmod 0755 "$TAFFISH_LICENSE_TRANSACTION/new"
+    cp "$TAFFISH_LICENSE_SOURCE/LICENSE" "$TAFFISH_LICENSE_TRANSACTION/new/TAFFISH-LICENSE.txt"
+    cp "$TAFFISH_LICENSE_SOURCE/vendor/han/LICENSE" "$TAFFISH_LICENSE_TRANSACTION/new/HAN-LICENSE.txt"
+    cp "$TAFFISH_LICENSE_SOURCE/licenses/$TAFFISH_RUNTIME_NOTICE" "$TAFFISH_LICENSE_TRANSACTION/new/$TAFFISH_RUNTIME_NOTICE"
+    chmod 0644 "$TAFFISH_LICENSE_TRANSACTION/new/TAFFISH-LICENSE.txt" \
+        "$TAFFISH_LICENSE_TRANSACTION/new/HAN-LICENSE.txt" \
+        "$TAFFISH_LICENSE_TRANSACTION/new/$TAFFISH_RUNTIME_NOTICE"
+    if [ -d "$TAFFISH_LICENSE_DEST" ]; then
+        mv "$TAFFISH_LICENSE_DEST" "$TAFFISH_LICENSE_TRANSACTION/previous"
+    fi
+    mv "$TAFFISH_LICENSE_TRANSACTION/new" "$TAFFISH_LICENSE_DEST" ||
+        taffish_die "failed to install license files"
+    TAFFISH_LICENSE_PLACED=1
+}
+
+taffish_rollback_license_files() {
+    [ -n "$TAFFISH_LICENSE_TRANSACTION" ] || return 0
+    if [ "$TAFFISH_LICENSE_PLACED" = 1 ]; then
+        rm -rf "$TAFFISH_LICENSE_DEST" || {
+            taffish_warn "license rollback failed; recovery files: $TAFFISH_LICENSE_TRANSACTION"
+            return
+        }
+    fi
+    if [ -d "$TAFFISH_LICENSE_TRANSACTION/previous" ]; then
+        mv "$TAFFISH_LICENSE_TRANSACTION/previous" "$TAFFISH_LICENSE_DEST" || {
+            taffish_warn "license rollback failed; recovery files: $TAFFISH_LICENSE_TRANSACTION"
+            return
+        }
+    fi
+    rm -rf "$TAFFISH_LICENSE_TRANSACTION"
+    TAFFISH_LICENSE_TRANSACTION=
+}
+
+taffish_finalize_license_files() {
+    [ -n "$TAFFISH_LICENSE_TRANSACTION" ] || return 0
+    if ! rm -rf "$TAFFISH_LICENSE_TRANSACTION"; then
+        taffish_warn "licenses installed; cleanup files retained at $TAFFISH_LICENSE_TRANSACTION"
+    fi
+    TAFFISH_LICENSE_TRANSACTION=
+}
+
 taffish_install_from_stage() {
     _taf_stage_input=$1
     TAFFISH_INSTALL_SOURCE_KIND=bundle
     taffish_resolve_install_paths
-    _taf_root=$(taffish_stage_root "$_taf_stage_input")
+    if [ -n "$TAFFISH_PLATFORM_ARCHIVE" ]; then
+        _taf_root=$_taf_stage_input
+    else
+        _taf_root=$(taffish_stage_root "$_taf_stage_input")
+    fi
     taffish_validate_stage "$_taf_root"
 
     taffish_info "install scope: $TAFFISH_INSTALL_SCOPE"
@@ -1478,8 +1803,18 @@ taffish_install_from_stage() {
             "$_taf_install_asset_taffish" "$_taf_install_src_taffish"
     fi
 
+    taffish_prepare_runtime_license "$_taf_root"
+
+    # Record only the level reached by both layers of a platform package.
+    if [ "$TAFFISH_ARCHIVE_VERIFICATION" = sha256 ] && [ "$TAFFISH_INSTALL_VERIFICATION_LEVEL" = gpg ]; then
+        TAFFISH_INSTALL_VERIFICATION_LEVEL=sha256
+    fi
+    if [ -n "$SHARE_URL" ]; then
+        taffish_prepare_share_override
+    fi
     taffish_prepare_install_home
     taffish_acquire_install_lock
+    taffish_install_license_files
     taffish_make_required_dirs
     if taffish_should_install_mcp; then
         taffish_install_binaries_transactionally \
@@ -1492,12 +1827,9 @@ taffish_install_from_stage() {
 
     taffish_write_install_receipt
     taffish_finalize_binary_transaction
+    taffish_finalize_license_files
 
-    taffish_copy_tree_files "$_taf_root/completion/bash" "$TAFFISH_INSTALL_HOME/share/completions/bash"
-    taffish_copy_tree_files "$_taf_root/completion/zsh" "$TAFFISH_INSTALL_HOME/share/completions/zsh"
-    taffish_copy_tree_files "$_taf_root/completion/fish" "$TAFFISH_INSTALL_HOME/share/completions/fish"
-    taffish_copy_tree_files "$_taf_root/vim-highlight/syntax" "$TAFFISH_INSTALL_HOME/share/vim/syntax"
-    taffish_copy_tree_files "$_taf_root/vim-highlight/ftdetect" "$TAFFISH_INSTALL_HOME/share/vim/ftdetect"
+    taffish_install_share_tree "${TAFFISH_SHARE_OVERRIDE_ROOT:-$_taf_root}"
 
     taffish_release_install_lock
     taffish_post_install
@@ -1627,6 +1959,26 @@ taffish_first_subdir() {
     return 1
 }
 
+taffish_prepare_share_override() {
+    _taf_share_archive="$TMPDIR_INSTALL/share.tar.gz"
+    _taf_share_extract="$TMPDIR_INSTALL/share-extract"
+    taffish_download_file "$SHARE_URL" "$_taf_share_archive"
+    taffish_unpack_archive "$_taf_share_archive" "$_taf_share_extract" z
+    if [ -d "$_taf_share_extract/completion" ] || [ -d "$_taf_share_extract/vim-highlight" ]; then
+        TAFFISH_SHARE_OVERRIDE_ROOT=$_taf_share_extract
+    else
+        TAFFISH_SHARE_OVERRIDE_ROOT=$(taffish_first_subdir "$_taf_share_extract" || printf '%s\n' "$_taf_share_extract")
+    fi
+}
+
+taffish_install_share_tree() {
+    taffish_copy_tree_files "$1/completion/bash" "$TAFFISH_INSTALL_HOME/share/completions/bash"
+    taffish_copy_tree_files "$1/completion/zsh" "$TAFFISH_INSTALL_HOME/share/completions/zsh"
+    taffish_copy_tree_files "$1/completion/fish" "$TAFFISH_INSTALL_HOME/share/completions/fish"
+    taffish_copy_tree_files "$1/vim-highlight/syntax" "$TAFFISH_INSTALL_HOME/share/vim/syntax"
+    taffish_copy_tree_files "$1/vim-highlight/ftdetect" "$TAFFISH_INSTALL_HOME/share/vim/ftdetect"
+}
+
 taffish_install_from_remote_raw() {
     TAFFISH_INSTALL_SOURCE_KIND=raw
     taffish_resolve_install_paths
@@ -1708,25 +2060,8 @@ taffish_install_from_remote_raw() {
     taffish_finalize_binary_transaction
 
     if [ -n "$SHARE_URL" ]; then
-        _taf_share_archive="$TMPDIR_INSTALL/share.tar.gz"
-        taffish_download_file "$SHARE_URL" "$_taf_share_archive"
-
-        _taf_share_extract="$TMPDIR_INSTALL/share-extract"
-        mkdir -p "$_taf_share_extract" || taffish_die "failed to create temp share dir"
-        taffish_validate_archive "$_taf_share_archive"
-        tar -xzf "$_taf_share_archive" -C "$_taf_share_extract" || \
-            taffish_die "failed to extract share archive: $SHARE_URL"
-
-        _taf_share_root=$(taffish_first_subdir "$_taf_share_extract" || true)
-        if [ -z "$_taf_share_root" ]; then
-            _taf_share_root=$_taf_share_extract
-        fi
-
-        taffish_copy_tree_files "$_taf_share_root/completion/bash" "$TAFFISH_INSTALL_HOME/share/completions/bash"
-        taffish_copy_tree_files "$_taf_share_root/completion/zsh" "$TAFFISH_INSTALL_HOME/share/completions/zsh"
-        taffish_copy_tree_files "$_taf_share_root/completion/fish" "$TAFFISH_INSTALL_HOME/share/completions/fish"
-        taffish_copy_tree_files "$_taf_share_root/vim-highlight/syntax" "$TAFFISH_INSTALL_HOME/share/vim/syntax"
-        taffish_copy_tree_files "$_taf_share_root/vim-highlight/ftdetect" "$TAFFISH_INSTALL_HOME/share/vim/ftdetect"
+        taffish_prepare_share_override
+        taffish_install_share_tree "$TAFFISH_SHARE_OVERRIDE_ROOT"
     else
         taffish_install_raw_share_files
     fi
@@ -1741,11 +2076,12 @@ usage() {
 Usage:
   install-taffish.gitee.sh [OPTIONS]
 
-Install TAFFISH from raw files under a fixed git tag.
+Install TAFFISH from a fixed git tag.
 
-Default mode (no --archive/--url):
-  - download taf/taffish/taffish-mcp binaries from target/ under tag v<version>
-  - download completion/vim files from the same tag
+Default online mode (no --local, --archive or --url):
+  - 0.12.0 and later: download one platform package with programs and share files
+  - earlier releases: download individual binaries and share files from the tag
+  - explicit binary URLs select the individual-file layout
 
 Options:
   --user                    Install for current user [default]
@@ -1755,10 +2091,12 @@ Options:
   --bin-dir DIR             Override executable install directory
   --taffish-home DIR        Override TAFFISH runtime home
   --repo OWNER/REPO         Gitee repository [taffish-org/taffish]
-  --version VERSION         Release version [0.11.0]
+EOF
+    printf '  --version VERSION         Release version [%s]\n' "$DEFAULT_VERSION"
+    cat <<'EOF'
   --provider PROVIDER       Raw provider: github or gitee [gitee]
   --raw-base-url URL        Override raw base URL. It should point at a tag,
-                            for example .../raw/v0.11.0
+                            for example .../raw/v<version>
   --os OS                   Override target OS (darwin|macos|linux)
   --arch ARCH               Override target arch (amd64|x86_64|arm64|aarch64)
   --taf-url URL             Override taf binary URL
@@ -1766,9 +2104,14 @@ Options:
   --taffish-mcp-url URL     Override taffish-mcp binary URL
   --share-url URL           Override completion/vim source with tar.gz archive
   --url URL                 Download full bundle tarball from explicit URL
-  --archive FILE            Install from local tar.gz archive
+  --local                   Find the official package beside this script or in
+                            ../target/packages-VERSION/ and skip taf update
+  --archive FILE            Install from a local tar.gz or tar.xz archive
+                            With --local, select an official package at any path or name
   --verify MODE             Payload verification: auto, sha256, gpg, or none
-                            [auto; official raw installs require SHA256]
+                            [auto; official packages require SHA256 at both layers]
+  --show-runtime-license    Verify the bundle, print its runtime text, and exit
+  --accept-runtime-license  Accept the Linux LispWorks runtime terms after reading
   --checksum-file FILE      Use a local SHA256SUMS manifest
   --checksum-url URL        Download SHA256SUMS from an explicit URL
   --signature-file FILE     Use a local detached checksum signature
@@ -1800,15 +2143,23 @@ Release tarball layout:
   target/taf-<os>-<arch>-<version> (or bin/taf for legacy)
   target/taffish-<os>-<arch>-<version> (or bin/taffish for legacy)
   target/taffish-mcp-<os>-<arch>-<version> (or bin/taffish-mcp for legacy)
+  LICENSE, vendor/han/LICENSE, licenses/<platform runtime text>
   completion/
   vim-highlight/
 
-Default GitHub raw URLs:
+Platform package URLs (0.12.0 and later):
+  <fixed-tag raw base>/target/packages-<version>/taffish-<version>-darwin-arm64.tar.xz
+  <fixed-tag raw base>/target/packages-<version>/taffish-<version>-linux-amd64.tar.gz
+  For --archive or --url with these names, request the matching --version.
+  Place ARCHIVE-SHA256SUMS, ARCHIVE-SHA256SUMS.asc and TAFFISH-RELEASE-KEY.asc
+  beside the package. Binary checksum/signature overrides refer to the inner files.
+
+Legacy GitHub raw URLs:
   https://raw.githubusercontent.com/<repo>/v<version>/target/taf-<os>-<arch>-<version>
   https://raw.githubusercontent.com/<repo>/v<version>/target/taffish-<os>-<arch>-<version>
   https://raw.githubusercontent.com/<repo>/v<version>/target/taffish-mcp-<os>-<arch>-<version>
 
-Default Gitee raw URLs:
+Legacy Gitee raw URLs:
   https://gitee.com/<repo>/raw/v<version>/target/taf-<os>-<arch>-<version>
   https://gitee.com/<repo>/raw/v<version>/target/taffish-<os>-<arch>-<version>
   https://gitee.com/<repo>/raw/v<version>/target/taffish-mcp-<os>-<arch>-<version>
@@ -1818,8 +2169,15 @@ Bundle mode (--archive or --url):
 EOF
 }
 
+remote_option=
 while [ "$#" -gt 0 ]; do
+    case "$1" in --url|--*-url) remote_option=$1 ;; esac
     case "$1" in
+        --local)
+            LOCAL_INSTALL=1
+            TAFFISH_INSTALL_NO_UPDATE=1
+            shift
+            ;;
         --user)
             TAFFISH_INSTALL_SCOPE=user
             shift
@@ -1899,7 +2257,7 @@ while [ "$#" -gt 0 ]; do
             shift 2
             ;;
         --archive)
-            [ "$#" -ge 2 ] || taffish_die "--archive requires a value"
+            [ -n "${2:-}" ] || taffish_die "--archive requires a value"
             ARCHIVE=$2
             shift 2
             ;;
@@ -1970,6 +2328,14 @@ while [ "$#" -gt 0 ]; do
             TAFFISH_INSTALL_SIF_CACHE_POLICY=shared
             shift
             ;;
+        --show-runtime-license)
+            TAFFISH_SHOW_RUNTIME_LICENSE=1
+            shift
+            ;;
+        --accept-runtime-license)
+            TAFFISH_ACCEPT_RUNTIME_LICENSE=1
+            shift
+            ;;
         --dry-run)
             TAFFISH_INSTALL_DRY_RUN=1
             shift
@@ -2010,20 +2376,45 @@ TAFFISH_INSTALL_CONNECT_TIMEOUT=$(taffish_normalize_positive_integer "--connect-
 [ -n "$RELEASE_KEY_FILE" ] && [ -n "$RELEASE_KEY_URL" ] && \
     taffish_die "--release-key-file and --release-key-url can't be used together"
 
+if [ "$LOCAL_INSTALL" = 1 ]; then
+    [ -z "$remote_option" ] || taffish_die "--local cannot be combined with $remote_option"
+    taffish_resolve_local_archive
+else
+    taffish_resolve_platform_archive
+fi
+if [ -n "$ARCHIVE$URL" ] && [ -n "$SHARE_URL" ]; then
+    taffish_warn "--share-url is ignored in bundle mode (--archive/--url)."
+    SHARE_URL=
+fi
+if [ -n "$TAFFISH_PLATFORM_ARCHIVE" ] && [ -z "$ARCHIVE$URL" ]; then
+    URL=$(taffish_raw_file_url "$(taffish_package_directory)/$TAFFISH_PLATFORM_ARCHIVE")
+    case "$TAFFISH_INSTALL_PROVIDER:$TAFFISH_PLATFORM_ARCHIVE" in
+        gitee:*-darwin-arm64.tar.xz) TAFFISH_ARCHIVE_PARTS=1 ;;
+    esac
+fi
+if [ "$TAFFISH_SHOW_RUNTIME_LICENSE" = 1 ] && [ -z "$ARCHIVE$URL" ]; then
+    taffish_die "--show-runtime-license requires a bundle or platform package"
+fi
 taffish_resolve_install_paths
-taffish_preflight_scope
+if [ "$TAFFISH_SHOW_RUNTIME_LICENSE" = 0 ] || [ "$TAFFISH_INSTALL_DRY_RUN" = 1 ]; then
+    taffish_preflight_scope
+fi
 
 if [ "$TAFFISH_INSTALL_DRY_RUN" = "1" ]; then
     taffish_print_dry_run
     exit 0
 fi
 
-taffish_need_command tar
+case "$TAFFISH_PLATFORM_ARCHIVE" in
+    *.tar.xz) if [ "$(uname -s)" = Darwin ]; then TAFFISH_ARCHIVE_TAR=/usr/bin/tar; fi ;;
+esac
+taffish_need_command "$TAFFISH_ARCHIVE_TAR"
 taffish_need_command mktemp
 
 TMPDIR_INSTALL=$(mktemp -d "${TMPDIR:-/tmp}/taffish-install.XXXXXX") || taffish_die "failed to create temp directory"
 cleanup() {
     taffish_rollback_binary_transaction
+    taffish_rollback_license_files
     taffish_release_install_lock
     [ -z "$TAFFISH_INSTALL_RECEIPT_TMP" ] || \
         rm -f "$TAFFISH_INSTALL_RECEIPT_TMP"
@@ -2033,24 +2424,26 @@ trap cleanup EXIT
 trap 'exit 130' INT TERM HUP
 
 if [ -n "$ARCHIVE" ] || [ -n "$URL" ]; then
-    if [ -n "$SHARE_URL" ]; then
-        taffish_warn "--share-url is ignored in bundle mode (--archive/--url)."
-    fi
-
+    TARBALL=$TMPDIR_INSTALL/taffish.tar
     if [ -n "$ARCHIVE" ]; then
         [ -f "$ARCHIVE" ] || taffish_die "archive does not exist: $ARCHIVE"
-        TARBALL=$TMPDIR_INSTALL/taffish-local.tar.gz
         cp "$ARCHIVE" "$TARBALL" || \
             taffish_die "failed to snapshot local archive: $ARCHIVE"
+    elif [ "$TAFFISH_ARCHIVE_PARTS" = 1 ]; then
+        taffish_download_archive_parts "$URL" "$TARBALL"
     else
-        TARBALL=$TMPDIR_INSTALL/taffish.tar.gz
         taffish_download_file "$URL" "$TARBALL"
     fi
-
+    if [ -n "$TAFFISH_PLATFORM_ARCHIVE" ]; then
+        taffish_verify_platform_archive "$TARBALL"
+    fi
     STAGE_PARENT=$TMPDIR_INSTALL/stage
-    mkdir -p "$STAGE_PARENT" || taffish_die "failed to create stage directory"
-    taffish_validate_archive "$TARBALL"
-    tar -xzf "$TARBALL" -C "$STAGE_PARENT" || taffish_die "failed to unpack tarball"
+    case "$TAFFISH_PLATFORM_ARCHIVE" in
+        *.tar.xz) tar_filter=J ;;
+        *.tar.gz) tar_filter=z ;;
+        *) tar_filter='' ;; # Custom archives are read from a local, seekable file.
+    esac
+    taffish_unpack_archive "$TARBALL" "$STAGE_PARENT" "$tar_filter"
     taffish_install_from_stage "$STAGE_PARENT"
 else
     taffish_install_from_remote_raw

@@ -24,7 +24,7 @@
 (in-package :han.json)
 
 (defun %get-help-string ()
-  "han.json v0.1.0
+  "han.json v0.3.0
 
 Purpose:
   Minimal portable Common Lisp JSON parser/writer.
@@ -64,7 +64,7 @@ Example:
     text))
 
 (defun version (&optional (stream *standard-output*))
-  (let ((version "0.1.0"))
+  (let ((version "0.3.0"))
     (when stream
       (format stream "han.json v~A~%" version))
     version))

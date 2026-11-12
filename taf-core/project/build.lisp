@@ -219,11 +219,20 @@
      (delete-file path)))
   nil)
 
-(defun %build-exact-file-target (target)
-  (let ((path (han.path:->pathname target)))
-    (if (null (pathname-type path))
-        (make-pathname :type :unspecific :defaults path)
-        path)))
+(defun %rename-to-exact-path (source target directory-p)
+  (if directory-p
+      (rename-file (han.path:directory-pathname source)
+                   (han.path:directory-pathname target))
+      (let ((old (han.path:->pathname source))
+            (new (han.path:->pathname target)))
+        ;; RENAME-FILE fills missing target components from the source. For
+        ;; an extensionless target, keep the old suffix in the filename itself
+        ;; so there is no type to inherit (or :UNSPECIFIC to print).
+        (when (and (null (pathname-type new)) (stringp (pathname-type old)))
+          (setf old (make-pathname :name (concatenate 'string (pathname-name old)
+                                                      "." (pathname-type old))
+                                   :type nil :defaults old)))
+        (rename-file old new))))
 
 (defun %build-path-exists-p (path directory-p)
   (if directory-p
@@ -231,23 +240,17 @@
       (han.path:file-exists-p path)))
 
 (defun %build-rename-path (source target directory-p)
-  (let ((source-path (if directory-p
-                         (han.path:directory-pathname source)
-                         (han.path:->pathname source)))
-        (target-path (if directory-p
-                         (han.path:directory-pathname target)
-                         (%build-exact-file-target target))))
-    (multiple-value-bind (defaulted-target old-truename actual-target)
-        (rename-file source-path target-path)
-      (declare (ignore old-truename))
-      (let ((actual (or actual-target defaulted-target target-path)))
-        (unless (%build-path-exists-p target directory-p)
-          (ignore-errors (%build-delete-path actual))
-          (%project-error "build-rename-invalid"
-                          :source (han.path:->namestring source-path)
-                          :target (han.path:->namestring target)
-                          :actual (han.path:->namestring actual)))
-        actual))))
+  (multiple-value-bind (defaulted-target old-truename actual-target)
+      (%rename-to-exact-path source target directory-p)
+    (declare (ignore old-truename))
+    (let ((actual (or actual-target defaulted-target target)))
+      (unless (%build-path-exists-p target directory-p)
+        (ignore-errors (%build-delete-path actual))
+        (%project-error "build-rename-invalid"
+                        :source (han.path:->namestring source)
+                        :target (han.path:->namestring target)
+                        :actual (han.path:->namestring actual)))
+      actual)))
 
 (defun %build-matching-target-paths (target-dir prefix directory-p)
   (let ((paths (if directory-p

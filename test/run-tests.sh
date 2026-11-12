@@ -114,6 +114,9 @@ if [ -z "$VERSION" ]; then
   VERSION=$(sed -n 's/.*:version "\([^"]*\)".*/\1/p' "$REPO_ROOT/taffish.asd" | head -n 1)
 fi
 [ -n "$VERSION" ] || fail "could not infer version from taffish.asd"
+if [ -d "$TARGET_DIR" ]; then
+  TARGET_DIR=$(CDPATH='' cd -- "$TARGET_DIR" && pwd -P)
+fi
 
 case "$(uname -s)" in
   Darwin) OS=darwin ;;
@@ -199,6 +202,7 @@ unset TAFFISH_INDEX_URL TAFFISH_SOURCE_DIR TAFFISH_SYSTEM_BIN_DIR \
 : > "$TAFFISH_TEST_TMP_ROOT/gitconfig"
 
 export TAFFISH_TEST_REPO_ROOT=$REPO_ROOT
+export TAFFISH_TEST_TARGET_DIR=$TARGET_DIR
 export TAFFISH_TEST_VERSION=$VERSION
 export TAFFISH_TEST_TMP_ROOT
 export TAFFISH_TEST_LOG_DIR

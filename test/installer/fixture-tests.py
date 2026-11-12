@@ -30,6 +30,7 @@ class FixtureTests(unittest.TestCase):
         self.env.update({
             "TEST_SOURCE_ROOT": str(SOURCE_ROOT),
             "TAFFISH_TEST_REPO_ROOT": str(self.repo),
+            "TAFFISH_TEST_TARGET_DIR": str(self.target),
             "TAFFISH_TEST_TMP_ROOT": str(self.root),
             "TAFFISH_TEST_LOG_DIR": str(self.root / "logs"),
             "TAFFISH_TEST_FILTER": "",

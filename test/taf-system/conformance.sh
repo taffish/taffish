@@ -16,7 +16,7 @@ _taf_system_case_doctor_read_only_and_output() {
     printf '# unchanged bashrc\n' > "$HOME/.bashrc"
     printf '" unchanged vimrc\n' > "$HOME/.vimrc"
 
-    output=$($TAF_BIN doctor --user --shell bash) || exit 1
+    output=$("$TAF_BIN" doctor --user --shell bash) || exit 1
     assert_contains "$output" "Diagnostics:" "doctor concise diagnostics" || exit 1
     assert_contains "$output" "shell-completion" "doctor reports completion issue" || exit 1
     assert_not_contains "$output" "evidence:" "doctor concise output hides evidence" || exit 1
@@ -29,11 +29,11 @@ _taf_system_case_doctor_read_only_and_output() {
     assert_eq '" unchanged vimrc' "$(cat "$HOME/.vimrc")" \
       "doctor keeps vimrc" || exit 1
 
-    verbose=$($TAF_BIN doctor --user --shell bash --verbose) || exit 1
+    verbose=$("$TAF_BIN" doctor --user --shell bash --verbose) || exit 1
     assert_contains "$verbose" "evidence:" "doctor verbose evidence" || exit 1
     assert_contains "$verbose" "remediation :" "doctor verbose remediation" || exit 1
 
-    json=$($TAF_BIN doctor --user --shell bash --json) || exit 1
+    json=$("$TAF_BIN" doctor --user --shell bash --json) || exit 1
     printf '%s' "$json" | _taf_system_json_check '
 import json, sys
 data = json.load(sys.stdin)
@@ -49,7 +49,7 @@ assert {item["id"] for item in data["diagnostics"]} >= {
 }
 ' || exit 1
 
-    if $TAF_BIN doctor --shell tcsh >/dev/null 2>&1; then
+    if "$TAF_BIN" doctor --shell tcsh >/dev/null 2>&1; then
       printf 'doctor accepted an unsupported shell\n' >&2
       exit 1
     fi
@@ -66,7 +66,7 @@ _taf_system_case_doctor_init_completion_and_vim() {
     printf '# unchanged before init\n' > "$HOME/.bashrc"
     printf '" unchanged before init\n' > "$HOME/.vimrc"
 
-    $TAF_BIN doctor --init --user --shell bash >/dev/null || exit 1
+    "$TAF_BIN" doctor --init --user --shell bash >/dev/null || exit 1
     for required in \
       apps index index/snapshots images/sif bin cache/repos \
       share/completions/bash share/vim/syntax share/vim/ftdetect logs
@@ -83,7 +83,7 @@ _taf_system_case_doctor_init_completion_and_vim() {
 
     printf '# taf completion\n' > "$TAFFISH_USER_HOME/share/completions/bash/taf"
     printf '# taffish completion\n' > "$TAFFISH_USER_HOME/share/completions/bash/taffish"
-    unknown_json=$($TAF_BIN doctor --user --shell bash --json) || exit 1
+    unknown_json=$("$TAF_BIN" doctor --user --shell bash --json) || exit 1
     printf '%s' "$unknown_json" | _taf_system_json_check '
 import json, sys
 data = json.load(sys.stdin)
@@ -103,7 +103,7 @@ EOF_BASHRC
     printf '" taf syntax\n' > "$HOME/.vim/syntax/taf.vim"
     printf '" taf ftdetect\n' > "$HOME/.vim/ftdetect/taf.vim"
 
-    active_json=$($TAF_BIN doctor --user --shell bash --json) || exit 1
+    active_json=$("$TAF_BIN" doctor --user --shell bash --json) || exit 1
     printf '%s' "$active_json" | _taf_system_json_check '
 import json, sys
 data = json.load(sys.stdin)
@@ -143,7 +143,7 @@ EOF_APPTAINER
     export PATH=$fake_bin:$PATH
 
     chmod 1777 "$TAFFISH_SYSTEM_HOME/images/sif"
-    shared_json=$($TAF_BIN doctor --system --shell bash --json) || exit 1
+    shared_json=$("$TAF_BIN" doctor --system --shell bash --json) || exit 1
     printf '%s' "$shared_json" | _taf_system_json_check '
 import json, sys
 data = json.load(sys.stdin)
@@ -157,7 +157,7 @@ assert backends["apptainer"]["status"] == "timeout"
 ' || exit 1
 
     chmod 0777 "$TAFFISH_SYSTEM_HOME/images/sif"
-    unsafe_json=$($TAF_BIN doctor --system --shell bash --json) || exit 1
+    unsafe_json=$("$TAF_BIN" doctor --system --shell bash --json) || exit 1
     printf '%s' "$unsafe_json" | _taf_system_json_check '
 import json, sys
 data = json.load(sys.stdin)
@@ -166,7 +166,7 @@ assert items["apptainer_sif_cache"]["status"] == "error"
 ' || exit 1
 
     chmod 0555 "$TAFFISH_SYSTEM_HOME/images/sif"
-    readonly_json=$($TAF_BIN doctor --system --shell bash --json) || exit 1
+    readonly_json=$("$TAF_BIN" doctor --system --shell bash --json) || exit 1
     printf '%s' "$readonly_json" | _taf_system_json_check '
 import json, sys
 data = json.load(sys.stdin)
@@ -188,7 +188,7 @@ _taf_system_case_mcp_environment_is_read_only() {
 
     tools=$(printf '%s\n' \
       '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' |
-      $TAFFISH_MCP_BIN 2>/dev/null) || exit 1
+      "$TAFFISH_MCP_BIN" 2>/dev/null) || exit 1
     printf '%s' "$tools" | _taf_system_json_check '
 import json, sys
 data = json.load(sys.stdin)
@@ -203,7 +203,7 @@ assert "read-only" in tool["description"].lower()
     system_json=$(printf '%s' "$TAFFISH_SYSTEM_HOME" | sed 's/\\/\\\\/g; s/"/\\"/g')
     response=$(printf '%s\n' \
       "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"taffish_check_environment\",\"arguments\":{\"scope\":\"user\",\"userHome\":\"$user_json\",\"systemHome\":\"$system_json\"}}}" |
-      $TAFFISH_MCP_BIN 2>/dev/null) || exit 1
+      "$TAFFISH_MCP_BIN" 2>/dev/null) || exit 1
     printf '%s' "$response" | _taf_system_json_check '
 import json, sys
 data = json.load(sys.stdin)

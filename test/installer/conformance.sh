@@ -261,7 +261,7 @@ _installer_gpg_prerequisites() {
     command -v "$_ig_tool" >/dev/null 2>&1 || skip_case "$_ig_tool is required for installer GPG coverage"
   done
   for _ig_material in SHA256SUMS SHA256SUMS.asc TAFFISH-RELEASE-KEY.asc; do
-    [ -f "$TAFFISH_TEST_REPO_ROOT/target/$_ig_material" ] || \
+    [ -f "$TAFFISH_TEST_TARGET_DIR/$_ig_material" ] || \
       skip_case "signed release material is missing: $_ig_material"
   done
   for _ig_name in taf taffish taffish-mcp; do
@@ -274,14 +274,14 @@ _installer_gpg_prerequisites() {
     if ! _ig_expected=$(awk -v asset="$_ig_asset" '
         $2 == asset || $2 == "*" asset { count++; value=$1 }
         END { if (count > 1) exit 1; if (count == 1) print value }
-      ' "$TAFFISH_TEST_REPO_ROOT/target/SHA256SUMS"); then
+      ' "$TAFFISH_TEST_TARGET_DIR/SHA256SUMS"); then
       harness_fail "signed release manifest has duplicate entries: $_ig_asset"
       return 1
     fi
     _ig_actual=$(_installer_sha256 "$_ig_source") || return 1
     _ig_expected=$(printf '%s' "$_ig_expected" | tr '[:upper:]' '[:lower:]')
     if [ "$_ig_actual" != "$_ig_expected" ]; then
-      if [ "$_ig_source" = "$TAFFISH_TEST_REPO_ROOT/target/$_ig_asset" ]; then
+      if [ "$_ig_source" = "$TAFFISH_TEST_TARGET_DIR/$_ig_asset" ]; then
         harness_fail "release binary does not match signed manifest: $_ig_asset"
         return 1
       fi
@@ -299,9 +299,9 @@ _installer_case_gpg_verification() {
   cp "$TAFFISH_BIN" "$gpg_bundle/target/taffish-$OS-$ARCH-$TAFFISH_TEST_VERSION"
   cp "$TAFFISH_MCP_BIN" "$gpg_bundle/target/taffish-mcp-$OS-$ARCH-$TAFFISH_TEST_VERSION"
   # Preserve the complete signed bytes, including entries for other platforms.
-  cp "$TAFFISH_TEST_REPO_ROOT/target/SHA256SUMS" \
-    "$TAFFISH_TEST_REPO_ROOT/target/SHA256SUMS.asc" \
-    "$TAFFISH_TEST_REPO_ROOT/target/TAFFISH-RELEASE-KEY.asc" "$gpg_bundle/target/"
+  cp "$TAFFISH_TEST_TARGET_DIR/SHA256SUMS" \
+    "$TAFFISH_TEST_TARGET_DIR/SHA256SUMS.asc" \
+    "$TAFFISH_TEST_TARGET_DIR/TAFFISH-RELEASE-KEY.asc" "$gpg_bundle/target/"
   gpg_archive=$gpg_dir/signed.tar.gz
   _installer_archive_bundle "$gpg_bundle" "$gpg_archive"
   for gpg_mode in gpg auto; do
@@ -319,9 +319,9 @@ _installer_case_gpg_verification() {
   cp "$gpg_dir/installed/home/install-receipt.toml" "$gpg_dir/receipt-before.toml"
 
   for gpg_fault in signature manifest key binary missing-signature missing-key; do
-    cp "$TAFFISH_TEST_REPO_ROOT/target/SHA256SUMS" \
-      "$TAFFISH_TEST_REPO_ROOT/target/SHA256SUMS.asc" \
-      "$TAFFISH_TEST_REPO_ROOT/target/TAFFISH-RELEASE-KEY.asc" "$gpg_bundle/target/"
+    cp "$TAFFISH_TEST_TARGET_DIR/SHA256SUMS" \
+      "$TAFFISH_TEST_TARGET_DIR/SHA256SUMS.asc" \
+      "$TAFFISH_TEST_TARGET_DIR/TAFFISH-RELEASE-KEY.asc" "$gpg_bundle/target/"
     cp "$TAF_BIN" "$gpg_bundle/target/taf-$OS-$ARCH-$TAFFISH_TEST_VERSION"
     gpg_modes='gpg auto'
     case "$gpg_fault" in
@@ -484,6 +484,8 @@ PY
 }
 
 _installer_case_raw_and_url_sources() {
+  # Keep covering the legacy fixed-tag layout after the release default advances.
+  TAFFISH_TEST_VERSION=0.11.0
   dir=$TAFFISH_TEST_TMP_ROOT/installer-raw-source
   raw=$dir/raw
   _installer_make_fake_bundle "$raw"

@@ -104,6 +104,6 @@ TAFFISH 当前使用字符串 schema 版本：
 5. config merge、index URL 解析、source rewrite。
 6. container backend 选择与生成 shell 的关键片段。
 7. 人类语言回退，同时保持 JSON、shell、history 与 MCP 机器接口不变。
-8. macOS/SBCL 与 Linux/LispWorks 两侧的 host/process/path 行为。
+8. macOS/SBCL 与 Linux/LispWorks 发布构建的宿主接口、进程和路径行为，以及受影响路径的 CCL/ECL 兼容性。
 
 在考虑规范 `v1.0` 之前，仍需要更完整的契约导向一致性测试覆盖。

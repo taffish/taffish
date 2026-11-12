@@ -39,13 +39,22 @@
 (defvar *operation-item* nil)
 (defvar *operation-total* nil)
 
+(defvar *cli-terminal-error-output* nil
+  "The configured stderr stream at CLI entry, when fd 2 is a terminal.")
+
+(defun %progress-terminal-p (stream)
+  (ignore-errors
+    (and (not (equal (han.host:getenv "TERM") "dumb"))
+         (if *cli-terminal-error-output*
+             (eq stream *cli-terminal-error-output*)
+             (and (interactive-stream-p stream)
+                  (han.host:standard-error-terminal-p))))))
+
 (defun %operation-display-create ()
   (ignore-errors
     (%make-operation-display
      :stream *error-output*
-     :terminal-p (and (han.host:standard-error-terminal-p)
-                      (interactive-stream-p *error-output*)
-                      (not (equal (han.host:getenv "TERM") "dumb"))))))
+     :terminal-p (%progress-terminal-p *error-output*))))
 
 (defun %operation-progress-yield ()
   "End our dynamic line before normal results, child output, or unwinding."

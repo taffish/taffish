@@ -1,0 +1,38 @@
+#!/bin/sh
+# The packager fills in the release version and the installer's key fingerprint.
+set -eu
+preferred_locale=${LC_ALL:-${LC_CTYPE:-${LANG:-}}}
+signing_locale() {
+    for candidate_locale in "$preferred_locale" C.UTF-8 en_US.UTF-8; do
+        [ -n "$candidate_locale" ] || continue
+        charset=$(LC_ALL="$candidate_locale" locale charmap 2>/dev/null) || continue
+        case "$charset" in UTF-8|UTF8|utf-8|utf8) printf '%s\n' "$candidate_locale"; return 0 ;; esac
+    done
+    echo 'GPG signing requires an installed UTF-8 locale (for example en_US.UTF-8 or C.UTF-8)' >&2
+    return 1
+}
+
+version=@VERSION@
+fingerprint=@FINGERPRINT@
+manifest=ARCHIVE-SHA256SUMS
+
+[ "$#" -eq 0 ] || { echo 'Usage: ./make-sha-asc.sh' >&2; exit 2; }
+CDPATH='' cd -P "$(dirname "$0")"
+if [ -e "$manifest.asc" ] || [ -L "$manifest.asc" ]; then
+    echo "$manifest.asc already exists. Keeping the existing signature." >&2
+    exit 1
+fi
+
+work=$(mktemp -d ./.archive-sign.XXXXXXXX)
+trap 'rm -rf "$work"' 0
+trap 'exit 1' HUP INT TERM
+shasum -a 256 "taffish-$version-darwin-arm64.tar.xz" "taffish-$version-linux-amd64.tar.gz" > "$work/$manifest"
+cmp -s "$work/$manifest" "$manifest" || { echo "Archives do not match $manifest." >&2; exit 1; }
+
+if [ -t 0 ]; then GPG_TTY=$(tty); export GPG_TTY; fi
+sign_locale=$(signing_locale)
+LC_ALL="$sign_locale" gpg --no-options --lc-ctype "$sign_locale" --lc-messages "$sign_locale" \
+    --armor --local-user "$fingerprint" --output "$work/$manifest.asc" --detach-sign "$work/$manifest"
+# Publish the complete signature without overwriting one from a concurrent run.
+ln "$work/$manifest.asc" .
+printf 'Signed both platform archives. Created %s.asc\n' "$manifest"

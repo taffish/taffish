@@ -17,7 +17,7 @@
 (in-package :han.test)
 
 (defun %get-help-string ()
-  "han.test v0.1.0
+  "han.test v0.3.0
 
 Purpose:
   Tiny test framework used by han and TAFFISH.
@@ -51,7 +51,7 @@ Note:
     text))
 
 (defun version (&optional (stream *standard-output*))
-  (let ((version "0.1.0"))
+  (let ((version "0.3.0"))
     (when stream
       (format stream "han.test v~A~%" version))
     version))

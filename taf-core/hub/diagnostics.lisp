@@ -67,11 +67,7 @@ done
 
 (defun %hub-make-diagnostic-progress (enabled &optional (clock #'get-internal-real-time))
   (when enabled
-    (let ((last (funcall clock)) (previous :validate) (printed nil)
-          (terminal (ignore-errors
-                      (and (han.host:standard-error-terminal-p)
-                           (interactive-stream-p *error-output*)
-                           (not (equal (han.host:getenv "TERM") "dumb"))))))
+    (let ((last (funcall clock)) (previous :validate) (printed nil))
       (lambda (completed total &optional (phase :validate))
         ;; Progress must never turn a successful operation into an I/O failure.
         (when enabled
@@ -83,7 +79,8 @@ done
                                (or (and changed (or (not (eq phase :validate)) (plusp total)))
                                    (and (plusp total)
                                                 (>= (- now last) internal-time-units-per-second)))))
-                  (let ((text (if (eql phase :validate)
+                  (let ((terminal (%progress-terminal-p *error-output*))
+                        (text (if (eql phase :validate)
                                   (%hub-message "diagnostic.progress" :completed completed :total total)
                                   (%hub-message (format nil "diagnostic.phase.~(~A~)" phase)
                                                 :completed completed :total total))))

@@ -9,7 +9,7 @@
 ;;;; ------------------------------------------------------------
 
 (defparameter *taf-version*
-  "taf         0.11.0")
+  "taf         0.12.0")
 
 (defun run-taf-version ()
   (format t "~A~%" *taf-version*))

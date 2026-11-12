@@ -71,30 +71,20 @@ sbcl --load load-taffish.dev.lisp \
   --quit
 ```
 
-If a change affects CLI behavior, generated shell, project/Hub/system workflows,
-process handling, or delivered binaries, build the three commands and run:
+For changes to CLI behavior, generated shell, project or Hub workflows, processes, or delivered programs, build the three commands from the repository root and test those executables explicitly.
 
 ```sh
-./test/run-tests.sh
+./test/run-tests.sh \
+  --taf ./target/taf \
+  --taffish ./target/taffish \
+  --taffish-mcp ./target/taffish-mcp
 ```
 
-The external runner infers the current version from `taffish.asd`, isolates
-host state, and exercises binary smoke, compiler, project, Hub, system, i18n,
-MCP, publish-recovery, installer, and CLI error-boundary suites. See the
-[External Test Guide](../../../test/README.md) for filters, explicit binary
-paths, root-only installer policy cases, and prerequisites.
+Verify host, process, path and stream changes on macOS/SBCL and Linux/LispWorks. Public CI for 0.12.0 also builds and tests the three CCL commands on Apple Silicon macOS. Maintainers validate the proprietary LispWorks build on Linux separately.
 
-Host/process/path/stream changes require both macOS/SBCL and Linux/LispWorks
-verification. LispWorks delivery remains a maintainer release gate because the
-proprietary runtime is not available in public CI.
+The runner infers the version from `taffish.asd` and isolates host state. For changes to entry points or error reporting, append `--filter cli-boundary/` to the same command to run the focused regressions. [External test guide](../../../test/README.md)
 
-For entry-point or error-reporting changes, the targeted delivered-binary check is:
-
-```sh
-./test/run-tests.sh --filter cli-boundary/
-```
-
-It checks startup failures, compiler diagnostics, unusable output streams,
+These regressions check startup failures, compiler diagnostics, unusable output streams,
 interrupts, and MCP recovery. Probes keep a controlling terminal open and enforce
 a timeout. Closed descriptor numbers can be reused during runtime startup, so
 write-failure tests must use a reliable fixture such as a read-only descriptor
@@ -102,23 +92,9 @@ or a broken pipe, not assume that closing stdout/stderr guarantees failure.
 
 ## Release Evidence
 
-Tests against a temporary build do not validate a later release binary. After
-rebuilding the versioned payload, run the full external suite on each target
-platform, then verify the final checksum manifest and its signature. Keep
-version-specific counts and checksums in the release notes, not in general usage
-documentation. A documentation-only correction does not require rebuilding an
-unchanged binary or replacing its valid signature.
+For 0.12.0, follow the [build guide](build-from-source.md) to verify the signed archive manifest, install the native package in strict GPG mode and run the full external suite on the three installed programs. Test the same-prefix upgrade from 0.11.0 on both platforms. Record the platform, executable digests, test results and installation receipts in the release acceptance record.
 
-When binaries are built on separate machines, collect the tested artifacts in
-one authoritative release directory and verify its complete signed manifest.
-Build-machine copies need not serve as distribution bundles; compare artifact
-hashes to the authoritative directory rather than treating an old checksum copy
-on a build machine as a defect in the release bundle.
-
-Local test success, CI success, and publication are separate gates. Check the
-release commit in CI before creating the tag and Release, then verify the actual
-published GitHub/Gitee installation paths. Do not describe a mock transport test
-as a real remote publication or an untested backend as verified.
+Distribute executable and archive checksums with their respective signed manifests. Keep the public Release body focused on user-visible changes and upgrade notes. Verify CI on the candidate commit before tagging. After publication, test installation from the actual GitHub and Gitee tags.
 
 ## Documentation Sync
 

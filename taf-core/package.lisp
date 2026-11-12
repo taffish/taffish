@@ -45,3 +45,19 @@
 	   :system-record-history-event
 	   :system-record-wrapper-history
    ))
+
+;; Fault-injection and call-count tests replace these functions temporarily.
+;; Calls within their defining file must also observe the current definition.
+(declaim (notinline taf.core::%build-container-image
+                    taf.core::%publish-run-program
+                    taf.core::%publish-gh-program
+                    taf.core::%publish-gh-query
+                    taf.core::%hub-install-run-program
+                    taf.core::%hub-read-index-source
+                    taf.core::%hub-diagnostic-prime
+                    taf.core::%hub-diagnostic-probe
+                    taf.core::%hub-diagnostic-test
+                    taf.core::%hub-diagnostic-contained-p
+                    taf.core::%hub-diagnostic-file-issues
+                    taf.core::%hub-diagnostic-snapshot-fields
+                    taf.core::%hub-repair-path-issue))

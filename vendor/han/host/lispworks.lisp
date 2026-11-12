@@ -14,9 +14,7 @@
   (lw:environment-variable name))
 
 (defun quit (&optional (code 0))
-  (ignore-errors (finish-output *standard-output*))
-  (ignore-errors (finish-output *error-output*))
-  (lw:quit :status code))
+  (lw:quit :status (%finish-exit-output code)))
 
 (defmacro prepare-runtime-io ()
   "Prepare Unicode character policy before configuring live process streams."
@@ -61,7 +59,36 @@
 
 #+(or darwin macosx linux)
 (progn
-  (fli:define-foreign-function (%lispworks-open-lock "open")
+  (fli:define-foreign-function (%lispworks-readlink "readlink")
+      ((path (:pointer :void)) (buffer (:pointer :void)) (size :size-t))
+    :result-type :ssize-t)
+
+  (fli:define-foreign-function (%lispworks-rename "rename")
+      ((old (:pointer :void)) (new (:pointer :void))) :result-type :int)
+
+  (defun %literal-file-stat (name)
+    ;; GET-FILE-STAT follows links. Identify the final link, including a
+    ;; dangling one, before asking LispWorks for its native stat structure.
+    (fli:with-dynamic-foreign-objects ((buffer :char))
+      (let* ((path (fli:convert-to-dynamic-foreign-string name :external-format :utf-8))
+             (result (%lispworks-readlink path buffer 1)))
+        (if (minusp result)
+            (let ((errno (lw:errno-value)))
+              (if (= errno 22) ; EINVAL: final entry is not a symbolic link
+                  (multiple-value-bind (stat stat-errno) (sys:get-file-stat name)
+                    (if stat (values (sys:file-stat-mode stat) (sys:file-stat-device stat)
+                                     (sys:file-stat-inode stat))
+                        (- stat-errno)))
+                  (- errno)))
+            #o120000)))) ; S_IFLNK
+
+  (defun %literal-rename-errno (source target)
+    (fli:with-dynamic-foreign-objects ()
+      (let ((old (fli:convert-to-dynamic-foreign-string source :external-format :utf-8))
+            (new (fli:convert-to-dynamic-foreign-string target :external-format :utf-8)))
+        (if (zerop (%lispworks-rename old new)) 0 (lw:errno-value)))))
+
+  (fli:define-foreign-function (%lispworks-open "open")
       ((path (:pointer :void)) (flags :int) (mode :int))
     :variadic-num-of-fixed 2
     :result-type :int)
@@ -70,14 +97,17 @@
       ((fd :int) (operation :int))
     :result-type :int)
 
-  (fli:define-foreign-function (%close-lock-file "close") ((fd :int))
+  (fli:define-foreign-function (%lispworks-close "close") ((fd :int))
     :result-type :int)
+
+  (defun %close-lock-file (fd)
+    (%lispworks-close fd))
 
   (defun %open-lock-file (path flags)
     (fli:with-dynamic-foreign-objects ()
       (let* ((cstring (fli:convert-to-dynamic-foreign-string
                        path :external-format :utf-8))
-             (fd (%lispworks-open-lock cstring flags #o666)))
+             (fd (%lispworks-open cstring flags #o666)))
         (if (minusp fd)
             (values nil (lw:errno-value))
             fd))))
@@ -234,11 +264,82 @@
   "Query process stderr (fd 2), not *ERROR-OUTPUT*, without reading or writing."
   (= (%lispworks-isatty 2) 1))
 
-(defun %lispworks-command-designator (program arguments)
-  "LispWorks run-shell-command accepts a string, list or vector command."
-  (if arguments
-      (cons program arguments)
-      program))
+#+(or darwin macosx linux)
+(defun %lispworks-os-name (path)
+  (let ((name (%native-open-name path)))
+    (when (or (zerop (length name)) (find (code-char 0) name))
+      (error "Invalid operating system path: ~S" name))
+    name))
+
+#+(or darwin macosx linux)
+(defun %lispworks-absolute-name (name directory)
+  (if (char= (char name 0) #\/)
+      name
+      (concatenate 'string directory "/" name)))
+
+#+(or darwin macosx linux)
+(defun %lispworks-open-directory (directory)
+  (fli:with-dynamic-foreign-objects ()
+    (let* ((name (fli:convert-to-dynamic-foreign-string directory :external-format :utf-8))
+           (fd (%lispworks-open name
+                                #+linux #o12200000 ; O_PATH | O_DIRECTORY | O_CLOEXEC
+                                #-linux #x41100000 ; O_SEARCH | O_CLOEXEC
+                                0)))
+      (when (minusp fd)
+        (error "Cannot open child working directory ~S (errno ~D)." directory (lw:errno-value)))
+      fd)))
+
+#+linux
+(fli:define-foreign-function (%lispworks-access "access")
+    ((name (:pointer :void)) (mode :int))
+  :result-type :int)
+
+#+linux
+(defun %lispworks-launch-in-directory (directory launch)
+  ;; LispWorks 8.1 can misencode the native chdir argument and then continue
+  ;; in the parent directory. The child inherits the directory fd at fork.
+  ;; Its ASCII procfs name needs a terminating NUL, and exec closes the fd.
+  (let ((fd (%lispworks-open-directory directory)))
+    (unwind-protect
+         (let ((alias (format nil "/proc/self/fd/~D/" fd)))
+           (fli:with-dynamic-foreign-objects ()
+             (let ((name (fli:convert-to-dynamic-foreign-string alias :external-format :utf-8)))
+               (unless (zerop (%lispworks-access name 1)) ; X_OK
+                 (error "Cannot enter child working directory ~S via ~A (errno ~D)."
+                        directory alias (lw:errno-value)))))
+           (funcall launch (concatenate 'string alias (string (code-char 0)))))
+      (%lispworks-close fd))))
+
+#+(or darwin macosx)
+(fli:define-foreign-function (%lispworks-thread-fchdir "pthread_fchdir_np")
+    ((fd :int)) :result-type :int)
+
+#+(or darwin macosx)
+(defun %lispworks-launch-in-directory (directory launch)
+  ;; Darwin's per-thread cwd is inherited by a fork. Preserve whether the
+  ;; caller already had an override: clearing a missing override gives EBADF.
+  ;; Reinstalling "." unconditionally would pin a thread which had previously
+  ;; followed subsequent process-wide working directory changes.
+  (let ((target (%lispworks-open-directory directory)))
+    (unwind-protect
+         (let ((saved (%lispworks-open-directory ".")))
+           (unwind-protect
+                (let ((had-override nil))
+                  (unwind-protect
+                       (progn
+                         (setf had-override (zerop (%lispworks-thread-fchdir -1)))
+                         (unless (or had-override (= (lw:errno-value) 9)) ; EBADF
+                           (error "Cannot determine the thread working directory (errno ~D)."
+                                  (lw:errno-value)))
+                         (unless (zerop (%lispworks-thread-fchdir target))
+                           (error "Cannot enter child working directory ~S (errno ~D)."
+                                  directory (lw:errno-value)))
+                         (funcall launch nil))
+                    (let ((status (%lispworks-thread-fchdir (if had-override saved -1))))
+                      (unless (or (zerop status) (and (not had-override) (= (lw:errno-value) 9)))
+                        (error "Cannot restore the thread working directory (errno ~D)." (lw:errno-value))))))
+             (%lispworks-close saved)))
+      (%lispworks-close target))))
 
 (defun %lispworks-sync-command-designator (command)
   (cond
@@ -287,28 +388,49 @@
                       input
                       (directory nil dir-p)
                       (environment nil env-p))
-  (when (null (file-exists-p program))
+  #-(or darwin macosx linux)
+  (unless (file-exists-p program)
     (error "(Need file path) Program file does not exist: ~A" program))
-  (let ((command (%lispworks-command-designator program arguments)))
-    (multiple-value-bind (out-stream err-stream pid)
-        (apply #'system:run-shell-command
-               command
-               (append (list :wait nil
-                             :input input
-                             :output :stream
-                             :error-output :stream
-                             :save-exit-status t)
-                       (when dir-p
-                         (list :current-directory directory))
-                       (when env-p
-                         (list :environment environment))))
-      (make-host-process
-       :backend :lispworks
-       :native-handle out-stream
-       :pid pid
-       :input-stream input
-       :output-stream out-stream
-       :error-stream err-stream))))
+  (let* (#+(or darwin macosx linux)
+         (name (%lispworks-os-name program))
+         (child-directory
+           #+(or darwin macosx linux)
+           (when directory
+             (%lispworks-absolute-name (%lispworks-os-name directory)
+                                       (namestring (working-directory-pathname))))
+           #-(or darwin macosx linux) directory)
+         (command
+           #+(or darwin macosx linux)
+           ;; A vector separates the resolved executable path from argv[0].
+           (coerce (list* (%lispworks-absolute-name name (or child-directory "."))
+                          name arguments)
+                   'simple-vector)
+           #-(or darwin macosx linux) (if arguments (cons program arguments) program))
+         ;; On Darwin, resolve redirected input before changing the thread cwd.
+         (run-input
+           #+(or darwin macosx)
+           (if (and directory (typep input '(or pathname string))) (truename input) input)
+           #-(or darwin macosx) input))
+    (flet ((launch (native-directory)
+             (apply #'system:run-shell-command
+                    command :wait nil :input run-input :output :stream
+                    :error-output :stream :save-exit-status t
+                    (append (when (or native-directory (and dir-p (null directory)))
+                              (list :current-directory native-directory))
+                            (when env-p (list :environment environment))))))
+      (multiple-value-bind (out-stream err-stream pid)
+          #+(or darwin macosx linux)
+          (if child-directory
+              (%lispworks-launch-in-directory child-directory #'launch)
+              (launch nil))
+          #-(or darwin macosx linux) (launch directory)
+        (make-host-process
+         :backend :lispworks
+         :native-handle out-stream
+         :pid pid
+         :input-stream input
+         :output-stream out-stream
+         :error-stream err-stream)))))
 
 ;; Return the current status(:running/:exited/:unknown) of the process
 (defun process-status (process)

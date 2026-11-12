@@ -10,7 +10,13 @@
   sb-ext:*posix-argv*
   #+lispworks
   sys:*line-arguments-list*
-  #-(or sbcl lispworks)
+  #+ccl
+  ccl:*unprocessed-command-line-arguments*
+  #+ecl
+  (let* ((args (ext:command-args))
+         (separator (member "--" args :test #'string=)))
+    (if separator (cdr separator) args))
+  #-(or sbcl lispworks ccl ecl)
   nil)
 
 (defun %load-taffish-quit (&optional (code 0))
@@ -18,7 +24,11 @@
   (sb-ext:exit :code code)
   #+lispworks
   (lw:quit :status code)
-  #-(or sbcl lispworks)
+  #+ccl
+  (ccl:quit code)
+  #+ecl
+  (ext:quit code)
+  #-(or sbcl lispworks ccl ecl)
   (declare (ignore code)))
 
 (defun %load-taffish-help-option-p (arg)
@@ -62,6 +72,8 @@
   lispworks -build load-taffish.lisp --taffish [TAFFISH-ARGS...]
   lispworks -build load-taffish.lisp --taf [TAF-ARGS...]
   lispworks -build load-taffish.lisp --taffish-mcp [MCP-ARGS...]
+  ccl --load load-taffish.lisp -- --compile
+  ecl -shell load-taffish.lisp -- --compile
 
 Development loader for TAFFISH.
 
@@ -81,8 +93,12 @@ SBCL note:
   --help is reserved by SBCL, so use -h directly, or pass --help after --.
 
 LispWorks note:
-  --compile starts two child delivery processes because DELIVER may not return
+  --compile starts three child delivery processes because DELIVER may not return
   to the parent image. If lispworks is not in PATH, set LISPWORKS=/path/to/lispworks.
+
+CCL and ECL:
+  After --, use the same loader options for building all or one of the three
+  executables. Output is written to the target/ directory beside this loader.
 
 Examples:
   sbcl --noinform --load load-taffish.lisp -h
@@ -135,6 +151,33 @@ Examples:
   (%print-load-taffish-help)
   (%load-taffish-quit 0))
 
+#+(or ccl ecl)
+(defparameter *taffish-source-builder*
+  (merge-pathnames "scripts/build-from-source.sh" *load-truename*))
+
+#+(or ccl ecl)
+(defun %dispatch-source-build (option)
+  (let ((program (cdr (assoc option '(("--compile" . "all")
+                                      ("--compile-taf" . "taf")
+                                      ("--compile-taffish" . "taffish")
+                                      ("--compile-taffish-mcp" . "taffish-mcp")
+                                      ("--compile-mcp" . "taffish-mcp"))
+                             :test #'string-equal))))
+    (when program
+      (multiple-value-bind (out err status)
+          (uiop:run-program
+           (list "/bin/sh" (uiop:native-namestring *taffish-source-builder*)
+                 #+ccl "ccl" #+ecl "ecl" "--target" program
+                 #+ccl (first ccl:*command-line-argument-list*) #+ecl (ext:argv 0))
+           :output :interactive :error-output :interactive :ignore-error-status t)
+        (declare (ignore out err))
+        (%load-taffish-quit status)))))
+
+;; The adapter owns the build's ASDF cache. Dispatch before loading TAFFISH
+;; into this launcher so the sources are only compiled by the selected builder.
+#+(or ccl ecl)
+(%dispatch-source-build *load-taffish-dispatch-option*)
+
 (%load-taffish-system
  :silent (member *load-taffish-dispatch-option*
                  '("--taffish" "--taf" "--taffish-mcp" "--mcp")
@@ -148,7 +191,7 @@ Examples:
 #+lispworks
 (defun %lispworks-taf-delivery-main ()
   (han.host:prepare-runtime-io)
-  (taf.cli:main))
+  (taf.cli::%standalone-main))
 
 #+lispworks
 (defun %lispworks-taffish-mcp-delivery-main ()
@@ -185,7 +228,7 @@ Examples:
       (format t "[SBCL] Compiling TAF -> ~A~%" file)
       (save-lisp-and-die file :save-runtime-options "--end-toplevel-options"
                               :executable t :purify t
-                              :toplevel #'taf.cli:main))
+                              :toplevel #'taf.cli::%standalone-main))
     #+lispworks
     (progn
       (format t "[LispWorks] Delivering TAF -> ~A~%" file)
@@ -316,6 +359,8 @@ Examples:
 (defun main (&optional (argv *load-taffish-argv*))
   (multiple-value-bind (dispatch-option dispatch-args)
       (%split-at-load-taffish-dispatch-option argv)
+    #+(or ccl ecl)
+    (%dispatch-source-build dispatch-option)
     (cond
       ((null dispatch-option)
        nil)
@@ -339,7 +384,7 @@ Examples:
        ;; taffish.cli keeps argv[0] as command name for $0-like context.
        (taffish.cli:main (cons "taffish" dispatch-args)))
       ((string-equal dispatch-option "--taf")
-       (taf.cli:main dispatch-args))
+       (taf.cli::%standalone-main dispatch-args))
       ((or (string-equal dispatch-option "--taffish-mcp")
            (string-equal dispatch-option "--mcp"))
        (taffish.mcp:main dispatch-args)))))

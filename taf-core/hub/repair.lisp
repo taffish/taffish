@@ -569,11 +569,16 @@ Callers must bypass this function for dry runs and missing-target no-ops."
 (defun %hub-repair-rename (source target directory-p &optional replace-p)
   (%hub-repair-check-path source directory-p t)
   (%hub-repair-check-path target directory-p)
-  (when (and (%hub-repair-present-p target) (not replace-p))
+  (when (and (%hub-repair-present-p target) (or directory-p (not replace-p)))
     (%hub-repair-fail "filesystem-operation" nil (format nil "Destination exists: ~A" target)))
   ;; No copy fallback: cross-filesystem roots must fail before losing the old root.
-  (rename-file (if directory-p (han.path:directory-pathname source) (han.path:->pathname source))
-               (if directory-p (han.path:directory-pathname target) (%build-exact-file-target target)))
+  (if (and replace-p (not directory-p))
+      (flet ((native-name (path)
+               (etypecase path
+                 (string path)
+                 (pathname (han.path:->namestring path)))))
+        (han.host:atomic-replace-file (native-name source) (native-name target)))
+      (%rename-to-exact-path source target directory-p))
   (%hub-repair-check-path target directory-p t)
   (when (%hub-repair-present-p source) (%hub-repair-fail "filesystem-operation" nil (han.path:->namestring source))))
 

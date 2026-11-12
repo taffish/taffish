@@ -18,13 +18,85 @@ install/generate-installers.sh
 install/generate-installers.sh --check
 ```
 
-Bundle mode layout (`--archive` / `--url`):
+## Versioned downloads
+
+The **0.12.0** installers select one package for the host OS and architecture.
+Both providers use `target/packages-<version>/` under the requested `v<version>`
+tag for 0.12.0 and later. Selecting `--version 0.11.0` uses the individual
+programs and share files from that tag. [0.12.0 release notes](../docs/releases/v0.12.0.md)
+
+| Platform | File in the tag | Extraction |
+| --- | --- | --- |
+| Apple Silicon macOS 15 or later | `taffish-<version>-darwin-arm64.tar.xz` | System `/usr/bin/tar` with built-in XZ support |
+| x86-64 Linux | `taffish-<version>-linux-amd64.tar.gz` | `tar` and `gzip` |
+
+Default Gitee/macOS downloads use the adjacent `.tar.xz.parts` manifest and `.part-aa`, `.part-ab`, etc., each at most 8 MiB. The installer joins them in order, then verifies and extracts the original complete archive. The installation command stays the same; missing or invalid parts stop installation without falling back to GitHub. GitHub, Linux and explicit `--url` downloads continue to use complete archives. This accommodates [Gitee authentication for raw files larger than 10 MB](https://help.gitee.com/repository/file-operate/raw#认证).
+
+### Local installation with 0.12.0 and later
+
+Local installation consumes a complete archive, not a parts manifest. If you downloaded the Gitee parts manually, concatenate them in the order listed in `.parts` into the standard archive filename, keep the original archive checksum manifest, signature and public key beside it, then install locally.
+
+<details>
+<summary>Reassemble the two macOS parts for 0.12.0</summary>
+
+In a directory containing both parts, their `.parts` manifest and the offline installation files:
+
+```sh
+shasum -a 256 -c taffish-0.12.0-darwin-arm64.tar.xz.parts &&
+cat taffish-0.12.0-darwin-arm64.tar.xz.part-aa \
+    taffish-0.12.0-darwin-arm64.tar.xz.part-ab > taffish-0.12.0-darwin-arm64.tar.xz &&
+sh install-taffish.sh --local --verify gpg
+```
+
+The `.parts` checksums detect damaged parts; authenticity still depends on the original signed archive manifest and pinned release key. This example is for 0.12.0's two parts; later versions may have a different count. Normal online installation performs reassembly automatically.
+
+</details>
+
+From a checkout containing the platform package and its verification files, run:
+
+```sh
+sh install/install-taffish.sh --local
+```
+
+User scope is the default. For a system install, use `sudo sh install/install-taffish.sh --local --system`.
+`--local` looks for the standard filename beside the installer first, then in
+`../target/packages-<version>/` relative to the installer. It skips the post-install
+`taf update` and rejects remote download options.
+
+For a portable offline copy, put the installer from the same version beside the
+platform package. Keep `ARCHIVE-SHA256SUMS`, `ARCHIVE-SHA256SUMS.asc` and
+`TAFFISH-RELEASE-KEY.asc` in the package directory. Run `sh install-taffish.sh --local --verify gpg`.
+If you moved or renamed the archive, select it explicitly:
+
+```sh
+sh install-taffish.sh --local --archive /path/to/my-package --verify gpg
+```
+
+This path takes priority over discovery. Verification uses the official manifest entry
+for the requested version and platform even when the local filename differs. Use
+`--version` to select a version other than the installer's default. For traditional or
+custom bundles, the existing `--archive FILE` mode remains available.
+
+For online use, `--url` accepts the full URL of a standard platform package and
+fetches its verification files from the same directory. The installer verifies the archive against
+`ARCHIVE-SHA256SUMS` before extracting it and checks all three programs
+against the package's `target/SHA256SUMS` before installation. `--verify gpg`
+requires both manifests to have a valid signature from the pinned release key.
+`--checksum-*` and `--signature-*` override the inner program verification
+materials. For the outer manifest, its signature and the public key, see the
+[0.12.0 package directory](../target/packages-0.12.0/). Maintainers can follow the
+[source build guide](../docs/dev/en/build-from-source.md).
+
+Bundle layout for the programs and share files:
 
 ```text
 target/
-  taf-<os>-<arch>-<version>       (or legacy target/taf)
-  taffish-<os>-<arch>-<version>   (or legacy target/taffish)
+  taf-<os>-<arch>-<version>
+  taffish-<os>-<arch>-<version>
   taffish-mcp-<os>-<arch>-<version>
+  SHA256SUMS
+  SHA256SUMS.asc
+  TAFFISH-RELEASE-KEY.asc
 completion/
   bash/
   zsh/
@@ -32,8 +104,6 @@ completion/
 vim-highlight/
   syntax/
   ftdetect/
-LICENSE
-README.md
 ```
 
 The installer auto-selects the host-matching binaries from `target/` and
@@ -47,8 +117,10 @@ Verification defaults to `--verify auto`:
 - when the signed manifest, release key, `gpg`, and `gpgv` are available, the
   installer also verifies the signature against the built-in TAFFISH release
   key fingerprint;
-- custom sources remain compatible in `auto` mode, but an unavailable manifest
-  is reported as unverified rather than silently described as trusted;
+- a package selected with `--local` or identified by its standard platform name requires both checksum manifests
+  in `auto` mode, including on a mirror or with `--archive`. Other custom
+  bundles and explicit binary URLs can report an unverified installation when
+  their program manifest is unavailable;
 - `--verify sha256` and `--verify gpg` make those levels strict, while
   `--verify none` is an explicit opt-out.
 
@@ -61,6 +133,25 @@ before binary installation.
 `taffish-mcp` is included in the binary set so MCP-compatible AI clients can
 inspect TAF source, installed taf-apps, and current TAFFISH projects through
 structured tools/resources without running workflows.
+
+### Release verification
+
+To install one official archive offline, obtain the installer through a trusted channel, keep the verification files beside the archive and run `sh install-taffish.sh --local --verify gpg`. The installer pins the release key and verifies both the archive and program manifests.
+
+To independently check both downloaded archives, start in their directory and display the public key fingerprint.
+
+```sh
+gpg --show-keys --fingerprint TAFFISH-RELEASE-KEY.asc
+```
+
+Compare the primary fingerprint with a trusted copy of the TAFFISH release fingerprint, `F863 33E6 0BD6 74F1 59A5  651A B919 3F30 C424 7BB2`. Once they match, verify the signature and then both archive hashes. On Linux you can use `sha256sum -c ARCHIVE-SHA256SUMS` for the last step.
+
+```sh
+keydir=$(mktemp -d)
+gpg --batch --dearmor --output "$keydir/release.gpg" TAFFISH-RELEASE-KEY.asc
+gpgv --keyring "$keydir/release.gpg" ARCHIVE-SHA256SUMS.asc ARCHIVE-SHA256SUMS
+shasum -a 256 -c ARCHIVE-SHA256SUMS
+```
 
 ## Language after installation
 
@@ -86,7 +177,7 @@ run `sudo taf config language zh --system`; user preferences and environment
 overrides still take precedence. Normal reinstallations keep existing config.
 `--force-config` explicitly replaces it and is not needed to change language.
 External language packs are optional; see the
-[language configuration guide](../README.md#human-cli-language).
+[language configuration guide](../docs/standards/en/localization.md#external-locale-packs).
 
 ## Requirements
 
@@ -96,6 +187,11 @@ Official payload verification requires either `sha256sum` or `shasum`; online
 sources require either `curl` or `wget`. In default `auto` mode, `gpg` and
 `gpgv` are optional and enable signed-manifest verification. Both are required
 for strict `--verify gpg`.
+
+The prebuilt commands include Han Lisp 0.3.0. The Apple Silicon build uses
+SBCL 2.4.9 with core compression disabled and links only to macOS system libraries;
+it does not require Homebrew or `zstd`. The Linux build
+uses LispWorks. Neither platform requires users to install a Lisp implementation.
 
 ## Default paths and scopes
 
@@ -167,15 +263,25 @@ China/Gitee install:
 curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffish.gitee.sh | sh -s -- --user
 ```
 
-Pinned version:
+To pin both the installer and the package, use the script from the 0.12.0 tag.
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sh -s -- --version 0.11.0 --user
+curl -fsSL https://raw.githubusercontent.com/taffish/taffish/v0.12.0/install/install-taffish.sh | sh -s -- --version 0.12.0 --user
 ```
 
-For an offline install, use the install script and original tarball from the same
-release tag. The [offline instructions](../README.md#local-or-offline-install)
-show how to verify the signed payload and skip the online index update.
+The corresponding pinned Gitee command uses the same tag.
+
+```sh
+curl -fsSL https://gitee.com/taffish-org/taffish/raw/v0.12.0/install/install-taffish.gitee.sh | sh -s -- --version 0.12.0 --user
+```
+
+For an offline 0.11.0 install, use the original source tarball and installer from the same tag. On macOS, if Gitee requests a login for the large individual 0.11.0 binaries, use its tag archive. [0.11.0 offline instructions](https://github.com/taffish/taffish/blob/v0.11.0/README.md#local-or-offline-install)
+
+```sh
+curl -fsSL https://gitee.com/taffish-org/taffish/raw/v0.11.0/install/install-taffish.gitee.sh \
+  | sh -s -- --user --version 0.11.0 --verify gpg \
+    --url https://gitee.com/taffish-org/taffish/repository/archive/v0.11.0.tar.gz
+```
 
 Install from an explicit URL:
 
@@ -183,15 +289,58 @@ Install from an explicit URL:
 sh install/install-taffish.sh --user --url https://example.org/taffish.tar.gz
 ```
 
-Default mode (without `--archive`/`--url`) downloads:
+The GitHub and Gitee installers default to `taffish/taffish` and
+`taffish-org/taffish`, respectively. When switching providers manually, set
+both `--provider` and `--repo`. A mirror can supply its fixed-tag root through
+`--raw-base-url`. `--os` and `--arch` override platform detection. In default download
+mode, `--share-url` supplies a separate completion/Vim archive. Explicit
+`--archive` and `--url` install the share files from the selected bundle.
+Any of `--taf-url`, `--taffish-url`, or `--taffish-mcp-url` selects
+individual-file mode. Supply the other binary URLs too, or point
+`--raw-base-url` to a mirror that provides the remaining individual files.
 
-- `taf-<os>-<arch>-<version>`, `taffish-<os>-<arch>-<version>`, and `taffish-mcp-<os>-<arch>-<version>` from `target/` under `v<version>`
-- completion and vim files from the same tag
+## Runtime licenses
 
-Use `--provider github|gitee` or `--raw-base-url` to select another raw source.
-Use `--share-url` to override the completion/vim source with a tar.gz archive.
-Use `--taf-url` / `--taffish-url` / `--taffish-mcp-url` to override binary asset URLs.
-Use `--os` / `--arch` to override platform detection.
+The official archives include TAFFISH's Apache 2.0 license, Han's MIT license and
+the runtime text for their platform. Installation places them in
+`<TAFFISH_HOME>/share/licenses/` as `TAFFISH-LICENSE.txt`, `HAN-LICENSE.txt`,
+and either `SBCL-NOTICES.txt` or `LISPWORKS-RUNTIME.txt`.
+
+The macOS SBCL file contains the applicable copyright and permission notices.
+The Linux file contains the terms for the proprietary LispWorks runtime within
+the three programs. LispWorks Professional permits this application delivery;
+end users can run TAFFISH without purchasing or installing LispWorks.
+TAFFISH source and separately licensed open-source components use their own licenses.
+[SBCL notices](../licenses/SBCL-NOTICES.txt) · [Linux runtime terms](../licenses/LISPWORKS-RUNTIME.txt)
+
+To read the text from a local package before installing it, run:
+
+```sh
+sh install/install-taffish.sh --local --show-runtime-license
+```
+
+This verifies the selected package and its program checksums, displays its
+runtime text and exits before executing the programs or writing an installation.
+Add `--verify gpg` for strict signature verification. For an online download,
+omit `--local`; source, version and verification options apply as usual.
+
+On Linux, an ordinary interactive installation displays the terms on the
+controlling terminal and asks you to type `yes`. Declining or reaching EOF stops
+the installation. When installing from a script or in CI, read the terms first
+and pass the explicit acceptance option:
+
+```sh
+sh install/install-taffish.sh --local --accept-runtime-license
+```
+
+The option also works with `--user`, `--system` and online installation.
+Each Linux installation or upgrade asks for acceptance of its selected text.
+Without a controlling terminal, the explicit option is required. The receipt
+records `runtime_license_file`, `runtime_license_sha256` and
+`runtime_license_acceptance` (`flag` or `terminal`).
+For a shared installation, arrange for its users to read and accept the runtime
+terms, or accept on their behalf when authorized. macOS requires no runtime
+acceptance. Older and custom bundles follow their included licensing materials.
 
 ## Useful Options
 
@@ -199,11 +348,17 @@ Use `--os` / `--arch` to override platform detection.
 --user
 --system
 --prefix DIR
+--version VERSION
+--local
+--archive FILE
+--url URL
 --bin-dir DIR
 --taffish-home DIR
 --provider github|gitee
 --raw-base-url URL
 --verify auto|sha256|gpg|none
+--show-runtime-license
+--accept-runtime-license
 --checksum-file FILE / --checksum-url URL
 --signature-file FILE / --signature-url URL
 --release-key-file FILE / --release-key-url URL
@@ -237,10 +392,14 @@ kind, actual verification level, SIF policy, selected asset names, and SHA256
 values. It intentionally does not record download URLs, credentials, tokens, or
 passwords.
 
+A versioned platform package also records `archive_asset`, `archive_sha256`,
+and `archive_verification`. The overall `verification` field reports the
+lower of the archive and program verification levels.
+
 An existing receipt must be a regular file. The installer refuses a symlink at
 the receipt path, including a dangling symlink, during both installation and reinstallation.
 
-`taf update` is attempted by default after installation. If it fails because
+Online installations attempt `taf update` by default. Local mode skips this step. If it fails because
 of network problems, the installer prints a warning but does not roll back the
 installation.
 
@@ -255,11 +414,12 @@ explicitly. See [the completion guide](../completion/README.md) and
 
 ## Testing The Installer
 
-Run the installer conformance suite from a complete repository checkout with
-the versioned binaries for the current platform under `target/`:
+From a checkout with the signed platform packages, prepare the native files in a fresh directory and run the installer subset:
 
 ```sh
-./test/run-tests.sh --version 0.11.0 --filter installer/
+scratch=$(mktemp -d)
+bash test/ci-release-payloads.sh "$scratch/release"
+./test/run-tests.sh --target-dir "$scratch/release/target" --filter installer/
 ```
 
 The ten cases cover test-fixture contracts, template drift and dry-run behavior,
@@ -281,7 +441,7 @@ and a separate count; invalid release data fails rather than skips. Require the
 GPG case to pass before release (an all-skipped run fails):
 
 ```sh
-./test/run-tests.sh --version 0.11.0 --filter installer/gpg-verification
+./test/run-tests.sh --target-dir "$scratch/release/target" --filter installer/gpg-verification
 ```
 
 Independently verify the final manifest and signature as well. See the
@@ -303,7 +463,7 @@ one additional root run, which still targets only the suite's temporary tree:
 
 ```sh
 sudo ./test/run-tests.sh \
-  --version 0.11.0 \
+  --target-dir "$scratch/release/target" \
   --filter installer/system-permissions
 ```
 
@@ -312,8 +472,13 @@ Before release, also run the full delivered-binary suite without a filter.
 
 ## Upgrade and removal
 
-Re-run the installer with the same scope and a selected `--version` to upgrade
-the three core binaries. `taf upgrade` upgrades taf-apps only.
+Re-run the installer with the same scope and installation paths to upgrade the
+three core commands. `taf upgrade` upgrades taf-apps only.
+
+When upgrading the macOS 0.11.0 SBCL build, keep Homebrew's `zstd` in place
+until the installer has identified the old commands and completed the upgrade.
+Check that `taf --version`, `taffish --version`, and `taffish-mcp --version`
+all report 0.12.0. The new SBCL commands start without Homebrew `zstd`.
 
 There is currently no dedicated core uninstaller. Uninstall unwanted apps
 with the matching scope first, preserve any customized `config.toml`, then

@@ -134,13 +134,13 @@ _taf_hub_case_install_all_filters_kind() {
   mkdir -p "$TAFFISH_USER_HOME" "$TAFFISH_SYSTEM_HOME"
   _taf_hub_prepare_index_fixture "$dir" || exit 1
 
-  dry_run=$($TAF_BIN install --all --flows --json) || return 1
+  dry_run=$("$TAF_BIN" install --all --flows --json) || return 1
   assert_contains "$dry_run" '"operation": "install_all"' "install-all json operation" || exit 1
   assert_contains "$dry_run" '"package_name": "batch-flow"' "install-all flow plan includes flow" || exit 1
   assert_not_contains "$dry_run" '"package_name": "multi-demo"' "install-all flow plan excludes tool" || exit 1
 
-  $TAF_BIN install --all --flows --yes >/dev/null || exit 1
-  list_output=$($TAF_BIN list) || exit 1
+  "$TAF_BIN" install --all --flows --yes >/dev/null || exit 1
+  list_output=$("$TAF_BIN" list) || exit 1
   assert_contains "$list_output" "batch-flow" "install-all flow installs flow" || exit 1
   assert_not_contains "$list_output" "multi-demo" "install-all flow does not install tool" || exit 1
   )
@@ -155,20 +155,20 @@ _taf_hub_case_outdated_upgrade_and_prune() {
   mkdir -p "$TAFFISH_USER_HOME" "$TAFFISH_SYSTEM_HOME"
   _taf_hub_prepare_index_fixture "$dir" || exit 1
 
-  $TAF_BIN install taf-multi-demo-v0.1.0-r1 >/dev/null || exit 1
-  outdated=$($TAF_BIN outdated --json) || exit 1
+  "$TAF_BIN" install taf-multi-demo-v0.1.0-r1 >/dev/null || exit 1
+  outdated=$("$TAF_BIN" outdated --json) || exit 1
   assert_contains "$outdated" '"operation": "outdated"' "outdated json operation" || exit 1
   assert_contains "$outdated" '"package_name": "multi-demo"' "outdated finds package" || exit 1
   assert_contains "$outdated" '"installed_version_id": "0.1.0-r1"' "outdated installed version" || exit 1
   assert_contains "$outdated" '"latest_version_id": "0.1.0-r2"' "outdated latest version" || exit 1
   assert_contains "$outdated" '"status": "outdated"' "outdated status" || exit 1
 
-  plan=$($TAF_BIN upgrade taf-multi-demo --json) || exit 1
+  plan=$("$TAF_BIN" upgrade taf-multi-demo --json) || exit 1
   assert_contains "$plan" '"dry_run": true' "upgrade defaults to dry-run" || exit 1
   assert_contains "$plan" '"action": "install_latest"' "upgrade plans install latest" || exit 1
 
-  $TAF_BIN upgrade taf-multi-demo --yes --prune-old >/dev/null || exit 1
-  list_json=$($TAF_BIN list --json) || exit 1
+  "$TAF_BIN" upgrade taf-multi-demo --yes --prune-old >/dev/null || exit 1
+  list_json=$("$TAF_BIN" list --json) || exit 1
   assert_contains "$list_json" '"version_id": "0.1.0-r2"' "upgrade installs r2" || exit 1
   assert_not_contains "$list_json" '"version_id": "0.1.0-r1"' "upgrade prune-old removes r1" || exit 1
 
@@ -186,15 +186,15 @@ _taf_hub_case_prune_keeps_newest() {
   mkdir -p "$TAFFISH_USER_HOME" "$TAFFISH_SYSTEM_HOME"
   _taf_hub_prepare_index_fixture "$dir" || exit 1
 
-  $TAF_BIN install taf-multi-demo-v0.1.0-r1 taf-multi-demo-v0.1.0-r2 >/dev/null || exit 1
-  prune_plan=$($TAF_BIN prune --json) || exit 1
+  "$TAF_BIN" install taf-multi-demo-v0.1.0-r1 taf-multi-demo-v0.1.0-r2 >/dev/null || exit 1
+  prune_plan=$("$TAF_BIN" prune --json) || exit 1
   assert_contains "$prune_plan" '"operation": "prune"' "prune json operation" || exit 1
   assert_contains "$prune_plan" '"action": "remove_old"' "prune plans removing old versions" || exit 1
   assert_contains "$prune_plan" '"remove_versions"' "prune exposes remove_versions" || exit 1
   assert_contains "$prune_plan" '"0.1.0-r1"' "prune identifies r1" || exit 1
 
-  $TAF_BIN prune --yes >/dev/null || exit 1
-  list_json=$($TAF_BIN list --json) || exit 1
+  "$TAF_BIN" prune --yes >/dev/null || exit 1
+  list_json=$("$TAF_BIN" list --json) || exit 1
   assert_contains "$list_json" '"version_id": "0.1.0-r2"' "prune keeps r2" || exit 1
   assert_not_contains "$list_json" '"version_id": "0.1.0-r1"' "prune removes r1" || exit 1
   )
@@ -209,17 +209,17 @@ _taf_hub_case_text_hides_current_items() {
   mkdir -p "$TAFFISH_USER_HOME" "$TAFFISH_SYSTEM_HOME"
   _taf_hub_prepare_index_fixture "$dir" || exit 1
 
-  $TAF_BIN install taf-multi-demo-v0.1.0-r2 >/dev/null || exit 1
+  "$TAF_BIN" install taf-multi-demo-v0.1.0-r2 >/dev/null || exit 1
 
-  outdated_output=$($TAF_BIN outdated) || exit 1
+  outdated_output=$("$TAF_BIN" outdated) || exit 1
   assert_contains "$outdated_output" "no changes" "outdated hides current app details" || exit 1
   assert_not_contains "$outdated_output" "multi-demo" "outdated does not list current app" || exit 1
 
-  install_all_output=$($TAF_BIN install --all --tools) || exit 1
+  install_all_output=$("$TAF_BIN" install --all --tools) || exit 1
   assert_contains "$install_all_output" "no changes" "install-all hides already installed tool details" || exit 1
   assert_not_contains "$install_all_output" "multi-demo" "install-all does not list current tool" || exit 1
 
-  upgrade_output=$($TAF_BIN upgrade) || exit 1
+  upgrade_output=$("$TAF_BIN" upgrade) || exit 1
   assert_contains "$upgrade_output" "no changes" "upgrade hides current app details" || exit 1
   assert_not_contains "$upgrade_output" "multi-demo" "upgrade does not list current app" || exit 1
   )

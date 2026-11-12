@@ -1,0 +1,100 @@
+TAFFISH Linux runtime terms
+Agreement ID TAFFISH-LW-RUNTIME-1
+
+These terms are offered by Kaiyuan Han, the TAFFISH distributor, for the
+LispWorks runtime incorporated in the official Linux editions of taf,
+taffish and taffish-mcp. "Runtime" means the proprietary LispWorks code in
+those programs. LispWorks Ltd and its licensors retain ownership of it.
+
+The programs were delivered using LispWorks Professional. You may use the
+Runtime as part of TAFFISH without buying or installing LispWorks or
+obtaining a separate runtime key. TAFFISH source code is licensed under
+Apache 2.0, and separately licensed open-source components remain governed
+by their own licenses. These terms apply to the proprietary Runtime.
+
+1. Reading and acceptance
+
+Read this file before accepting the Runtime terms. The installer option
+--show-runtime-license displays the terms in the selected package and
+exits. Accept by answering yes to the installer's terminal prompt, or by
+providing --accept-runtime-license after reading the terms. When acting
+for an organization, you must have authority to accept on its behalf.
+If you decline, stop the installation. A copy of these terms is installed
+in share/licenses/LISPWORKS-RUNTIME.txt under the TAFFISH home directory.
+The installation receipt records the text's SHA-256 and acceptance method.
+
+2. Use and distribution
+
+You receive a non-exclusive right to use the Runtime solely as an integral
+part of TAFFISH. You may make backup copies of the complete application.
+You may pass on complete, unmodified official TAFFISH packages as an
+authorized distributor, provided all licensing materials remain included,
+recipients receive these terms, and you ensure their acceptance before
+use. This permission covers redistribution as TAFFISH to end users.
+
+You must not extract, rent, lease, sell, sublicense or distribute the
+Runtime separately, repurpose it as a general-purpose Lisp development
+tool, or incorporate it into another product. You must not reverse
+engineer, decompile, disassemble, adapt or modify the proprietary Runtime,
+except to the extent expressly permitted by applicable law. Distribution
+of TAFFISH source and independently licensed components follows their
+respective licenses.
+
+3. Ownership and retained notices
+
+Preserve the Runtime's product identification, copyright notices and
+other proprietary legends, and reproduce them on permitted copies.
+LispWorks and its licensors retain their intellectual property rights.
+This agreement grants no rights to use their trademarks for promotion
+or endorsement. Observe applicable export, re-export and import laws
+when using or distributing the Runtime.
+
+4. Warranty, liability and statutory rights
+
+The Runtime is supplied as is, to the extent permitted by applicable law.
+LispWorks Ltd and its licensors provide no separate support or warranty
+to you under this TAFFISH agreement. To the maximum extent permitted by
+law, they disclaim implied warranties and liability for loss of profits,
+business, savings or data and for special, incidental or consequential
+damages arising from the Runtime. Nothing in these terms excludes
+liability for death or personal injury caused by negligence, fraud, or
+other liability that the law prohibits excluding, or limits mandatory
+consumer or other statutory rights.
+
+5. Termination
+
+The distributor may terminate your Runtime rights by written notice if
+you breach these terms. Your Runtime rights also end if the distributor's
+right to provide this Runtime is terminated under its LispWorks license.
+Following termination, cease using and distributing the Runtime and
+remove the affected Runtime-containing programs and copies. Rights in
+TAFFISH source and separately licensed components follow their licenses.
+
+6. US Government Restricted Rights
+
+The following is the notice required by the LispWorks license. In this
+notice, "Licensed Program" refers to the LispWorks Runtime.
+
+This Licensed Program is a commercial computer software program developed
+at private expense and is provided with restricted rights. The Licensed
+Program provided herein may not be used, reproduced, or disclosed by the
+Government except as set forth in this Agreement and, if applicable, as
+provided in DFARS 227.7202-1(a), 227.7202-3(a) (1995), FAR 12.212(a)(1995),
+FAR 52.227-19, and/or FAR 52.227-14 Alt III.  Manufacturer: LispWorks Ltd,
+St John's Innovation Centre, Cowley Road, Cambridge CB4 0WS, UK.
+
+You agree to include the notice under this Section in any software
+application, including any associated documentation, you distribute
+using this Licensed Program, in whole or in part.  All rights are
+reserved under the copyright laws of the United States.
+
+LispWorks vendor information
+
+Copyright (C) 2024 LispWorks Ltd. All rights reserved.
+LISPWORKS is a registered trademark of LispWorks Ltd.
+https://www.lispworks.com/products/lw-eula.txt
+https://www.lispworks.com/products/runtimes.html
+
+The vendor's developer-license agreement provides the basis for the
+Runtime restrictions. Your acceptance through the TAFFISH installer
+applies to the Runtime terms in this file.

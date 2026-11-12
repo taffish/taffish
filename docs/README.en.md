@@ -8,8 +8,7 @@ here go deeper than installation and basic command usage.
 
 ## Start Here
 
-- New users: read the root [README](../README.md), then follow its installation,
-  first-run, container-backend, and troubleshooting sections in order.
+- New users: start with the [core installation](../README.md#quick-install), then [try a versioned app](../README.md#first-run).
 - Guided users: use the public
   [TAFFISH Quick Start](https://github.com/taffish/taffish-docs/blob/main/en/quick-start.en.md).
 - Source builders and contributors: begin with the
@@ -20,9 +19,7 @@ here go deeper than installation and basic command usage.
 - Installer maintainers: use the source-adjacent
   [Installer Manual](../install/README.md) for provider generation,
   verification, transaction, permission, and conformance-test contracts.
-- Maintainers reviewing a release: read the current
-  [v0.11.0 Release Notes](releases/v0.11.0.md) together with the root README's
-  release-verification section.
+- To verify a 0.12.0 download, follow the [release verification instructions](../install/README.md#release-verification).
 
 ## Documentation Scope
 
@@ -43,14 +40,13 @@ ecosystem repositories. Paper narratives remain outside this source tree.
 - [Developer Manual](dev/README.en.md)
 - [TAFFISH Specification Draft](standards/README.en.md)
 - [TAFFISH System Architecture](architecture/README.en.md)
-- [Current Release Notes: v0.11.0](releases/v0.11.0.md)
+- [TAFFISH 0.12.0 release notes](releases/v0.12.0.md)
 
 Chinese entries:
 
 - [Chinese Developer Manual](dev/README.zh-CN.md)
 - [Chinese TAFFISH Specification Draft](standards/README.zh-CN.md)
 - [Chinese TAFFISH System Architecture](architecture/README.zh-CN.md)
-- [Chinese Release Notes: v0.11.0](releases/v0.11.0.zh-CN.md)
 
 ## Writing Principles
 
@@ -74,7 +70,7 @@ Recommended order:
 
 This is a living documentation set. It should evolve with the source code
 rather than be written only after the project is complete. The current set
-contains paired Chinese and English developer, specification, architecture,
-and release documents. Public user documentation already lives in the separate
+contains paired Chinese and English developer, specification, and architecture
+documents. Release notes are written in English. Public user documentation lives in the separate
 `taffish-docs` repository; future additions here should remain source-adjacent,
 such as deeper implementation topics, test contracts, and release runbooks.

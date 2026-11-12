@@ -24,7 +24,7 @@
 (in-package :han.path)
 
 (defun %get-help-string ()
-  "han.path v0.1.0
+  "han.path v0.3.0
 
 Purpose:
   Small pathname helpers for portable Common Lisp path manipulation.
@@ -59,7 +59,7 @@ Example:
     text))
 
 (defun version (&optional (stream *standard-output*))
-  (let ((version "0.1.0"))
+  (let ((version "0.3.0"))
     (when stream
       (format stream "han.path v~A~%" version))
     version))

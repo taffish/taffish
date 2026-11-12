@@ -11,7 +11,11 @@ Thumbs.db
 *.tmp
 *.swp
 *.swo
-#*#
+\#*\#
+
+# Python bytecode caches
+__pycache__/
+*.pyc
 
 # Logs and local scratch files
 *.log
@@ -41,19 +45,29 @@ temp/
 *.sse2f
 
 # Build/package scratch directories. The release payload under target/ is kept
-# intentionally because the raw installers download versioned binaries from git
-# tags for GitHub/Gitee compatibility.
+# intentionally because the installers download versioned payloads from the
+# same GitHub/Gitee tag.
 build/
 dist/
 release/
 
-# Keep only public release payload files in target/.
+# Keep raw executables local. Track the build scripts and program verification files.
 target/*
-!target/taf-*
-!target/taffish-*
+!target/make-sha-asc.sh
 !target/SHA256SUMS
 !target/SHA256SUMS.asc
 !target/TAFFISH-RELEASE-KEY.asc
+
+# Publish complete platform archives, macOS transport parts and verification files in place.
+!target/packages-[0-9]*/
+target/packages-[0-9]*/*
+!target/packages-[0-9]*/taffish-*-darwin-arm64.tar.xz
+!target/packages-[0-9]*/taffish-*-darwin-arm64.tar.xz.parts
+!target/packages-[0-9]*/taffish-*-darwin-arm64.tar.xz.part-[a-z][a-z]
+!target/packages-[0-9]*/taffish-*-linux-amd64.tar.gz
+!target/packages-[0-9]*/ARCHIVE-SHA256SUMS
+!target/packages-[0-9]*/ARCHIVE-SHA256SUMS.asc
+!target/packages-[0-9]*/TAFFISH-RELEASE-KEY.asc
 
 # taf-app publish drafts should not be committed when this repository is used as
 # a working TAFFISH project.

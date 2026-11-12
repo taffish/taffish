@@ -7,8 +7,7 @@
 
 ## 从这里开始
 
-- 第一次使用：先阅读根目录 [README-CN](../README-CN.md)，依次完成安装、首次使用、
-  容器 backend 和故障排查章节。
+- 第一次使用：先[安装核心命令](../README-CN.md#快速安装)，再[试用带版本的 app](../README-CN.md#首次使用)。
 - 希望按教程操作：阅读公开的
   [TAFFISH 快速开始](https://github.com/taffish/taffish-docs/blob/main/zh/quick-start.cn.md)。
 - 从源码构建或参与开发：从[开发者手册](dev/README.zh-CN.md)和
@@ -17,8 +16,7 @@
   [参数替换、转发与展示](standards/zh-CN/argument-passing.md)。
 - 维护安装器：阅读贴近源码的[安装器手册](../install/README-CN.md)，其中说明 provider
   生成、载荷校验、事务、权限和 conformance test 契约。
-- 维护者检查 release：同时阅读当前的
-  [v0.11.0 Release Notes](releases/v0.11.0.zh-CN.md)和根 README 的 release 校验章节。
+- 核验下载的 0.12.0 平台包时，参阅安装指南的[发布验签说明](../install/README-CN.md#发布验签)。
 
 ## 文档范围
 
@@ -37,14 +35,13 @@
 - [开发者手册](dev/README.zh-CN.md)
 - [TAFFISH 规范草案](standards/README.zh-CN.md)
 - [TAFFISH 系统架构](architecture/README.zh-CN.md)
-- [当前 Release Notes：v0.11.0](releases/v0.11.0.zh-CN.md)
+- [TAFFISH 0.12.0 发布说明（英文）](releases/v0.12.0.md)
 
 英文入口：
 
 - [Developer Manual](dev/README.en.md)
 - [TAFFISH Specification Draft](standards/README.en.md)
 - [TAFFISH System Architecture](architecture/README.en.md)
-- [English Release Notes: v0.11.0](releases/v0.11.0.md)
 
 ## 写作原则
 
@@ -67,5 +64,5 @@
 ## 状态说明
 
 这是一套活文档。它应该随着源码一起演进，而不是等项目完成后再补写。当前已经包含
-成对的中英文开发者、规范、架构和 release 文档。普通用户公开文档已经位于独立的
+成对的中英文开发者、规范和架构文档。新版发布说明以英文撰写。普通用户公开文档位于独立的
 `taffish-docs` 仓库；这里后续应继续补充贴近源码的实现专题、测试契约和 release runbook。

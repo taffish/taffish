@@ -70,45 +70,28 @@ sbcl --load load-taffish.dev.lisp \
   --quit
 ```
 
-如果改动影响 CLI、生成 shell、project/Hub/system 工作流、进程处理或交付二进制，构建三个
-命令后运行：
+如果改动影响 CLI、生成 shell、项目、Hub、进程或交付程序，从仓库根目录构建三个命令后，用它们的实际路径运行完整外测。
 
 ```sh
-./test/run-tests.sh
+./test/run-tests.sh \
+  --taf ./target/taf \
+  --taffish ./target/taffish \
+  --taffish-mcp ./target/taffish-mcp
 ```
 
-外部 runner 会从 `taffish.asd` 推断当前版本，隔离宿主状态，并运行 binary smoke、compiler、
-project、Hub、system、i18n、MCP、publish 恢复、installer 和 CLI 错误边界套件。过滤 case、显式指定
-二进制、installer root-only policy case 和先决条件见
-[外部测试指南](../../../test/README.md)。
+宿主、进程、路径或流的改动需要在 macOS/SBCL 和 Linux/LispWorks 上验证。0.12.0 的公开 CI 还会在 Apple Silicon macOS 上用 CCL 构建并测试三个命令。维护者在 Linux 上另行验证商业 LispWorks 构建。
 
-host/process/path/stream 改动必须同时经过 macOS/SBCL 与 Linux/LispWorks 验证。LispWorks
-delivery 使用商业 runtime，当前仍由维护者作为 release gate 手动验证。
+运行器从 `taffish.asd` 推断版本并隔离宿主状态。修改入口或错误报告时，可以在同一条命令末尾加 `--filter cli-boundary/` 运行定向回归。[外部测试指南](../../../test/README.md)
 
-修改入口或错误报告时，可以针对交付二进制运行：
-
-```sh
-./test/run-tests.sh --filter cli-boundary/
-```
-
-它检查启动失败、编译器诊断、不可用的输出流、中断和 MCP 恢复。探测保留控制终端并设置
+这些回归用例检查启动失败、编译器诊断、不可用的输出流、中断和 MCP 恢复。探测保留控制终端并设置
 超时。运行时启动时可能重用已关闭的描述符编号，因此写入失败测试应使用只读描述符或
 断开的管道等可靠条件，不能假定关闭 stdout/stderr 就一定会失败。
 
 ## 发布证据
 
-临时构建的测试结果不能证明后来生成的正式二进制已经通过验证。重建带版本载荷后，应在
-每个目标平台运行完整外部测试，再校验最终 checksum manifest 和签名。版本专属的测试
-数量和 checksum 放在 release notes，不放在通用使用文档中。仅修正文档时，不需要重编译
-未变化的二进制，也不需要替换其有效签名。
+从 0.12.0 起，按[构建指南](build-from-source.md)校验已签名的包外清单，用严格 GPG 模式安装本机平台包，再对安装所得的三个程序运行完整外测。在两个平台分别验证从 0.11.0 同前缀升级。记录测试平台、程序摘要、测试结果与安装收据，供本版本发布验收使用。
 
-跨机器构建时，将已经测试的载荷汇总到一个正式交付目录，验证其中完整的签名清单。
-构建机器的副本不必同时充当分发包；应把二进制哈希与正式交付目录比较，不能仅因构建
-机器留有旧 checksum 副本，就判定正式交付包存在缺陷。
-
-本地测试通过、CI 通过和正式发布是独立门禁。创建 tag 和 Release 前，应检查发布 commit
-的 CI 结果；发布后再验证真实 GitHub/Gitee 安装路径。不要把 mock transport 测试描述成
-真实远端发布，也不要把未测试的 backend 写成已验证。
+程序和压缩包的校验和随各自的签名清单分发。公开 Release 正文说明用户可见的变化和升级注意事项。打标签前核对候选提交的 CI，发布后再从 GitHub 和 Gitee 的实际标签入口验证安装。
 
 ## 文档同步
 

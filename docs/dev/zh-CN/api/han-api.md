@@ -154,6 +154,7 @@ host 是低层适配 API。普通 TAFFISH 代码优先用 `han.os`。
 (han.host:standard-error-terminal-p)
 (han.host:current-process-id)
 (han.host:append-utf8-line path line)
+(han.host:atomic-replace-file staged-name target-name)
 (han.host:call-with-exclusive-file-lock lock-path function :timeout 5)
 (han.host:file-exists-p path)
 (han.host:directory-exists-p path)
@@ -164,11 +165,7 @@ host 是低层适配 API。普通 TAFFISH 代码优先用 `han.os`。
 (han.host:process-close process)
 ```
 
-支持实现：
-
-```text
-SBCL, LispWorks
-```
+宿主实现和平台条件见[支持实现](../han/host.md#支持实现)。
 
 不支持实现会抛 `unsupported-host-function`。
 
@@ -219,6 +216,6 @@ renderer 还须检查实际输出流与 `TERM=dumb`，并禁止在 JSON/MCP 中�
 
 1. `han` API 不应知道 TAF、hub、taf-app、GitHub/Gitee。
 2. `han.args` 是 TAFFISH 参数系统基础，改动要同步检查 `taffish-core`。
-3. `han.host` 改动要同时考虑 SBCL 和 LispWorks。
+3. `han.host` 改动要覆盖受影响的宿主后端。
 4. `han.json` 的 `:null` 和 `get-json` 双返回值不能随意改变。
 5. `han.os:run-shell-command` 返回值形状不能轻易改变。

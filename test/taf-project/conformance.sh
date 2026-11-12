@@ -341,6 +341,25 @@ PY
   )
 }
 
+_taf_project_case_run_concurrent_temp_directories() {
+  dir=$TAFFISH_TEST_TMP_ROOT/taf-project-run-concurrent
+  mkdir -p "$dir"
+  (
+    cd "$dir" || exit 1
+    "$TAF_BIN" new overlapping --flow >/dev/null || exit 1
+    cat > overlapping/src/main.taf <<'TAF'
+RUN
+<shell>
+printf '%s\n' "$0" > "$RUN_MARKER"
+while [ ! -f "$RUN_RELEASE" ]; do sleep 0.05; done
+test -f "$0" || exit 23
+printf '%s\n' "$RUN_NAME"
+if [ "$RUN_NAME" = second ]; then echo 'second diagnostic' >&2; exit 17; fi
+TAF
+    python3 "$TAFFISH_TEST_REPO_ROOT/test/taf-project/run-concurrency.py" "$TAF_BIN" "$dir"
+  )
+}
+
 _taf_project_case_build_is_idempotent_and_exact() {
   dir=$TAFFISH_TEST_TMP_ROOT/taf-project-build-idempotent
   mkdir -p "$dir"
@@ -1710,6 +1729,7 @@ run_taf_project_conformance() {
     _taf_project_case_unicode_build_and_history
   run_case "taf-project/run-stdin-process-boundary" \
     _taf_project_case_run_stdin_process_boundary
+  run_case "taf-project/run-concurrent-temp-directories" _taf_project_case_run_concurrent_temp_directories
   run_case "taf-project/build-is-idempotent-and-exact" _taf_project_case_build_is_idempotent_and_exact
   run_case "taf-project/new-docker-native-actions" _taf_project_case_new_docker_workflow_contract
   run_case "taf-project/publish-resumes-early-remote-boundaries" _taf_project_case_publish_resumes_early_remote_boundaries

@@ -32,7 +32,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y sbcl zsh fish gnupg shellcheck
+          sudo apt-get install -y sbcl zsh fish gnupg shellcheck xz-utils
 
       # macos-15 is the standard arm64 runner; do not use an Intel runner for
       # the darwin-arm64 release payloads in the separate release job below.
@@ -69,22 +69,25 @@ jobs:
 
       - name: Run complete external suite against current source
         run: |
-          test/run-tests.sh \
-            --taf "$RUNNER_TEMP/taffish-source-build/taf" \
-            --taffish "$RUNNER_TEMP/taffish-source-build/taffish" \
-            --taffish-mcp "$RUNNER_TEMP/taffish-source-build/taffish-mcp" \
-            2>&1 | tee "$RUNNER_TEMP/source-external.log"
-          # Temporary builds have no release signature. No other skip is allowed;
-          # signed payload behavior is required independently in release-payloads.
-          awk '/^\[SKIP\] / && $0 != "[SKIP] installer/gpg-verification" { bad=1 } END { exit bad }' \
-            "$RUNNER_TEMP/source-external.log"
+          bash test/ci-source-external.sh "$RUNNER_TEMP/taffish-source-build"
           printf '%s\n' 'Source suite: temporary SBCL build; release GPG coverage belongs to the release-payloads jobs.' \
             >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Test platform packaging and offline installations
+        run: |
+          python3 -I test/package-release.py
+          python3 -I test/installer/platform-packages.py
+          sh -n target/make-sha-asc.sh
+          sh -n scripts/sign-release-archives.sh.in
+          sh -n scripts/split-release-archive.sh
+          shellcheck -s sh target/make-sha-asc.sh scripts/sign-release-archives.sh.in scripts/split-release-archive.sh
 
       - name: Check installer scripts
         run: |
           sh -n test/ci-build.sh
           shellcheck -s sh test/ci-build.sh
+          shellcheck test/ci-source-external.sh test/ci-release-payloads.sh
+          shellcheck -s sh scripts/build-from-source.sh test/source-build.sh
           install/generate-installers.sh --check
           sh -n install/generate-installers.sh
           sh -n install/install-taffish.template.sh
@@ -105,6 +108,72 @@ jobs:
           zsh -n completion/zsh/_taffish
           fish -n completion/fish/taf.fish
           fish -n completion/fish/taffish.fish
+
+  macos-ccl:
+    name: Source / macos-15 / CCL
+    runs-on: macos-15
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install CCL 1.14 for Apple Silicon
+        working-directory: ${{ runner.temp }}
+        run: |
+          test "$(uname -m)" = arm64
+          archive=ccl-1.14-darwinarm64.tar.gz
+          curl --fail --location --silent --show-error --retry 3 \
+            "https://github.com/Clozure/ccl/releases/download/v1.14/$archive" -o "$archive"
+          printf '%s  %s\n' c26d879053c6691182da779ceeadb7fd4e2d63d04a4a603cfff5a2f124be0211 "$archive" | shasum -a 256 -c -
+          tar -xzf "$archive"
+          "$RUNNER_TEMP/ccl/darm64cl" --version
+          echo "CCL_DEFAULT_DIRECTORY=$RUNNER_TEMP/ccl" >> "$GITHUB_ENV"
+          echo "CCL=$RUNNER_TEMP/ccl/darm64cl" >> "$GITHUB_ENV"
+
+      - name: Install regression verification tools
+        run: |
+          brew install gnupg
+          command -v gpg
+          command -v gpgv
+
+      - name: Test TAFFISH and Han in separate CCL processes
+        run: |
+          git rev-parse HEAD
+          for loader in load-taffish.dev.lisp vendor/han/load-han.dev.lisp; do
+            echo "Testing $loader"
+            XDG_CACHE_HOME="$RUNNER_TEMP/$(basename "$loader" .dev.lisp)-ccl-cache" \
+              "$CCL" --no-init --batch --quiet --load "$loader" \
+              --eval '(multiple-value-bind (passed failed) (han.test:run-all-tests) (ccl:quit (if (and (plusp passed) (zerop failed)) 0 1)))'
+          done
+
+      - name: Build CCL executables and run build regressions
+        run: sh test/source-build.sh ccl "$RUNNER_TEMP/taffish-ccl-build"
+
+      - name: Check root loader target builds in an isolated source copy
+        run: python3 -I test/loader-build.py ccl
+
+      - name: Verify architecture and runtime dependencies
+        working-directory: ${{ runner.temp }}/taffish-ccl-build/bin
+        run: |
+          for exe in taf taffish taffish-mcp; do
+            lipo -verify_arch arm64 "$exe"
+            otool -L "$exe" | awk '
+              NR > 1 && $1 !~ /^\/(usr\/lib|System\/Library)\// {
+                print "Unexpected runtime dependency:", $0
+                bad = 1
+              }
+              END { exit (bad || NR < 2) }
+            '
+          done
+          shasum -a 256 taf taffish taffish-mcp
+
+      - name: Run complete external suite against CCL executables
+        run: bash test/ci-source-external.sh "$RUNNER_TEMP/taffish-ccl-build/bin"
 
   # This is an independent mandatory gate, not evidence supplied by source-tests.
   # Frozen payloads must fail newly added regressions until maintainers rebuild
@@ -135,27 +204,26 @@ jobs:
 
       - name: Install macOS release verification tools
         if: runner.os == 'macOS'
-        run: brew install gnupg zstd
-
-      - name: Check all release checksums and manifest signature
         run: |
-          cd target
-          shasum -a 256 -c SHA256SUMS
-          keydir=$(mktemp -d)
-          trap 'rm -rf "$keydir"' EXIT
-          keyring=$keydir/release.gpg
-          gpg --batch --yes --dearmor --output "$keyring" TAFFISH-RELEASE-KEY.asc
-          gpgv --keyring "$keyring" SHA256SUMS.asc SHA256SUMS
+          brew install gnupg
+          # Only older, SBCL-based macOS releases need the Homebrew zstd library.
+          version=$(sed -n 's/.*:version "\([^"]*\)".*/\1/p' taffish.asd | head -n 1)
+          case "$version" in
+            0.[0-9].*|0.1[01].*) brew install zstd ;;
+          esac
+
+      - name: Verify signed release payloads and prepare native binaries
+        run: bash test/ci-release-payloads.sh "$RUNNER_TEMP/taffish-release"
 
       - name: Require signed-payload installer GPG coverage
-        run: test/run-tests.sh --filter installer/gpg-verification
+        run: test/run-tests.sh --target-dir "$RUNNER_TEMP/taffish-release/target" --filter installer/gpg-verification
 
       - name: Check root-only system installer policies
-        run: sudo env "PATH=$PATH" test/run-tests.sh --filter installer/system-permissions
+        run: sudo env "PATH=$PATH" test/run-tests.sh --target-dir "$RUNNER_TEMP/taffish-release/target" --filter installer/system-permissions
 
       - name: Run complete external suite against release payloads
         run: |
-          test/run-tests.sh 2>&1 | tee "$RUNNER_TEMP/release-external.log"
+          test/run-tests.sh --target-dir "$RUNNER_TEMP/taffish-release/target" 2>&1 | tee "$RUNNER_TEMP/release-external.log"
           if grep '^\[SKIP\] ' "$RUNNER_TEMP/release-external.log"; then
             echo 'Release payload acceptance requires every case to execute.' >&2
             exit 1

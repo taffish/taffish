@@ -8,7 +8,7 @@
   (sb-ext:posix-getenv name))
 
 (defun quit (&optional (code 0))
-  (sb-ext:exit :code code))
+  (sb-ext:exit :code (%finish-exit-output code)))
 
 (defmacro prepare-runtime-io ()
   "Prepare character I/O policy before configuring process streams."
@@ -27,6 +27,17 @@
 
 #+(or darwin linux)
 (progn
+  (defun %literal-file-stat (name)
+    (let ((sb-alien::*default-c-string-external-format* :utf-8))
+      (multiple-value-bind (ok device-or-errno inode mode)
+          (sb-unix:unix-lstat (coerce name 'simple-string))
+        (if ok (values mode device-or-errno inode) (- device-or-errno)))))
+
+  (defun %literal-rename-errno (source target)
+    (let ((sb-alien::*default-c-string-external-format* :utf-8))
+      (nth-value 1 (sb-unix:unix-rename (coerce source 'simple-string)
+                                        (coerce target 'simple-string)))))
+
   (sb-alien:define-alien-routine ("flock" %sbcl-flock) sb-alien:int
     (fd sb-alien:int) (operation sb-alien:int))
 

@@ -1,6 +1,6 @@
 # han ASDF 与包边界
 
-`han` 是 TAFFISH 内置基础库，ASDF 系统名为 `han`，版本为 `0.1.0`。它被 `taffish.asd` 作为依赖加载。
+`taffish.asd` 加载内置的 ASDF 系统 `han`，版本为 `0.3.0`。[内置源码来源](README.md)
 
 ## 加载顺序
 
@@ -31,7 +31,7 @@ args
 | 包 | 目录 | 作用 |
 | --- | --- | --- |
 | `han.test` | `test/` | 极小测试框架。 |
-| `han.host` | `host/` | SBCL/LispWorks 等实现差异适配。 |
+| `han.host` | `host/` | SBCL、LispWorks、Unicode ECL 和 64 位 CCL 的宿主操作适配。 |
 | `han.source` | `source/` | 字符源、mark、span、匹配与消费。 |
 | `han.os` | `os/` | IO、环境变量、可执行查找、shell 命令运行。 |
 | `han.path` | `path/` | pathname 规范化、join、relative、文件目录操作。 |

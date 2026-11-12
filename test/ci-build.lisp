@@ -22,7 +22,7 @@
 (asdf:load-asd (merge-pathnames "taffish.asd" *ci-source-root*))
 (asdf:load-system :taffish)
 
-(let ((entry (cond ((string= *ci-entry-name* "taf") #'taf.cli:main)
+(let ((entry (cond ((string= *ci-entry-name* "taf") #'taf.cli::%standalone-main)
                    ((string= *ci-entry-name* "taffish") #'taffish.cli:main)
                    ((string= *ci-entry-name* "taffish-mcp") #'taffish.mcp:main)
                    (t (error "Unknown CI entry: ~S" *ci-entry-name*)))))

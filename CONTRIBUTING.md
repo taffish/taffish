@@ -14,16 +14,18 @@ Run the test suite:
 
 ```sh
 sbcl --load load-taffish.dev.lisp \
-  --eval '(multiple-value-bind (passed failed) (han.test:run-all-tests) (declare (ignore passed)) (when (> failed 0) (sb-ext:exit :code 1)))' \
+  --eval '(multiple-value-bind (passed failed) (han.test:run-all-tests) (han.host:quit (if (and (plusp passed) (zerop failed)) 0 1)))' \
   --quit
 ```
 
 If a change affects CLI behavior, generated shell, project/Hub/system workflows,
 process handling, or delivered binaries, also build the three commands and run
-the external suite:
+the external suite against that build:
 
 ```sh
-./test/run-tests.sh
+build_dir=$(mktemp -d)
+sh test/ci-build.sh "$build_dir"
+test/run-tests.sh --taf "$build_dir/taf" --taffish "$build_dir/taffish" --taffish-mcp "$build_dir/taffish-mcp"
 ```
 
 See [TAFFISH External Tests](test/README.md) for binary selection, filtering,
@@ -35,7 +37,8 @@ Build local binaries:
 sbcl --load load-taffish.lisp --compile
 ```
 
-See [Build From Source](docs/dev/en/build-from-source.md) for more details, including the LispWorks maintainer build path.
+The 0.12.0 release configuration uses SBCL built without core compression on Apple Silicon and LispWorks on Linux x86-64. CCL and ECL remain available for development and compatibility testing.
+The source tree includes Han Lisp 0.3.0. See [Build From Source](docs/dev/en/build-from-source.md) for the CCL, ECL, SBCL, and LispWorks commands.
 
 ## Patch Expectations
 
@@ -59,21 +62,21 @@ fish -n completion/fish/taffish.fish
 
 If you changed Lisp code, run the Common Lisp suite. If you changed shell
 completion, validate the relevant shell syntax when that shell is available.
-Changes to host/process/path/stream behavior must be checked on both the
-macOS/SBCL and Linux/LispWorks release paths before release.
+Check changes to host, process, path, or stream behavior with the macOS/SBCL
+and Linux/LispWorks release builds, and retain CCL/ECL compatibility coverage for affected paths.
 
 Changes to the installer template, generator, download/verification behavior,
 transaction handling, paths, or permissions must also pass:
 
 ```sh
-./test/run-tests.sh --filter installer/
+qa=$(mktemp -d)
+bash test/ci-release-payloads.sh "$qa/release"
+test/run-tests.sh --target-dir "$qa/release/target" --filter installer/
 ```
 
 Run that subset on both macOS and Linux. The root-only system permission branch
-is selected explicitly with `sudo ./test/run-tests.sh --filter
-installer/system-permissions`; it uses an isolated temporary tree rather than
-the real system installation paths. Generated provider scripts must not be
-edited independently.
+can be exercised with `sudo test/run-tests.sh --target-dir "$qa/release/target" --filter installer/system-permissions`.
+It uses an isolated temporary tree. Regenerate both provider scripts from the template.
 
 ## Code Boundaries
 

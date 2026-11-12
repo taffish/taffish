@@ -34,18 +34,13 @@ When WAIT is false:
   - return stdout-stream, stderr-stream, NIL, and process
 
 If SHELL is NIL, try bash first, then sh."
-  (let* ((shell-path (or shell
-                         (find-executable "bash")
-                         (find-executable "sh")
-                         (error "No shell executable found."))))
-    (unless (han.host:file-exists-p shell-path)
-      (error "Shell executable does not exist: ~A" shell-path))
+  (let ((argv (han.host:shell-command-argv command shell)))
     (if wait
         ;; han.host drains process output while waiting, avoiding pipe-buffer
         ;; deadlocks for commands that produce large stdout/stderr.
         (multiple-value-bind (out err exit-code)
             (han.host:run-program-sync
-             (list shell-path "-c" command)
+             argv
              :output :string
              :error-output :string
              :ignore-error-status t)
@@ -54,8 +49,7 @@ If SHELL is NIL, try bash first, then sh."
                       (%string-to-lines err)
                       exit-code)
               (values out err exit-code)))
-        (let* ((process (han.host:run-program shell-path
-                                              :arguments (list "-c" command)))
+        (let* ((process (han.host:run-program (first argv) :arguments (rest argv)))
                (out-stream (han.host:host-process-output-stream process))
                (err-stream (han.host:host-process-error-stream  process)))
           (values out-stream err-stream nil process)))))

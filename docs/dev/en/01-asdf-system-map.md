@@ -1,6 +1,6 @@
 # ASDF System And Module Map
 
-TAFFISH uses ASDF to describe Common Lisp systems. The current main system is `taffish`, version `0.11.0`, and it depends on the built-in base library `han`. The ASDF file is not just build configuration; it is also an important architecture map.
+The main ASDF system for TAFFISH 0.12.0 is `taffish`. Its [system definition](../../../taffish.asd) requires Han Lisp 0.3.0 or later. This checkout includes [Han Lisp 0.3.0](han/README.md).
 
 ## Main System Load Order
 
@@ -30,12 +30,6 @@ taffish-core
   emitter/builtins/shell
   emitter/builtins/container
   compiler
-  main
-
-taffish-cli
-  package
-  i18n
-  run
   main
 
 taf-core
@@ -69,6 +63,12 @@ taf-core
   system/history
   system/doctor-i18n
   system/doctor
+
+taffish-cli
+  package
+  i18n
+  run
+  main
 
 taf-cli
   package

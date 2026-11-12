@@ -89,9 +89,19 @@
       (format *error-output* "[TAF-ERROR] ~A~%" c)
       (han.host:quit 1))))
 
-(defun main (&optional (raw-argv (han.host:argv)))
+(defun %run-command-line (raw-argv standalone-p)
   (han.host::%with-cli-error-boundary ("[TAF-ERROR]")
     (han.host:prepare-runtime-io)
     (han.host:configure-runtime-io)
-    (taffish.i18n:call-with-resolved-language
-     (lambda () (%main raw-argv)))))
+    (let ((taf.core::*cli-terminal-error-output*
+            (and standalone-p (ignore-errors (han.host:standard-error-terminal-p))
+                 *error-output*)))
+      (taffish.i18n:call-with-resolved-language
+       (lambda () (%main raw-argv))))))
+
+(defun main (&optional (raw-argv (han.host:argv)))
+  (%run-command-line raw-argv nil))
+
+(defun %standalone-main (&optional (raw-argv (han.host:argv)))
+  "Executable entry point. After runtime I/O setup, stderr belongs to this process."
+  (%run-command-line raw-argv t))

@@ -92,3 +92,6 @@
 
    ;; main
    :taffish-to-shell))
+
+;; The single-pass test observes this call for every source token.
+(declaim (notinline taffish.core::%resolve-taf-token))

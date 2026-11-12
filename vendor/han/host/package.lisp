@@ -19,7 +19,17 @@
 	   :standard-input-terminal-p
 	   :standard-error-terminal-p
 	   :current-process-id
+	   :working-directory-pathname
+	   :pathname-directory-list
+	   :current-user
+	   :home-directory
+	   :find-executable
+	   :shell-command-argv
+	   :unicode-scalar-char
+	   :char-unicode-scalar
+	   :with-open-utf8-file
 	   :append-utf8-line
+	   :atomic-replace-file
 	   :call-with-exclusive-file-lock
 	   :cwd
 	   :file-exists-p
@@ -53,16 +63,19 @@
 (in-package :han.host)
 
 (defun %get-help-string ()
-  "han.host v0.1.0
+  "han.host v0.3.0
 
 Purpose:
   Provide a small host-implementation portability layer for TAFFISH.
-  It hides SBCL/LispWorks differences behind one process/env/argv API.
+  It hides SBCL, LispWorks, ECL and CCL differences behind one process/env/argv API.
 
 Common usage:
   (han.host:argv)
 	  (han.host:getenv \"HOME\")
 	  (han.host:cwd)
+	  (han.host:working-directory-pathname)
+	  (han.host:find-executable \"sh\")
+	  (han.host:with-open-utf8-file (in path) (read-line in))
 	  (han.host:quit 0)
 	  (han.host:prepare-runtime-io)
 	  (han.host:configure-runtime-io)
@@ -70,6 +83,7 @@ Common usage:
 	  (han.host:standard-error-terminal-p)
 	  (han.host:current-process-id)
 	  (han.host:append-utf8-line path line)
+	  (han.host:atomic-replace-file staged-name target-name)
 	  (han.host:call-with-exclusive-file-lock lock-path function :timeout 5)
 	  (han.host:file-exists-p path)
 	  (han.host:escape-sh-token token)
@@ -109,7 +123,7 @@ Note:
     text))
 
 (defun version (&optional (stream *standard-output*))
-  (let ((version "0.1.0"))
+  (let ((version "0.3.0"))
     (when stream
       (format stream "han.host v~A~%" version))
     version))

@@ -154,6 +154,7 @@ Core API:
 (han.host:standard-error-terminal-p)
 (han.host:current-process-id)
 (han.host:append-utf8-line path line)
+(han.host:atomic-replace-file staged-name target-name)
 (han.host:call-with-exclusive-file-lock lock-path function :timeout 5)
 (han.host:file-exists-p path)
 (han.host:directory-exists-p path)
@@ -164,11 +165,7 @@ Core API:
 (han.host:process-close process)
 ```
 
-Supported implementations:
-
-```text
-SBCL, LispWorks
-```
+See [host backends](../han/host.md#supported-implementations) for the implementation and platform conditions.
 
 Unsupported implementations signal `unsupported-host-function`.
 
@@ -220,6 +217,6 @@ Positioning: a small self-hosted test framework, not a full testing platform.
 
 1. `han` APIs should not know TAF, Hub, taf-app, GitHub, or Gitee.
 2. `han.args` is the foundation of the TAFFISH argument system; changes must be checked against `taffish-core`.
-3. `han.host` changes must consider both SBCL and LispWorks.
+3. `han.host` changes must cover the affected backends.
 4. `han.json` `:null` and the two return values of `get-json` must not change casually.
 5. The return shape of `han.os:run-shell-command` must not change casually.

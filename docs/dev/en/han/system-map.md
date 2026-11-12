@@ -1,6 +1,6 @@
 # han ASDF And Package Boundaries
 
-`han` is TAFFISH's built-in base library. Its ASDF system name is `han`, version `0.1.0`. It is loaded as a dependency by `taffish.asd`.
+`taffish.asd` loads the vendored ASDF system `han` at version `0.3.0`. [Vendored source](README.md)
 
 ## Load Order
 
@@ -31,7 +31,7 @@ This order reflects dependency direction:
 | Package | Directory | Role |
 | --- | --- | --- |
 | `han.test` | `test/` | Tiny test framework. |
-| `han.host` | `host/` | SBCL/LispWorks and other implementation adaptation. |
+| `han.host` | `host/` | Host operations for SBCL, LispWorks, Unicode ECL and 64-bit CCL. |
 | `han.source` | `source/` | Character source, mark, span, match, and consume. |
 | `han.os` | `os/` | IO, environment variables, executable lookup, shell command execution. |
 | `han.path` | `path/` | Pathname normalization, join, relative path, file and directory operations. |

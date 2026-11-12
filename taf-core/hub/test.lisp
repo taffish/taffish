@@ -36,10 +36,9 @@
 
 (defun %taf-hub-write-string (path string)
   (ensure-directories-exist path)
-  (with-open-file (out path :direction :output
-                            :if-exists :supersede
-                            :if-does-not-exist :create)
-    (write-string string out)))
+  ;; A content-only edit must truncate the old bytes and retain its mode.
+  (uiop:run-program (list "sh" "-c" "cat > \"$1\"" "fixture" (namestring (pathname path)))
+                    :input (make-string-input-stream string)))
 
 (defun %taf-hub-sample-index ()
   "{\"schema_version\":\"taffish.index/v1\",\"packages\":{},\"commands\":{}}")
@@ -2459,9 +2458,10 @@ echo after"))
                                    :test #'equal))
                (han.os:run-program (list (han.os:find-executable "chmod") "755" (getf entry :command-file)))
                (%taf-hub-write-string (getf entry :command-file) "changed")
-               (check-true (member "wrapper-digest"
-                                   (%taf-hub-diagnostic-codes (taf.core::%hub-diagnose-entry entry))
-                                   :test #'equal)))
+               (check-equal "changed" (uiop:read-file-string (getf entry :command-file)))
+               (let ((codes (%taf-hub-diagnostic-codes (taf.core::%hub-diagnose-entry entry))))
+                 (check-true (member "wrapper-digest" codes :test #'equal))
+                 (check-false (member "not-executable" codes :test #'equal))))
           (setf (symbol-function 'han.os:run-program) original))))))
 
 (deftest test-taf-hub-doctor-batch-probe-budget-and-target ()
@@ -2855,11 +2855,14 @@ echo after"))
              (snapshot (han.path:parent-directory-pathname (%taf-hub-diagnostic-manifest new)))
              (prime (symbol-function 'taf.core::%hub-diagnostic-prime))
              (hash-file (symbol-function 'taf.core::%project-sha256-file))
+             (properties-checked nil)
              (violations nil))
         (unwind-protect
              (progn
                (setf (symbol-function 'taf.core::%hub-diagnostic-prime)
                      (lambda (mode paths)
+                       (when (and paths (equal mode "properties"))
+                         (setf properties-checked t))
                        (when (and (equal mode "tree")
                                   (find (taf.core::%hub-diagnostic-path-key snapshot) paths
                                         :test #'equal :key #'taf.core::%hub-diagnostic-path-key))
@@ -2883,7 +2886,9 @@ echo after"))
                           (command (find :command-entry results :key (lambda (r) (getf r :check-kind)))))
                      (check-equal :unknown (getf command :state))
                      (check-true (member "metadata-schema" (%taf-hub-diagnostic-codes command) :test #'equal))
-                     (check-equal nil violations)))))
+                     (check-equal nil violations))))
+               ;; The negative tree assertion is meaningful only if the probe was installed.
+               (check-true properties-checked))
           (setf (symbol-function 'taf.core::%hub-diagnostic-prime) prime
                 (symbol-function 'taf.core::%project-sha256-file) hash-file))
         (remhash "schema_version" metadata)

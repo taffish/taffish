@@ -30,7 +30,33 @@
                           (get-output-stream-string *error-output*)))))
           (loop for symbol in symbols for original in originals
                 do (setf (symbol-function symbol) original)))))))
-
+(han.test:deftest test-taf-cli-progress-stream-ownership-at-entry ()
+  ;; Stop just before command dispatch, with fd 2 on a terminal and the
+  ;; caller's Lisp error stream already rebound. Never exit the test process.
+  (let* ((symbols '(han.host:configure-runtime-io han.host:standard-error-terminal-p han.host:quit
+                    taffish.i18n:call-with-resolved-language))
+         (originals (mapcar #'symbol-function symbols))
+         (tag (gensym "PROGRESS-STREAM")))
+    (unwind-protect
+         (progn
+           (setf (symbol-function 'han.host:configure-runtime-io) (constantly t)
+                 (symbol-function 'han.host:standard-error-terminal-p) (constantly t)
+                 (symbol-function 'han.host:quit)
+                 (lambda (&optional code) (declare (ignore code)) (throw tag :unexpected-exit))
+                 (symbol-function 'taffish.i18n:call-with-resolved-language)
+                 (lambda (function &rest options)
+                   (declare (ignore function options))
+                   (throw tag taf.core::*cli-terminal-error-output*)))
+           (with-taf-system-temp-dir (dir)
+             (let ((file (merge-pathnames "capture.log" dir)))
+               (ensure-directories-exist file)
+               (with-open-file (*error-output* file :direction :output :if-exists :error)
+                 (check-equal nil (catch tag (taf.cli:main '("--version")))))))
+           (let ((*error-output* (make-string-output-stream)))
+             (check-equal nil (catch tag (taf.cli:main '("--version"))))
+             (check-true (eq *error-output* (catch tag (taf.cli::%standalone-main '("--version")))))))
+      (mapc (lambda (symbol function) (setf (symbol-function symbol) function))
+            symbols originals))))
 
 ;;;; ============================================================
 ;;;; taf.cli tests
@@ -79,9 +105,9 @@
 (deftest test-taf-cli-version-string-basic ()
   (check-equal (stringp taf.cli:*taf-version*) t)
   (check-equal (%taf-cli-string-contains-p taf.cli:*taf-version* "taf") t)
-  (check-equal (%taf-cli-string-contains-p taf.cli:*taf-version* "0.11.0") t)
+  (check-equal (%taf-cli-string-contains-p taf.cli:*taf-version* "0.12.0") t)
   (check-equal taf.cli:*taf-version*
-               "taf         0.11.0"))
+               "taf         0.12.0"))
 
 (deftest test-taf-cli-help-string-basic ()
   (let ((help-string (taf.cli::%get-taf-help-string)))

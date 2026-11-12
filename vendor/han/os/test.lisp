@@ -5,7 +5,7 @@
     (check-true (stringp help-string))
     (check-true (search "han.os" help-string))
     (check-true (search "run-shell-command" help-string)))
-  (check-equal "0.1.0" (han.os:version nil)))
+  (check-equal "0.3.0" (han.os:version nil)))
 
 ;; io.lisp
 ;; keep-read & keep-read-line & keep-read-char
@@ -30,12 +30,89 @@
 
 ;; env.lisp
 (deftest test-getenv-default ()
-  (check-equal (han.os:getenv-default "" "NO-THIS-ENV") "NO-THIS-ENV")
-  (check-true  (han.os:getenv-default "USER" nil)))
+  (let ((missing (symbol-name (gensym "HAN_TEST_MISSING_"))))
+    (check-equal :unset (han.os:getenv-default missing :unset))
+    (check-error (simple-error) (han.os:require-env missing)))
+  (let* ((user (han.host:getenv "USER"))
+         (name (or user (han.host:getenv "LOGNAME"))))
+    (check-equal (or user :unset) (han.os:getenv-default "USER" :unset))
+    (when user (check-equal user (han.os:require-env "USER")))
+    (check-equal name (han.host:current-user))
+    (check-equal (or name "World") (han.os:current-user))
+    (check-equal (or name :batch) (han.os:current-user :batch))))
+
+(deftest test-home-directory-uses-an-existing-directory ()
+  (let* ((home (han.host:getenv "HOME"))
+         (fallback (ignore-errors (user-homedir-pathname)))
+         (directory (or (and home (han.host:directory-exists-p home))
+                        (and fallback (han.host:directory-exists-p fallback))))
+         (expected (when directory (namestring directory))))
+    (check-equal expected (han.host:home-directory))
+    (check-equal expected (han.os:home-directory))))
+
+(deftest test-keep-read-limits-and-nil-data ()
+  (with-input-from-string (in "nil 10 20 :end")
+    (check-false (han.os:keep-read in 0))
+    (check-equal '(nil 10 20)
+                 (han.os:keep-read in (lambda (reversed)
+                                        (not (equal reversed '(20 10 nil))))))
+    (check-equal :end (read in)))
+  (with-input-from-string (in "untouched")
+    (check-error (simple-error) (han.os:keep-read-char in :invalid))
+    (check-equal #\u (read-char in))))
+
+(deftest test-os-load-text-from-utf8-file-and-caller-stream ()
+  (let* ((file (%han-host-temp-file "han-os-text" "txt"))
+         (sample (map 'string #'han.host:unicode-scalar-char '(#x6C49 #x1F600))))
+    (unwind-protect
+         (progn
+           (check-error (simple-error) (han.os:load-lines file))
+           (with-open-file (out file :direction :output :if-exists :error
+                                     :element-type '(unsigned-byte 8))
+             (write-sequence #(#xE6 #xB1 #x89 #xF0 #x9F #x98 #x80 10 10) out))
+           (check-equal (list sample "") (han.os:load-lines file))
+           (check-equal (format nil "~A~%" sample)
+                        (han.os:load-string (namestring file))))
+      (when (probe-file file) (delete-file file))))
+  (with-input-from-string (in (format nil "skip~%~%tail"))
+    (read-line in)
+    (check-equal (format nil "~%tail") (han.os:load-string in))
+    (check-true (open-stream-p in))
+    (check-equal :eof (read-char in nil :eof)))
+  (check-error (simple-error) (han.os:load-lines 42)))
 
 (deftest test-find-executable ()
   (check-true (han.os:find-executable "/bin/sh"))
-  (check-true (han.os:find-executable "sh")))
+  (check-true (han.os:find-executable "sh"))
+  (dolist (name '(nil "" 3))
+    (check-equal '(nil) (multiple-value-list (han.os:find-executable name)))))
+
+(deftest test-find-executable-search-order ()
+  (let* ((name (pathname-name (%han-host-temp-file "han-find" nil)))
+         (root (merge-pathnames (make-pathname :directory (list :relative name))
+                                (han.host:temporary-directory)))
+         (first-dir (merge-pathnames "first/" root))
+         (second-dir (merge-pathnames "second/" root))
+         (relative (format nil "~A/tool" name))
+         (first-file (merge-pathnames relative first-dir))
+         (second-file (merge-pathnames relative second-dir)))
+    (unwind-protect
+         (progn
+           (dolist (file (list first-file second-file))
+             (ensure-directories-exist file)
+             (with-open-file (out file :direction :output :if-exists :error)
+               (write-line "regular file" out)))
+           (let ((han.host::*default-executable-search-paths*
+                   (mapcar #'namestring (list first-dir second-dir first-dir)))
+                 (*default-pathname-defaults* root))
+             ;; A missing relative path falls through to the search, even with a slash.
+             (check-equal (mapcar (lambda (file) (namestring (truename file)))
+                                  (list first-file second-file))
+                          (multiple-value-list (han.os:find-executable relative)))
+             (let ((*default-pathname-defaults* second-dir))
+               (check-equal (list (namestring (truename second-file)))
+                            (multiple-value-list (han.os:find-executable relative))))))
+      (han.host:delete-directory-tree root))))
 
 ;; run-shell.lisp
 (deftest test-run-shell-command ()
@@ -47,11 +124,18 @@
                                           :lines nil))
                (list (format nil "1~%") (format nil "2~%") 3))
   (multiple-value-bind (out-stream err-stream exit-code process)
-      (han.os:run-shell-command "echo 1; echo 2 >&2; exit 3" :wait nil)
-    (check-true (streamp out-stream))
-    (check-true (streamp err-stream))
-    (check-false exit-code)
-    (check-true (typep process 'han.host:host-process)))
+      (han.os:run-shell-command "echo 1; echo 2 >&2; exit 3" :shell "/bin/sh" :wait nil)
+    (unwind-protect
+         (progn
+           (check-true (typep process 'han.host:host-process))
+           (check-false exit-code)
+           (check-equal "1" (read-line out-stream))
+           (check-equal "2" (read-line err-stream))
+           (check-equal process (han.host:process-wait process))
+           (check-equal 3 (han.host:process-exit-code process)))
+      (han.host:process-close process))
+    (check-false (open-stream-p out-stream))
+    (check-false (open-stream-p err-stream)))
   (multiple-value-bind (out err code)
       (han.os:run-shell-command
        "i=0; while [ $i -lt 10000 ]; do echo line; i=$((i + 1)); done")

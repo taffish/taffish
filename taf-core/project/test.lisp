@@ -25,27 +25,23 @@
       (setf (symbol-function 'taf.core::%publish-run-program) original))))
 
 (deftest test-taf-project-publish-progress-keeps-reconciliation-policy ()
-  (let ((original (symbol-function 'taf.core::%publish-operation))
-        (calls 0)
-        (taf.core::*publish-repository-readiness-delays* '(0 0)))
-    (unwind-protect
-         (progn
-           (setf (symbol-function 'taf.core::%publish-operation)
-                 (lambda (operation context)
-                   (check-equal :inspect-repository operation)
-                   (check-equal "v1.0.0-r1" (getf context :tag))
-                   (incf calls)
-                   (list :state (if (< calls 3) :missing :matching))))
-           (check-true
-            (search "Confirming remote result"
-                    (%operation-test-display
-                     (lambda ()
-                       (check-equal :matching
-                                    (getf (taf.core::%publish-reconcile-inspection
-                                           (list :tag "v1.0.0-r1") :inspect-repository :create-repository)
-                                          :state))))))
-           (check-equal 3 calls))
-      (setf (symbol-function 'taf.core::%publish-operation) original))))
+  (let* ((calls 0)
+         (taf.core::*publish-repository-readiness-delays* '(0 0))
+         (taf.core::*publish-operation-adapter*
+           (lambda (operation context)
+             (check-equal :inspect-repository operation)
+             (check-equal "v1.0.0-r1" (getf context :tag))
+             (incf calls)
+             (list :state (if (< calls 3) :missing :matching)))))
+    (check-true
+     (search "Confirming remote result"
+             (%operation-test-display
+              (lambda ()
+                (check-equal :matching
+                             (getf (taf.core::%publish-reconcile-inspection
+                                    (list :tag "v1.0.0-r1") :inspect-repository :create-repository)
+                                   :state))))))
+    (check-equal 3 calls)))
 
 ;;;; ============================================================
 ;;;; taf.core project tests
@@ -143,8 +139,8 @@
     (error (condition)
       (princ-to-string condition))))
 
-(defun %taf-project-publish-fake-state ()
-  (list :repository-p nil
+(defun %taf-project-publish-fake-state (&key repository-p)
+  (list :repository-p repository-p
         :repository-readiness-misses 0
         :policy-p nil
         :commit nil
@@ -269,6 +265,16 @@
          nil)
             (otherwise
              (error "unknown fake publish operation: ~S" operation)))))))
+
+(defun %taf-project-offline-release-plan (root tags &optional (channel :latest))
+  ;; Supplying tags alone still lets dry-run inspect a release using gh.
+  (let* ((state (%taf-project-publish-fake-state :repository-p t))
+         (taf.core::*publish-operation-adapter* (%taf-project-publish-fake-adapter state))
+         (result (taf.core:project-publish :start-dir root :dry-run t :release-p t
+                                           :channel channel :remote-tags tags :verbose nil)))
+    (check-true (member :inspect-release (getf state :operations)))
+    (check-false (member :create-release (getf state :operations)))
+    result))
 
 (defmacro with-taf-project-publish-fake
     ((project-name state journal-home &key interrupt-after) &body body)
@@ -1216,6 +1222,17 @@ echo changed")
        "7ea646958715ed687aa9ac2f5d785feb1a93411f4f25fdd6c7fcc6ab07fdf0e3"
        (taf.core::%project-sha256-file file)))))
 
+(deftest test-taf-project-build-rename-to-extensionless-launcher ()
+  (with-taf-project-temp-dir (dir)
+    (let ((staged (han.path:join-path dir "staged.wrapper.tmp"))
+          (target (han.path:join-path dir "launcher")))
+      (%taf-project-write-string staged "new")
+      (taf.core::%chmod-executable staged)
+      (taf.core::%build-rename-path staged target nil)
+      (check-equal "new" (han.os:load-string target))
+      (check-true (taf.core::%build-executable-p target))
+      (check-equal '("launcher") (mapcar #'file-namestring (han.path:directory-files dir))))))
+
 (deftest test-taf-project-build-is-idempotent-and-cleans-numbered-residue ()
   (with-taf-project-temp-dir (dir)
     (taf.core:project-new "demo-build-idempotent" nil)
@@ -1690,6 +1707,20 @@ echo 'step-1' | [[taf: taf-my-test-tool-v0.1.0-r1 cat]]
                       "run: alice")
                      t)))))
 
+(deftest test-taf-project-run-readable-shell-file-preserves-streams-and-status ()
+  (with-taf-project-temp-dir (dir)
+    (let ((file (%taf-project-path "script ' $ example.sh"))
+          (input (format nil "input~%")))
+      (%taf-project-write-string file "test ! -x \"$0\" || exit 99
+cat
+echo diagnostic >&2
+exit 29")
+      (multiple-value-bind (out err status)
+          (taf.core::%run-shell-file file (make-string-input-stream input) :string :string)
+        (check-equal input out)
+        (check-equal (format nil "diagnostic~%") err)
+        (check-equal 29 status)))))
+
 (deftest test-taf-project-run-default-does-not-inherit-stdin ()
   (with-taf-project-temp-dir (dir)
     (taf.core:project-new "demo-run-no-stdin" nil)
@@ -1952,12 +1983,8 @@ Please replace this file before publishing.")
 
 This release fixes the container image tag.")
     (uiop:with-current-directory ((%taf-project-dir "demo-publish-release"))
-      (let* ((result (taf.core:project-publish
-                      :start-dir (han.os:current-directory)
-                      :dry-run t
-                      :release-p t
-                      :remote-tags '("refs/tags/v1.2.3-r1")
-                      :verbose nil))
+      (let* ((result (%taf-project-offline-release-plan
+                      (han.os:current-directory) '("refs/tags/v1.2.3-r1")))
              (release (getf result :release))
              (commands (format nil "~S" (getf result :commands))))
         (check-equal (getf release :message) "fix image mismatch")
@@ -1994,12 +2021,8 @@ This release fixes the container image tag.")
 
 This release mentions a todo-like upstream word, but it is not the default template.")
     (uiop:with-current-directory ((%taf-project-dir "demo-publish-release-todo-word"))
-      (let* ((result (taf.core:project-publish
-                      :start-dir (han.os:current-directory)
-                      :dry-run t
-                      :release-p t
-                      :remote-tags '("refs/tags/v1.2.3-r1")
-                      :verbose nil))
+      (let* ((result (%taf-project-offline-release-plan
+                      (han.os:current-directory) '("refs/tags/v1.2.3-r1")))
              (release (getf result :release)))
         (check-equal (getf release :message) "autodock-vina todo wording")
         (check-equal (%taf-project-string-contains-p
@@ -2884,10 +2907,8 @@ This release mentions a todo-like upstream word, but it is not the default templ
       (taf.core:project-new "publish-args" '("--version" "3.0.0"))
       (%taf-project-write-string (%taf-project-path "publish-args" "release.md")
                                  "# A release")
-      (let* ((result (taf.core:project-publish
-                      :start-dir (%taf-project-dir "publish-args")
-                      :release-p t :channel channel :dry-run t
-                      :remote-tags '("v1.0.0-r1") :verbose nil))
+      (let* ((result (%taf-project-offline-release-plan
+                      (%taf-project-dir "publish-args") '("v1.0.0-r1") channel))
              (planned (cdr (car (last (getf result :commands)))))
              (release (copy-list (getf result :release)))
              (captured nil))

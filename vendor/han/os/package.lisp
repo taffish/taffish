@@ -29,7 +29,7 @@
 (in-package :han.os)
 
 (defun %get-help-string ()
-  "han.os v0.1.0
+  "han.os v0.3.0
 
 Purpose:
   Small operating-system utilities built on top of han.host.
@@ -73,7 +73,7 @@ Note:
     text))
 
 (defun version (&optional (stream *standard-output*))
-  (let ((version "0.1.0"))
+  (let ((version "0.3.0"))
     (when stream
       (format stream "han.os v~A~%" version))
     version))

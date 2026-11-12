@@ -106,7 +106,7 @@ continue expanding toward:
 6. Container backend selection and key generated-shell fragments.
 7. Human-language fallback while preserving JSON, shell, history, and MCP
    machine interfaces.
-8. Host/process/path behavior on both macOS/SBCL and Linux/LispWorks.
+8. Host, process, and path behavior on the macOS/SBCL and Linux/LispWorks release builds, with CCL/ECL compatibility coverage for affected paths.
 
 Complete contract-oriented conformance coverage remains necessary before
 considering specification `v1.0`.

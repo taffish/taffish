@@ -10,18 +10,15 @@ OS/architecture. The suite is supported on macOS and Linux, matching TAFFISH's
 release platforms. Run it from a complete TAFFISH checkout because the i18n
 contract also inspects the tracked Bash, Zsh, and Fish completion fixtures.
 
-When versioned binaries matching `taffish.asd` are present under `target/`, run
-the full external suite directly from the repository root:
+From the repository root, verify the signed platform archives and run the full suite against the installed native commands:
 
 ```sh
-./test/run-tests.sh
+scratch=$(mktemp -d)
+bash test/ci-release-payloads.sh "$scratch/release"
+./test/run-tests.sh --target-dir "$scratch/release/target"
 ```
 
-The version is inferred from `taffish.asd`. It can also be selected explicitly:
-
-```sh
-./test/run-tests.sh --version 0.11.0
-```
+This path requires `bash`, `gpg` and `gpgv`. The runner infers the version from `taffish.asd`. When working with versioned executables directly under `target/`, you can omit `--target-dir` or add `--version VERSION` to select a different version.
 
 For local unsuffixed builds:
 
@@ -44,17 +41,24 @@ sh test/ci-build.sh "$build_dir"
   --taffish-mcp "$build_dir/taffish-mcp"
 ```
 
-The build script keeps compilation caches and build logs in that directory.
-These unsigned binaries cannot supply release-signature evidence. CI runs
-current-source checks separately from signed release-payload acceptance: the
-source suite permits only `installer/gpg-verification` to skip, while the
-release suite permits no skips. Linux/SBCL source builds do not replace the
-maintainer's Linux/LispWorks delivery validation.
+The build script keeps compilation caches and logs in the selected directory. Public CI runs source builds with SBCL on macOS and Linux and with CCL on Apple Silicon macOS. On unsigned builds, only `installer/gpg-verification` may skip. The two signed-payload jobs require the entire external suite to pass without skips. Maintainers separately build and test the official Linux executables with LispWorks.
+
+For the ECL or Clozure CL developer build, select an installed implementation and a new output directory outside the checkout:
+
+```sh
+work=$(mktemp -d)
+sh test/source-build.sh ecl "$work/ecl"
+# Or: sh test/source-build.sh ccl "$work/ccl"
+```
+
+This checks that compiler failure leaves no partial output and that a second build refuses an occupied directory. It builds all three commands and exercises their binary smoke, arguments, stdin and terminal progress using paths with spaces. The resulting commands remain in the chosen directory under `bin/`. See the [source build instructions](../docs/dev/en/build-from-source.md) for prerequisites and running the full suite.
+
+Run `python3 -I test/loader-build.py ccl` or `python3 -I test/loader-build.py ecl` to test the root loader. Each test builds the three executables in the `target/` of a temporary source copy, rebuilds MCP alone, and checks the existing programs, release asset and signature files after a forced compiler error.
 
 Rerun only cases whose names contain a literal substring:
 
 ```sh
-./test/run-tests.sh --version 0.11.0 --filter publish-resumes
+./test/run-tests.sh --target-dir "$scratch/release/target" --filter publish-resumes
 ```
 
 The filter is a literal case-name substring. A filter matching no cases fails
@@ -106,8 +110,8 @@ automatically and print the path; every case has a complete stdout/stderr log
 under `<test-root>/logs/`. Preserve a successful run for inspection with either:
 
 ```sh
-./test/run-tests.sh --version 0.11.0 --keep-tmp
-TAFFISH_TEST_KEEP_TMP=1 ./test/run-tests.sh --version 0.11.0
+./test/run-tests.sh --target-dir "$scratch/release/target" --keep-tmp
+TAFFISH_TEST_KEEP_TMP=1 ./test/run-tests.sh --version 0.12.0
 ```
 
 Current suites:
@@ -270,14 +274,16 @@ Unicode widths and conservative fallback, not universal terminal/grapheme behavi
 
 ### Installer Subset
 
-Run only the installer subset with:
+To test the signed platform package, prepare its executables and run the installer subset:
 
 ```sh
-./test/run-tests.sh --version 0.11.0 --filter installer/
+scratch=$(mktemp -d)
+bash test/ci-release-payloads.sh "$scratch/release"
+./test/run-tests.sh --target-dir "$scratch/release/target" --filter installer/
 ```
 
 The dedicated `installer/gpg-verification` case requires `gpg`, `gpgv`, the
-three signed release materials in `target/`, and current-platform binaries
+three signed release materials in the selected `--target-dir` (default `target/`), and current-platform binaries
 matching that manifest. It copies the **complete signed manifest unchanged**,
 including other-platform entries; no private key or new signature is needed.
 It tests strict `gpg` and automatic verification, checks the recorded `gpg`
@@ -293,11 +299,33 @@ A filtered run in which every case is skipped also fails. Require actual GPG
 coverage before release, as CI does, with:
 
 ```sh
-./test/run-tests.sh --version 0.11.0 --filter installer/gpg-verification
+./test/run-tests.sh --target-dir "$scratch/release/target" --filter installer/gpg-verification
 ```
 
 Also verify the final release materials independently as described in
-[Release Verification](../README.md#release-verification).
+[Release Verification](../install/README.md#release-verification).
+
+For source checkouts, exercise the release packager and both providers without a network connection:
+
+```sh
+python3 -I test/package-release.py
+python3 -I test/installer/platform-packages.py
+```
+
+The first test runs the [unified signing and packaging script](../target/make-sha-asc.sh) against temporary payloads and disposable GPG keys. It covers the default sign-then-package path, separate-stage retries, signature reuse, UTF-8 settings passed to GPG, input locking, existing-output protection, and signing or compression failure recovery. The generated archive signer is tested separately; no maintainer key is used. macOS transport-part tests cover ordered reassembly, size boundaries, existing-output protection and split-only operation without modifying the original archive. Linux archives remain unsplit.
+The second test uses a temporary GPG key and two installer copies pinned to its fingerprint.
+It covers Gitee/macOS part downloads and rejection of missing, damaged, reordered or mismatched parts before installation, both archive formats, a 0.11.0 to 0.12.0 upgrade, dry-run, local package selection
+and renamed package verification. Failure at either verification layer must preserve an existing installation. The tests also check platform-specific notices, runtime text display before any program execution, explicit Linux acceptance, terminal refusal/EOF, recorded terms, and rollback of installed licenses with the binaries and receipt.
+
+To run the full external suite on the files prepared above:
+
+```sh
+test/run-tests.sh --target-dir "$scratch/release/target"
+```
+
+For 0.12.0 and later, preparation reads `target/packages-<version>/`, verifies both archive digests
+against the signed manifest and installs the native package using `--local --verify gpg --accept-runtime-license`. The external suite receives the installed
+programs together with their original signed inner manifest. The 0.11.0 branch checks all six raw binaries.
 
 A non-root run covers user installation and rejects unauthorized system
 mutation. Exercise the administrator-only `0755` and sticky-`1777` branches
@@ -305,7 +333,7 @@ against the suite's temporary tree with:
 
 ```sh
 sudo ./test/run-tests.sh \
-  --version 0.11.0 \
+  --target-dir "$scratch/release/target" \
   --filter installer/system-permissions
 ```
 

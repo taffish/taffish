@@ -69,7 +69,7 @@ from a missing key."
   value)
 
 (defun %json-ws-p (char)
-  (member char '(#\Space #\Tab #\Newline #\Return) :test #'char=))
+  (member (han.host:char-unicode-scalar char) '(#x20 #x09 #x0A #x0D)))
 
 (defun %json-skip-ws (string pos)
   (loop while (and (< pos (length string))
@@ -78,17 +78,12 @@ from a missing key."
         finally (return pos)))
 
 (defun %json-digit-p (char)
-  (and (char<= #\0 char) (char<= char #\9)))
+  ;; POSITION gives the decimal value as well as rejecting non-ASCII digits.
+  (position char "0123456789"))
 
 (defun %json-hex-value (char)
-  (cond
-    ((and (char<= #\0 char) (char<= char #\9))
-     (- (char-code char) (char-code #\0)))
-    ((and (char<= #\a char) (char<= char #\f))
-     (+ 10 (- (char-code char) (char-code #\a))))
-    ((and (char<= #\A char) (char<= char #\F))
-     (+ 10 (- (char-code char) (char-code #\A))))
-    (t nil)))
+  (or (position char "0123456789abcdef")
+      (position char "0123456789ABCDEF")))
 
 (defun %json-parse-hex4 (string pos)
   (when (> (+ pos 4) (length string))
@@ -102,11 +97,9 @@ from a missing key."
     (values code (+ pos 4))))
 
 (defun %json-code-char (code pos)
-  (let ((char (funcall (symbol-function 'code-char) code)))
-    (if char
-        char
-        (%json-error "unsupported JSON character code U+~4,'0X at position ~D"
-                     code pos))))
+  (or (han.host:unicode-scalar-char code)
+      (%json-error "unsupported JSON character code U+~4,'0X at position ~D"
+                   code pos)))
 
 (defun %json-parse-unicode-escape (string pos)
   (multiple-value-bind (code next-pos)
@@ -149,9 +142,6 @@ from a missing key."
           ((char= char #\")
            (return-from %json-parse-string
              (values (get-output-stream-string out) pos)))
-          ((< (char-code char) #x20)
-           (%json-error "unescaped control character in JSON string at position ~D"
-                        (1- pos)))
           ((char= char #\\)
            (when (>= pos (length string))
              (%json-error "unterminated JSON escape"))
@@ -161,11 +151,11 @@ from a missing key."
                (#\" (write-char #\" out))
                (#\\ (write-char #\\ out))
                (#\/ (write-char #\/ out))
-               (#\b (write-char #\Backspace out))
-               (#\f (write-char #\Page out))
-               (#\n (write-char #\Newline out))
-               (#\r (write-char #\Return out))
-               (#\t (write-char #\Tab out))
+               (#\b (write-char (%json-code-char #x08 (1- pos)) out))
+               (#\f (write-char (%json-code-char #x0C (1- pos)) out))
+               (#\n (write-char (%json-code-char #x0A (1- pos)) out))
+               (#\r (write-char (%json-code-char #x0D (1- pos)) out))
+               (#\t (write-char (%json-code-char #x09 (1- pos)) out))
                (#\u
                 (multiple-value-bind (unicode-char next-pos)
                     (%json-parse-unicode-escape string pos)
@@ -175,7 +165,14 @@ from a missing key."
                 (%json-error "bad JSON escape ~S at position ~D"
                              escape (1- pos))))))
           (t
-           (write-char char out)))))))
+           (let ((code (han.host:char-unicode-scalar char)))
+             (unless code
+               (%json-error "character has no Unicode scalar at position ~D"
+                            (1- pos)))
+             (when (< code #x20)
+               (%json-error "unescaped control character in JSON string at position ~D"
+                            (1- pos)))
+             (write-char char out))))))))
 
 (defun %json-parse-int (string pos)
   (let ((len (length string)))
@@ -184,8 +181,7 @@ from a missing key."
        (%json-error "expected JSON integer at position ~D" pos))
       ((char= (char string pos) #\0)
        (values (1+ pos) nil))
-         ((and (char<= #\1 (char string pos))
-            (char<= (char string pos) #\9))
+      ((%json-digit-p (char string pos))
        (loop do (incf pos)
              while (and (< pos len)
                         (%json-digit-p (char string pos))))
@@ -197,8 +193,7 @@ from a missing key."
   (let ((value 0))
     (loop for index from start below end do
       (setf value (+ (* value 10)
-                     (- (char-code (char string index))
-                        (char-code #\0)))))
+                     (%json-digit-p (char string index)))))
     value))
 
 (defun %json-number-value (raw)
@@ -250,9 +245,8 @@ from a missing key."
               (if negative-p (- scaled) scaled))
             (if negative-p (- int-value) int-value))))))
 
-(defun %json-parse-number (string pos)
-  (let* ((start pos)
-         (len (length string)))
+(defun %json-number-end (string pos)
+  (let ((len (length string)))
     (when (and (< pos len) (char= (char string pos) #\-))
       (incf pos))
     (multiple-value-bind (next-pos ignored)
@@ -277,19 +271,11 @@ from a missing key."
       (loop do (incf pos)
             while (and (< pos len)
                        (%json-digit-p (char string pos)))))
-    (let ((raw (subseq string start pos)))
-      (when (and (> (length raw) 1)
-                 (char= (char raw 0) #\0)
-                 (%json-digit-p (char raw 1)))
-        (%json-error "leading zero is not allowed in JSON number at position ~D"
-                     start))
-      (when (and (> (length raw) 2)
-                 (char= (char raw 0) #\-)
-                 (char= (char raw 1) #\0)
-                 (%json-digit-p (char raw 2)))
-        (%json-error "leading zero is not allowed in JSON number at position ~D"
-                     start))
-      (values (%json-number-value raw) pos))))
+    pos))
+
+(defun %json-parse-number (string pos)
+  (let ((end (%json-number-end string pos)))
+    (values (%json-number-value (subseq string pos end)) end)))
 
 (defun %json-expect (string pos token value)
   (let ((end (+ pos (length token))))
@@ -385,9 +371,7 @@ JSON null   => :NULL."
       value)))
 
 (defun %read-file-string (path)
-  (with-open-file (in path :direction :input
-                           :element-type 'character
-                           :external-format :utf-8)
+  (han.host:with-open-utf8-file (in path)
     (let ((out (make-string-output-stream :element-type 'character)))
       (loop for char = (read-char in nil nil)
             while char
@@ -404,21 +388,22 @@ JSON null   => :NULL."
   (format out "\\u~4,'0X" code))
 
 (defun %json-write-char (char out)
-  (let ((code (char-code char)))
+  (let ((code (or (han.host:char-unicode-scalar char)
+                  (%json-error "cannot encode a character without a Unicode scalar"))))
     (cond
       ((char= char #\")
        (write-string "\\\"" out))
       ((char= char #\\)
        (write-string "\\\\" out))
-      ((char= char #\Backspace)
+      ((= code #x08)
        (write-string "\\b" out))
-      ((char= char #\Page)
+      ((= code #x0C)
        (write-string "\\f" out))
-      ((char= char #\Newline)
+      ((= code #x0A)
        (write-string "\\n" out))
-      ((char= char #\Return)
+      ((= code #x0D)
        (write-string "\\r" out))
-      ((char= char #\Tab)
+      ((= code #x09)
        (write-string "\\t" out))
       ((or (< code #x20) (> code #x7E))
        (if (<= code #xFFFF)
@@ -440,11 +425,17 @@ JSON null   => :NULL."
 (defun %json-number-string (number)
   (cond
     ((integerp number)
-     (princ-to-string number))
+     (format nil "~D" number))
     ((floatp number)
-     (let ((raw (princ-to-string number)))
-       (substitute #\e #\d
-                   (substitute #\e #\D raw))))
+     (let* ((*read-default-float-format* 'single-float)
+            (raw (write-to-string number :base 10 :radix nil :readably nil
+                                         :pretty nil :escape nil))
+            (token (substitute-if #\e (lambda (c) (find c "sSfFdDlL")) raw)))
+       ;; Some implementations also print infinities and NaNs. Only emit
+       ;; tokens accepted by our JSON grammar, without coercing to a double.
+       (unless (= (%json-number-end token 0) (length token))
+         (%json-error "invalid JSON number: ~A" raw))
+       token))
     (t
      (%json-error "JSON number must be an integer or float, got ~S" number))))
 
@@ -510,11 +501,8 @@ Set INDENT to NIL for compact output."
 
 (defun write-json-file (path value &key (indent 2))
   (ensure-directories-exist path)
-  (with-open-file (out path
-                       :direction :output
-                       :if-exists :supersede
-                       :if-does-not-exist :create
-                       :element-type 'character
-                       :external-format :utf-8)
+  (han.host:with-open-utf8-file (out path :direction :output
+                                         :if-exists :supersede
+                                         :if-does-not-exist :create)
     (write-json value out :indent indent))
   path)

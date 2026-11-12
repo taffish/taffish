@@ -18,13 +18,78 @@ install/generate-installers.sh
 install/generate-installers.sh --check
 ```
 
-`--archive` / `--url` bundle 结构：
+## 按版本选择下载文件
+
+**0.12.0** 的两个安装器都按主机操作系统和架构选择一个平台包。从 0.12.0 起，GitHub 和 Gitee
+都从所选 `v<version>` 标签下的 `target/packages-<version>/` 提供下载。
+指定 `--version 0.11.0` 时，安装器从该标签逐个下载程序和配套文件。[0.12.0 发布说明（英文）](../docs/releases/v0.12.0.md)
+
+| 平台 | 标签内文件名 | 解包工具 |
+| --- | --- | --- |
+| Apple Silicon Mac，macOS 15 及以上 | `taffish-<version>-darwin-arm64.tar.xz` | 系统自带的 `/usr/bin/tar` 支持 XZ |
+| x86-64 Linux | `taffish-<version>-linux-amd64.tar.gz` | `tar` 和 `gzip` |
+
+默认 Gitee/macOS 下载使用同目录的 `.tar.xz.parts` 清单和每片最多 8 MiB 的 `.part-aa`、`.part-ab` 等文件，安装器自动按顺序合并成上表中的完整包，再校验、验签和解包。安装命令不变；缺片或校验失败时停止，不回退到 GitHub。GitHub、Linux 和显式 `--url` 仍下载完整包。分片规则用于适配 [Gitee 大于 10 MB 的 raw 文件需要认证的限制](https://help.gitee.com/repository/file-operate/raw#认证)。
+
+### 0.12.0 起的本地安装
+
+本地安装使用完整平台包，不直接读取分片清单。若手动下载了 Gitee 分片，先按 `.parts` 清单中的顺序拼回标准包名；保留相邻的原包校验清单、签名和公钥，再执行本地安装。
+
+<details>
+<summary>手动合并 0.12.0 的两个 macOS 分片</summary>
+
+将两片、`.parts` 清单和离线安装所需文件放在同一目录，再运行：
+
+```sh
+shasum -a 256 -c taffish-0.12.0-darwin-arm64.tar.xz.parts &&
+cat taffish-0.12.0-darwin-arm64.tar.xz.part-aa \
+    taffish-0.12.0-darwin-arm64.tar.xz.part-ab > taffish-0.12.0-darwin-arm64.tar.xz &&
+sh install-taffish.sh --local --verify gpg
+```
+
+`.parts` 校验用于发现分片损坏，来源可信性仍由原始整包签名清单和固定发布公钥验证。示例针对 0.12.0 的两片，后续版本片数可能不同；正常在线安装会自动完成合并。
+
+</details>
+
+仓库中备有本机平台包及校验文件时，从仓库根目录运行：
+
+```sh
+sh install/install-taffish.sh --local
+```
+
+默认安装给当前用户；系统安装使用 `sudo sh install/install-taffish.sh --local --system`。
+`--local` 先在安装脚本旁查找本机平台的标准包名，再查找相对于脚本目录的
+`../target/packages-<version>/`。该模式跳过安装后的 `taf update`，也会拒绝远程下载选项。
+
+在离线机器上，可把同版安装脚本和平台包放在一起。包旁需保留
+`ARCHIVE-SHA256SUMS`、`ARCHIVE-SHA256SUMS.asc` 和 `TAFFISH-RELEASE-KEY.asc`。
+运行 `sh install-taffish.sh --local --verify gpg` 即可要求严格验签。
+如果把包移到了其他目录或改了文件名，可显式选择：
+
+```sh
+sh install-taffish.sh --local --archive /path/to/my-package --verify gpg
+```
+
+指定的文件优先于自动查找。即使本地文件已改名，安装器也按所选版本和平台在官方清单中的原始条目校验。
+要选择安装器默认版本以外的版本，可加 `--version`。传统或自定义归档仍可单独用 `--archive FILE` 安装。
+
+联网时也可以给 `--url` 传入具有标准文件名的平台包 URL，从同一目录取包和相邻校验文件。
+解包前用 `ARCHIVE-SHA256SUMS` 核对整包，安装前用包内 `target/SHA256SUMS` 逐个核对
+三个程序。`--verify gpg` 要求两份清单都通过固定发布公钥的签名验证。
+`--checksum-*`、`--signature-*` 用于覆盖包内程序的校验材料。包外清单、签名和公钥见
+[0.12.0 平台包目录](../target/packages-0.12.0/)。维护者制作安装包的步骤见
+[源码构建指南](../docs/dev/zh-CN/build-from-source.md)。
+
+包中程序及配套文件的布局如下。
 
 ```text
 target/
-  taf-<os>-<arch>-<version>       （或旧布局 target/taf）
-  taffish-<os>-<arch>-<version>   （或旧布局 target/taffish）
+  taf-<os>-<arch>-<version>
+  taffish-<os>-<arch>-<version>
   taffish-mcp-<os>-<arch>-<version>
+  SHA256SUMS
+  SHA256SUMS.asc
+  TAFFISH-RELEASE-KEY.asc
 completion/
   bash/
   zsh/
@@ -32,8 +97,6 @@ completion/
 vim-highlight/
   syntax/
   ftdetect/
-LICENSE
-README.md
 ```
 
 安装器会从 `target/` 自动选择当前主机匹配的二进制，并安装为
@@ -45,12 +108,32 @@ README.md
   `SHA256SUMS` 中唯一的条目；
 - signed manifest、release key、`gpg` 和 `gpgv` 可用时，还会根据内置 TAFFISH
   release-key fingerprint 校验签名；
-- 自定义来源在缺少 manifest 时仍可兼容使用，但会明确标记为 unverified；
+- 用 `--local` 选择的包或使用标准版本文件名的平台包在 `auto` 模式下要求两份清单，镜像及 `--archive` 同样适用。
+  其他自定义归档或显式程序 URL 缺少程序清单时可按未校验状态安装；
 - `--verify sha256` 和 `--verify gpg` 会强制对应等级，`--verify none` 是显式退出校验。
 
 通过 `curl | sh` 获取的安装器脚本本身不会被 payload checksum 独立认证。高安全
 bootstrap 应先从独立可信渠道获取并检查 fixed-tag 安装器，再在本地运行。二进制载荷
 仍会在安装前完成上述校验。
+
+### 发布验签
+
+离线安装单个平台包时，从可信渠道取得安装脚本，将校验文件放在压缩包旁，运行 `sh install-taffish.sh --local --verify gpg`。安装器使用固定的发布公钥指纹验证包外和包内两份清单。
+
+若要独立校验两个已下载的平台包，在包所在目录查看公钥指纹。
+
+```sh
+gpg --show-keys --fingerprint TAFFISH-RELEASE-KEY.asc
+```
+
+将主密钥的指纹与可信渠道提供的 TAFFISH 发布指纹 `F863 33E6 0BD6 74F1 59A5  651A B919 3F30 C424 7BB2` 核对。一致后，先验清单签名，再核对两个压缩包的摘要。Linux 上最后一条命令也可用 `sha256sum -c ARCHIVE-SHA256SUMS`。
+
+```sh
+keydir=$(mktemp -d)
+gpg --batch --dearmor --output "$keydir/release.gpg" TAFFISH-RELEASE-KEY.asc
+gpgv --keyring "$keydir/release.gpg" ARCHIVE-SHA256SUMS.asc ARCHIVE-SHA256SUMS
+shasum -a 256 -c ARCHIVE-SHA256SUMS
+```
 
 ## 安装后的语言
 
@@ -72,7 +155,7 @@ TAFFISH_LANGUAGE=en taf -h   # 仅本次使用英文，不修改配置
 协议。管理员可用 `sudo taf config language zh --system` 设置系统默认值；用户偏好和
 环境变量仍有更高优先级。普通重复安装保留已有配置；`--force-config` 会显式替换配置，
 切换语言不需要使用它。外部语言包是可选能力，详见
-[语言配置说明](../README-CN.md#cli-人类语言)。
+[语言配置说明](../docs/standards/zh-CN/localization.md)。
 
 ## 依赖
 
@@ -80,6 +163,9 @@ TAFFISH_LANGUAGE=en taf -h   # 仅本次使用英文，不修改配置
 `awk`、`sed`、`grep`、`tr`、`stat` 和 `id`。官方载荷校验需要 `sha256sum` 或
 `shasum`；在线来源需要 `curl` 或 `wget`。默认 `auto` 模式下，`gpg` 和 `gpgv` 是
 可选签名增强；严格 `--verify gpg` 模式要求两者都存在。
+
+三个预编译命令都已内置 Han Lisp 0.3.0。Apple Silicon 版本用关闭 core 压缩支持的 SBCL 2.4.9 构建，
+只链接 macOS 系统库，无需 Homebrew 或 `zstd`。Linux 版本用 LispWorks 构建。两个平台的用户均无需另外安装 Lisp 实现。
 
 ## 默认路径和 scope
 
@@ -138,14 +224,25 @@ Gitee/中国地区 user 安装：
 curl -fsSL https://gitee.com/taffish-org/taffish/raw/main/install/install-taffish.gitee.sh | sh -s -- --user
 ```
 
-固定版本：
+要将安装脚本和平台包都固定到 0.12.0，请使用该标签下的脚本。
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/install-taffish.sh | sh -s -- --version 0.11.0 --user
+curl -fsSL https://raw.githubusercontent.com/taffish/taffish/v0.12.0/install/install-taffish.sh | sh -s -- --version 0.12.0 --user
 ```
 
-离线安装使用同一发布 tag 的安装脚本和原始 tar.gz 归档。按
-[离线安装步骤](../README-CN.md#本地或离线安装)校验签名并跳过在线索引更新。
+Gitee 对应的命令使用相同的版本标签。
+
+```sh
+curl -fsSL https://gitee.com/taffish-org/taffish/raw/v0.12.0/install/install-taffish.gitee.sh | sh -s -- --version 0.12.0 --user
+```
+
+离线安装 0.11.0 时使用同一标签的原版脚本和源码归档。在 macOS 上，如果 Gitee 要求登录才能下载旧版的单个大文件，可以改用 Gitee 的标签归档。[0.11.0 离线安装说明](https://github.com/taffish/taffish/blob/v0.11.0/README-CN.md#本地或离线安装)
+
+```sh
+curl -fsSL https://gitee.com/taffish-org/taffish/raw/v0.11.0/install/install-taffish.gitee.sh \
+  | sh -s -- --user --version 0.11.0 --verify gpg \
+    --url https://gitee.com/taffish-org/taffish/repository/archive/v0.11.0.tar.gz
+```
 
 显式 bundle URL：
 
@@ -153,9 +250,46 @@ curl -fsSL https://raw.githubusercontent.com/taffish/taffish/main/install/instal
 sh install/install-taffish.sh --user --url https://example.org/taffish.tar.gz
 ```
 
-默认 raw 模式会从固定 `v<version>` tag 的 `target/` 下载三份版本化二进制，并从同一
-tag 获取 completion 和 Vim 文件。可以通过 `--provider`、`--raw-base-url`、
-`--share-url`、三个 binary URL 选项，以及 `--os` / `--arch` 明确覆盖来源或平台。
+GitHub 安装器默认使用 `taffish/taffish`，Gitee 安装器默认使用 `taffish-org/taffish`。
+手动切换站点时一并指定 `--provider` 和 `--repo`。自定义镜像可用 `--raw-base-url` 指定固定标签根地址。
+`--os` 和 `--arch` 可指定平台。默认下载模式下，`--share-url` 可单独指定补全和 Vim
+文件的归档。显式 `--archive`、`--url` 使用所选安装包内的配套文件。
+只要指定 `--taf-url`、`--taffish-url`、`--taffish-mcp-url` 中任一选项，就会切换到逐个下载
+程序的旧式布局。其余程序也需提供 URL，或指定仍提供其余裸程序的 `--raw-base-url` 镜像。
+
+## 运行时许可
+
+官方包包含 TAFFISH 的 Apache 2.0 许可、Han 的 MIT 许可，以及对应平台的运行时文本。
+安装后位于 `<TAFFISH_HOME>/share/licenses/`，文件名为 `TAFFISH-LICENSE.txt`、
+`HAN-LICENSE.txt`，以及 `SBCL-NOTICES.txt` 或 `LISPWORKS-RUNTIME.txt`。
+
+macOS 的 SBCL 文件保留相关组件的版权和许可声明。Linux 文件说明三个程序所含
+LispWorks 专有运行时的使用条款。Professional 版允许应用交付，用户运行 TAFFISH
+无需另行购买或安装 LispWorks。TAFFISH 源码和独立开源组件分别适用各自许可。
+[SBCL 声明](../licenses/SBCL-NOTICES.txt) · [Linux 运行时条款](../licenses/LISPWORKS-RUNTIME.txt)
+
+安装前可直接查看本地包中的文本。
+
+```sh
+sh install/install-taffish.sh --local --show-runtime-license
+```
+
+该命令先验证所选包及其中程序的摘要，再显示运行时文本并退出；显示过程中不会运行
+待安装程序或写入安装目录。可加 `--verify gpg` 严格验签。在线查看时去掉
+`--local`，版本、下载来源及验证选项照常生效。
+
+Linux 的普通交互式安装会在控制终端显示条款，要求输入 `yes`。拒绝或输入结束会
+停止安装。脚本和 CI 安装请先阅读条款，再显式传入接受选项。
+
+```sh
+sh install/install-taffish.sh --local --accept-runtime-license
+```
+
+该选项也适用于 `--user`、`--system` 和在线安装。每次 Linux 安装、重装或升级都
+确认本次选定的文本；没有控制终端时必须显式传参。收据记录 `runtime_license_file`、
+`runtime_license_sha256` 和 `runtime_license_acceptance`（`flag` 或 `terminal`）。
+共享安装应安排使用者阅读、接受条款，或由具有相应授权的管理员代为接受。
+macOS 安装无需运行时接受操作。旧版与自定义包按各自随附的许可材料使用。
 
 ## 常用选项
 
@@ -163,11 +297,17 @@ tag 获取 completion 和 Vim 文件。可以通过 `--provider`、`--raw-base-u
 --user
 --system
 --prefix DIR
+--version VERSION
+--local
+--archive FILE
+--url URL
 --bin-dir DIR
 --taffish-home DIR
 --provider github|gitee
 --raw-base-url URL
 --verify auto|sha256|gpg|none
+--show-runtime-license
+--accept-runtime-license
 --checksum-file FILE / --checksum-url URL
 --signature-file FILE / --signature-url URL
 --release-key-file FILE / --release-key-url URL
@@ -195,10 +335,13 @@ tag 获取 completion 和 Vim 文件。可以通过 `--provider`、`--raw-base-u
 成功后，`<TAFFISH_HOME>/install-receipt.toml` 会记录版本、scope、source kind、实际
 校验等级、SIF 策略、asset 名和 SHA256，但不会保存 URL、token、密码或凭据。
 
+标准平台包还记录 `archive_asset`、`archive_sha256` 和 `archive_verification`。
+收据的 `verification` 取整包校验和程序校验两者中较低的等级。
+
 已有收据必须是普通文件。无论首次安装还是重复安装，如果收据路径是符号链接，
 即使其目标不存在，安装器也会停止。
 
-默认会尝试运行 `taf update`。网络失败只会产生 warning，不会回滚已经校验并提交的核心
+在线安装默认会尝试运行 `taf update`，本地模式跳过此步骤。网络失败只会产生 warning，不会回滚已经校验并提交的核心
 安装。system 安装的 post-install 使用明确的 system scope。
 
 安装器不会修改 shell rc 或 Vim 配置，只会复制文件并输出其位置。参见
@@ -206,10 +349,12 @@ tag 获取 completion 和 Vim 文件。可以通过 `--provider`、`--raw-base-u
 
 ## 测试安装器
 
-仓库中存在当前平台的版本化二进制时运行：
+仓库中备有签名平台包时，先将本机程序准备到新目录，再运行安装器用例：
 
 ```sh
-./test/run-tests.sh --version 0.11.0 --filter installer/
+scratch=$(mktemp -d)
+bash test/ci-release-payloads.sh "$scratch/release"
+./test/run-tests.sh --target-dir "$scratch/release/target" --filter installer/
 ```
 
 十项测试覆盖测试夹具契约、模板漂移和 dry-run、checksum 与 GPG 校验、checksum 失败、危险 archive、
@@ -225,7 +370,7 @@ raw/custom URL、冲突与锁、事务回滚、post-install warning、幂等二�
 发布前应要求 GPG 用例实际通过（全部跳过的运行返回失败）：
 
 ```sh
-./test/run-tests.sh --version 0.11.0 --filter installer/gpg-verification
+./test/run-tests.sh --target-dir "$scratch/release/target" --filter installer/gpg-verification
 ```
 
 同时仍须独立验证最终 manifest 和签名。先决条件和覆盖边界详见
@@ -246,7 +391,7 @@ raw/custom URL、冲突与锁、事务回滚、post-install warning、幂等二�
 
 ```sh
 sudo ./test/run-tests.sh \
-  --version 0.11.0 \
+  --target-dir "$scratch/release/target" \
   --filter installer/system-permissions
 ```
 
@@ -255,8 +400,12 @@ installer 子集需要在 macOS 和 Linux 两个 release 平台运行；发布�
 
 ## 升级和移除
 
-用相同 scope 和目标 `--version` 重新运行安装器，即可升级三个核心二进制。`taf upgrade`
+按原安装范围和路径重新运行安装器，即可升级三个核心命令。`taf upgrade`
 只升级 taf-app。
+
+macOS 用户从 0.11.0 的 SBCL 构建升级时，请保留 Homebrew 的 `zstd`，直到安装器识别完旧命令并完成升级。
+分别执行 `taf --version`、`taffish --version` 和 `taffish-mcp --version`，确认三个命令均报告 0.12.0。
+新版 SBCL 命令启动时无需 Homebrew 的 `zstd`。
 
 当前没有专门的核心 uninstaller。手动移除前，应先卸载不再需要的 app、备份自定义
 `config.toml`，并确认 home 中的 index、日志和镜像 cache 不再需要。

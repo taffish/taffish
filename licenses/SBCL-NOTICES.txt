@@ -1,0 +1,264 @@
+TAFFISH macOS runtime notices
+
+The Apple Silicon editions of taf, taffish and taffish-mcp built with the
+TAFFISH SBCL toolchain include SBCL 2.4.9 and its saved Lisp image, including
+ASDF 3.3.1 / UIOP. SBCL core compression is disabled in this toolchain;
+these programs do not include or require the zstd runtime library.
+
+This file retains the notices from SBCL's COPYING and the separately
+identified components below. TAFFISH and Han Lisp retain their own
+accompanying LICENSE and vendor/han/LICENSE, installed as
+share/licenses/TAFFISH-LICENSE.txt and share/licenses/HAN-LICENSE.txt.
+
+Official SBCL source archive:
+https://downloads.sourceforge.net/project/sbcl/sbcl/2.4.9/sbcl-2.4.9-source.tar.bz2
+SHA-256: 9970e4ebc5d6943dc64d7ca1f52d9b5cd9fc94cef94d233213d78ec75f3605e2
+
+SBCL 2.4.9
+==========
+
+Source: SBCL 2.4.9 official source distribution, COPYING
+https://github.com/sbcl/sbcl/blob/sbcl-2.4.9/COPYING
+
+Steel Bank Common Lisp (SBCL) is free software, and comes with
+absolutely no warranty.
+
+SBCL is derived from CMU CL, which was released into the public
+domain, subject only to the BSD-style "free, but credit must be given
+and copyright notices must be retained" licenses in the LOOP macro
+(from MIT and Symbolics) and in the PCL implementation of CLOS (from
+Xerox).
+
+After CMU CL was released into the public domain, it was maintained by
+volunteers, who continued the tradition of releasing their work into
+the public domain.
+
+All changes to SBCL since the fork from CMU CL have been released into
+the public domain in jurisdictions where this is possible, or under
+the FreeBSD licence where not.
+
+The CityHash mix function as adapted in hopscotch.c has an MIT license.
+
+Thus, there are no known obstacles to copying, using, and modifying
+SBCL freely, as long as copyright notices of MIT, Symbolics, Xerox and
+Gerd Moellmann are retained.
+
+================================================================================
+
+;;;; Portions of LOOP are Copyright (c) 1986 by the Massachusetts Institute
+;;;; of Technology. All Rights Reserved.
+;;;;
+;;;; Permission to use, copy, modify and distribute this software and its
+;;;; documentation for any purpose and without fee is hereby granted,
+;;;; provided that the M.I.T. copyright notice appear in all copies and that
+;;;; both that copyright notice and this permission notice appear in
+;;;; supporting documentation. The names "M.I.T." and "Massachusetts
+;;;; Institute of Technology" may not be used in advertising or publicity
+;;;; pertaining to distribution of the software without specific, written
+;;;; prior permission. Notice must be given in supporting documentation that
+;;;; copying distribution is by permission of M.I.T. M.I.T. makes no
+;;;; representations about the suitability of this software for any purpose.
+;;;; It is provided "as is" without express or implied warranty.
+;;;;
+;;;;      Massachusetts Institute of Technology
+;;;;      77 Massachusetts Avenue
+;;;;      Cambridge, Massachusetts  02139
+
+================================================================================
+
+;;;; Portions of LOOP are Copyright (c) 1989, 1990, 1991, 1992 by Symbolics,
+;;;; Inc. All Rights Reserved.
+;;;;
+;;;; Permission to use, copy, modify and distribute this software and its
+;;;; documentation for any purpose and without fee is hereby granted,
+;;;; provided that the Symbolics copyright notice appear in all copies and
+;;;; that both that copyright notice and this permission notice appear in
+;;;; supporting documentation. The name "Symbolics" may not be used in
+;;;; advertising or publicity pertaining to distribution of the software
+;;;; without specific, written prior permission. Notice must be given in
+;;;; supporting documentation that copying distribution is by permission of
+;;;; Symbolics. Symbolics makes no representations about the suitability of
+;;;; this software for any purpose. It is provided "as is" without express
+;;;; or implied warranty.
+;;;;
+;;;; Symbolics, CLOE Runtime, and Minima are trademarks, and CLOE, Genera,
+;;;; and Zetalisp are registered trademarks of Symbolics, Inc.
+;;;;
+;;;;      Symbolics, Inc.
+;;;;      8 New England Executive Park, East
+;;;;      Burlington, Massachusetts  01803
+
+================================================================================
+
+;;;; copyright information from original PCL sources:
+;;;;
+;;;; Copyright (c) 1985, 1986, 1987, 1988, 1989, 1990 Xerox Corporation.
+;;;; All rights reserved.
+;;;;
+;;;; Use and copying of this software and preparation of derivative works based
+;;;; upon this software are permitted. Any distribution of this software or
+;;;; derivative works must comply with all applicable United States export
+;;;; control laws.
+;;;;
+;;;; This software is made available AS IS, and Xerox Corporation makes no
+;;;; warranty about the software, its performance or its conformity to any
+;;;; specification.
+
+================================================================================
+
+;;; Copyright (C) 2002 Gerd Moellmann <gerd.moellmann@t-online.de>
+;;; All rights reserved.
+;;;
+;;; Redistribution and use in source and binary forms, with or without
+;;; modification, are permitted provided that the following conditions
+;;; are met:
+;;;
+;;; 1. Redistributions of source code must retain the above copyright
+;;;    notice, this list of conditions and the following disclaimer.
+;;; 2. Redistributions in binary form must reproduce the above copyright
+;;;    notice, this list of conditions and the following disclaimer in the
+;;;    documentation and/or other materials provided with the distribution.
+;;; 3. The name of the author may not be used to endorse or promote
+;;;    products derived from this software without specific prior written
+;;;    permission.
+;;;
+;;; THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS
+;;; OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+;;; WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+;;; ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE
+;;; LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+;;; CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT
+;;; OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+;;; BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+;;; LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+;;; (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
+;;; USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH
+;;; DAMAGE.
+
+TLSF-BSD allocator
+==================
+
+Source: SBCL 2.4.9 official source distribution, tlsf-bsd/LICENSE
+https://github.com/sbcl/sbcl/blob/sbcl-2.4.9/tlsf-bsd/LICENSE
+
+TLSF-BSD is freely redistributable under the two-clause BSD License:
+
+Copyright (c) 2016 National Cheng Kung University, Taiwan.
+Copyright (c) 2006-2008, 2011, 2014 Matthew Conte.
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions
+are met:
+1. Redistributions of source code must retain the above copyright
+   notice, this list of conditions and the following disclaimer.
+2. Redistributions in binary form must reproduce the above copyright
+   notice, this list of conditions and the following disclaimer in the
+   documentation and/or other materials provided with the distribution.
+ *
+THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+SUCH DAMAGE.
+
+CityHash mixing function
+========================
+
+Source: SBCL src/runtime/hopscotch.c and Google CityHash COPYING
+https://github.com/sbcl/sbcl/blob/sbcl-2.4.9/src/runtime/hopscotch.c
+https://github.com/google/cityhash/blob/f5dc54147fcce12cefd16548c8e760d68ac04226/COPYING
+
+Copyright (c) 2011 Google, Inc.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+MurmurHash implementation from gRPC
+===================================
+
+Source: SBCL 2.4.9 src/runtime/murmur_hash.c and murmur_hash.h
+https://github.com/sbcl/sbcl/blob/sbcl-2.4.9/src/runtime/murmur_hash.c
+
+Copyright 2015 gRPC authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+The full Apache License, Version 2.0 accompanies this package in LICENSE
+(installed as share/licenses/TAFFISH-LICENSE.txt). The component copyright
+above applies to the gRPC-derived code.
+
+Bob Jenkins perfect hash
+========================
+
+Source: SBCL 2.4.9 src/runtime/perfecthash.c
+https://github.com/sbcl/sbcl/blob/sbcl-2.4.9/src/runtime/perfecthash.c
+
+perfect.c: code to generate code for a hash for perfect hashing.
+(c) Bob Jenkins, September 1996, December 1999
+You may use this code in any way you wish, and it is free.  No warranty.
+I hereby place this in the public domain.
+Source is http://burtleburtle.net/bob/c/perfect.c
+
+ASDF 3.3.1 and UIOP
+===================
+
+Source: ASDF 3.3.1 official archive, header.lisp (LICENSE START/END block)
+https://asdf.common-lisp.dev/archives/asdf-3.3.1.tar.gz
+SBCL bundles this version in contrib/asdf/asdf.lisp and uiop.lisp.
+
+(This is the MIT / X Consortium license as taken from
+ http://www.opensource.org/licenses/mit-license.html on or about
+ Monday; July 13, 2009)
+
+Copyright (c) 2001-2016 Daniel Barlow and contributors
+
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
+
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

@@ -11,8 +11,10 @@ TAFFISH builds binary command-line tools, so upper layers should not contain `#+
 Currently declared support:
 
 ```text
-SBCL, LispWorks
+SBCL, LispWorks, ECL, CCL
 ```
+
+The ECL backend requires Unicode ECL on macOS or Linux. The CCL backend requires a 64-bit Clozure CL on macOS or Linux. See the [source build guide](../build-from-source.md) for the implementation used in each platform release.
 
 Unsupported implementations load `unsupported.lisp`; calling related functions signals `unsupported-host-function`.
 
@@ -34,10 +36,11 @@ Unsupported implementations load `unsupported.lisp`; calling related functions s
 
 | API | Role |
 | --- | --- |
-| `configure-runtime-io` | Configure implementation-specific character I/O before a delivered CLI handles user text. LispWorks selects UTF-8 console I/O; SBCL currently needs no extra setup. |
+| `configure-runtime-io` | Configure implementation-specific character I/O before a delivered CLI handles user text. LispWorks selects UTF-8 console I/O. SBCL, CCL and ECL need no extra setup here. |
 | `standard-input-terminal-p` | Report whether file descriptor 0 is a terminal, so commands can distinguish interactive stdin from an actual pipe. |
 | `standard-error-terminal-p` | Query whether process stderr (file descriptor 2) is a terminal, without reading, writing or spawning a process. |
 | `append-utf8-line` | Append UTF-8 bytes and a newline, retrying short writes. |
+| `atomic-replace-file` | Publish a staged regular file to its literal target name on the same filesystem. Pass the source and destination as strings. Success returns `T`; a directory target or cross-device rename signals `file-error`. |
 | `call-with-exclusive-file-lock` | Hold an OS lock on the given stable path while running a zero-argument function. The default wait is five seconds. |
 
 These functions are host-specific by design. Upper layers must not reproduce
@@ -129,7 +132,7 @@ It also returns through the unified `host-process` wrapper.
 Be very careful when changing the host layer:
 
 1. Do not introduce TAFFISH business logic.
-2. Check SBCL and LispWorks together.
+2. Test the affected backends and both release build environments.
 3. Preserve process return semantics.
 4. Do not weaken directory deletion safety checks.
 5. Shell escaping behavior affects TAFFISH security as a whole.

@@ -1,5 +1,7 @@
 (in-package :han.host)
 
+(defvar *cli-error-prefix* nil)
+
 (defun %report-cli-error (prefix condition)
   ;; Reporting must never fail recursively or fall back to protocol stdout.
   (ignore-errors
@@ -7,17 +9,31 @@
     (finish-output *error-output*))
   nil)
 
+(defun %finish-exit-output (code)
+  ;; A result may first reach stdout's descriptor at exit. Diagnostics can
+  ;; still contain buffered bytes from a progress write the caller handled.
+  (prog1 (handler-case (progn (finish-output *standard-output*) code)
+           (error (condition)
+             (when (and (zerop code) *cli-error-prefix*)
+               (%report-cli-error *cli-error-prefix* condition))
+             (if (zerop code) 1 code)))
+    (ignore-errors (finish-output *error-output*))))
+
 (defmacro %with-cli-error-boundary ((prefix) &body body)
   "Internal boundary for executable entry points, not library operations."
-  `(handler-case
-       (progn ,@body)
-     #+sbcl
-     (sb-sys:interactive-interrupt ()
-       (%report-cli-error ,prefix "Interrupted.")
-       (quit 1))
-     (error (condition)
-       (%report-cli-error ,prefix condition)
-       (quit 1))))
+  `(let ((*cli-error-prefix* ,prefix))
+     (handler-case
+         #+ccl (%call-with-ccl-cli-interrupt (lambda () ,@body))
+         #-ccl (progn ,@body)
+       #+(or sbcl ecl ccl)
+       (#+sbcl sb-sys:interactive-interrupt
+        #+ecl ext:interactive-interrupt
+        #+ccl ccl::interrupt-signal-condition ()
+         (%report-cli-error *cli-error-prefix* "Interrupted.")
+         (quit 1))
+       (error (condition)
+         (%report-cli-error *cli-error-prefix* condition)
+         (quit 1)))))
 
 (defun %call-with-character-output-string (function)
   "Call FUNCTION with an output stream backed by a full CHARACTER string."
@@ -25,7 +41,7 @@
                             :element-type 'character
                             :adjustable t
                             :fill-pointer 0
-                            :initial-element (code-char #x10000))))
+                            :initial-element (or (unicode-scalar-char #x10000) #\Space))))
     (with-output-to-string (out buffer)
       (funcall function out))
     buffer))
@@ -35,6 +51,16 @@
   `(%call-with-character-output-string
     (lambda (,stream)
       ,@body)))
+
+(defmacro with-open-utf8-file ((stream filespec &rest options
+                                &key direction if-exists if-does-not-exist)
+                               &body body)
+  "Like WITH-OPEN-FILE, with a character stream in the host's UTF-8 format."
+  (declare (ignore direction if-exists if-does-not-exist))
+  `(with-open-file (,stream ,filespec :element-type 'character
+                   :external-format #+clisp charset:utf-8 #-clisp :utf-8
+                   ,@options)
+     ,@body))
 
 (defun %utf8-line-string (line)
   "Return LINE followed by one newline as a full CHARACTER string."
@@ -58,51 +84,54 @@
     (ignore-errors
      (close stream))))
 
+(defun working-directory-pathname ()
+  "Return the truename of the current working directory, signaling on failure."
+  (truename "./"))
+
 (defun cwd ()
   "Return the current working directory namestring, or NIL if unavailable."
-  (ignore-errors (namestring (truename "."))))
+  (ignore-errors (namestring (working-directory-pathname))))
 
-(defun %normalize-directory-list (dir &optional (default-kind :relative))
-  (cond
-    ((null dir)
-     (list default-kind))
-    ((and (consp dir)
-          (keywordp (first dir)))
-     dir)
-    (t
-     (cons default-kind dir))))
+(defun current-user ()
+  "Return USER, then LOGNAME, or NIL if neither is set."
+  (or (getenv "USER") (getenv "LOGNAME")))
 
 (defun %->pathname (x)
-  (let ((p (etypecase x
-             (pathname x)
-             (string (pathname x)))))
-    (make-pathname
-     :host (pathname-host p)
-     :device (pathname-device p)
-     :directory (%normalize-directory-list (pathname-directory p))
-     :name (pathname-name p)
-     :type (pathname-type p)
-     :version (pathname-version p)
-     :defaults p)))
+  (etypecase x
+    (pathname x)
+    (string (pathname x))))
+
+(defun pathname-directory-list (path)
+  "Return the directory levels of PATH, starting with :ABSOLUTE or :RELATIVE.
+Signal an error if the pathname host cannot represent those levels."
+  (let* ((p (%->pathname path))
+         (directory (pathname-directory p)))
+    ;; Let the pathname host choose :WILD or :WILD-INFERIORS as appropriate.
+    (when (eq directory :wild)
+      (setf directory (pathname-directory
+                       (make-pathname :directory :wild :defaults p))))
+    (cond ((null directory) (list :relative))
+          ((stringp directory) (list :absolute directory))
+          ((and (consp directory) (member (first directory) '(:absolute :relative)))
+           directory)
+          (t (error "Cannot determine directory levels for ~S (directory component ~S)."
+                    p directory)))))
 
 (defun %directory-pathname-p (x)
   (let ((p (%->pathname x)))
-    (and (null (pathname-name p))
-         (null (pathname-type p)))))
+    (and (member (pathname-name p) '(nil :unspecific))
+         (member (pathname-type p) '(nil :unspecific))
+         t)))
 
 (defun %directory-pathname (x)
-  (let* ((p (%->pathname x))
-         (dir (%normalize-directory-list (pathname-directory p))))
-    (if (%directory-pathname-p p)
+  (let ((p (%->pathname x)))
+    (if (and (null (pathname-name p)) (null (pathname-type p)))
         p
-        (let ((last (file-namestring p)))
+        (let ((file (unless (%directory-pathname-p p) (file-namestring p))))
           (make-pathname
-           :host (pathname-host p)
-           :device (pathname-device p)
-           :directory (append dir
-                              (if (and last (not (string= last "")))
-                                  (list last)
-                                  '()))
+           :directory (if (plusp (length file))
+                          (append (pathname-directory-list p) (list file))
+                          (pathname-directory p))
            :name nil
            :type nil
            :version nil
@@ -130,6 +159,7 @@
             (error condition)))))
     file))
 
+#-(and ecl unicode (or darwin linux))
 (defun %prepare-native-file (path)
   ;; String inputs come from OS interfaces such as argv and environment
   ;; variables. Do not parse their metacharacters as CL pathname patterns.
@@ -141,7 +171,51 @@
 (defun %native-open-name (path)
   (etypecase path
     (string path)
-    (pathname (namestring path))))
+    (pathname #+ccl (ccl:native-translated-namestring path)
+              #-ccl (namestring path))))
+
+(define-condition %replacement-file-error (file-error)
+  ((reason :initarg :reason :reader %replacement-error-reason))
+  (:report (lambda (condition stream)
+             (format stream "Atomic file replacement failed for ~S: ~A"
+                     (file-error-pathname condition)
+                     (%replacement-error-reason condition)))))
+
+(defun %replacement-file-id (name allow-missing)
+  (check-type name string)
+  (when (or (zerop (length name)) (find (code-char 0) name)
+            (find-if-not #'char-unicode-scalar name))
+    (error '%replacement-file-error :pathname name
+           :reason "expected a nonempty UTF-8 filename without NUL"))
+  (multiple-value-bind (mode device inode) (%literal-file-stat name)
+    ;; Backends return a negative errno or the mode from lstat(2).
+    (cond ((and allow-missing (= mode -2)) (values nil nil)) ; ENOENT
+          ((minusp mode)
+           (error '%replacement-file-error :pathname name
+                  :reason (format nil "cannot inspect file (errno ~D)" (- mode))))
+          ((/= #o100000 (logand mode #o170000))
+           (error '%replacement-file-error :pathname name :reason "expected a regular file"))
+          (t (values device inode)))))
+
+(defun atomic-replace-file (source target)
+  "Atomically rename regular file SOURCE onto literal UTF-8 filename TARGET.
+Return T. TARGET may be absent. A symlink or other non-regular endpoint,
+identical file identities, or a failed rename signals FILE-ERROR. The caller
+must control concurrent changes to the two directory entries."
+  #+(and (or sbcl lispworks (and ccl 64-bit-target) (and ecl unicode)) (or darwin macosx linux))
+  (multiple-value-bind (source-device source-inode) (%replacement-file-id source nil)
+    (multiple-value-bind (target-device target-inode) (%replacement-file-id target t)
+      (when (and (eql source-device target-device) (eql source-inode target-inode))
+        ;; POSIX rename would silently succeed without removing the source.
+        (error '%replacement-file-error :pathname target :reason "source and target are the same file"))
+      (let ((errno (%literal-rename-errno source target)))
+        (unless (zerop errno)
+          (error '%replacement-file-error :pathname target
+                 :reason (format nil "rename from ~S failed (errno ~D)" source errno))))
+      t))
+  #-(and (or sbcl lispworks (and ccl 64-bit-target) (and ecl unicode)) (or darwin macosx linux))
+  (error "Atomic file replacement is unsupported on ~A/~A (~S to ~S)."
+         (lisp-implementation-type) (software-type) source target))
 
 (defun call-with-exclusive-file-lock (lock-path function &key (timeout 5))
   "Call FUNCTION with no arguments while holding an exclusive flock on LOCK-PATH.
@@ -149,7 +223,7 @@ All cooperating processes must keep and use the same lock file. Return the
 callback's values. On contention, wait at most TIMEOUT seconds before
 signaling an error. Zero makes a single nonblocking attempt."
   (check-type timeout (real 0))
-  #+(and (or sbcl lispworks) (or darwin macosx linux))
+  #+(and (or sbcl lispworks (and ccl 64-bit-target) (and ecl unicode)) (or darwin macosx linux))
   (let* ((file (%prepare-native-file lock-path))
          ;; O_WRONLY | O_CREAT | O_NONBLOCK | O_CLOEXEC (Darwin and Linux
          ;; x86-64/arm64 ABIs). Never truncate or unlink this stable inode.
@@ -171,7 +245,7 @@ signaling an error. Zero makes a single nonblocking attempt."
                         (error "Timed out waiting for lock ~A." file))
                       (sleep (min 1/100 (/ remaining internal-time-units-per-second)))))
         (%close-lock-file fd))))
-  #-(and (or sbcl lispworks) (or darwin macosx linux))
+  #-(and (or sbcl lispworks (and ccl 64-bit-target) (and ecl unicode)) (or darwin macosx linux))
   (error "File locking is unsupported on ~A/~A (lock ~A for ~S)."
          (lisp-implementation-type) (software-type) lock-path function))
 
@@ -203,6 +277,16 @@ signaling an error. Zero makes a single nonblocking attempt."
          (%probe-directory-found-p dir found)
          (%directory-pathname found))))
 
+(defun home-directory ()
+  "Return the namestring of an existing home directory, or NIL.
+Try HOME first, then the implementation's user home directory."
+  (flet ((existing-directory (path)
+           (when (or (stringp path) (pathnamep path))
+             (let ((dir (directory-exists-p path)))
+               (when dir (namestring dir))))))
+    (or (existing-directory (getenv "HOME"))
+        (existing-directory (ignore-errors (user-homedir-pathname))))))
+
 (defun %directory-entry-wildcard (directory)
   (make-pathname :name :wild
                  :type :wild
@@ -210,7 +294,7 @@ signaling an error. Zero makes a single nonblocking attempt."
 
 (defun %subdirectory-wildcard (directory)
   (let* ((dir (%directory-pathname directory))
-         (dir-list (%normalize-directory-list (pathname-directory dir))))
+         (dir-list (pathname-directory-list dir)))
     (make-pathname :host (pathname-host dir)
                    :device (pathname-device dir)
                    :directory (append dir-list (list :wild))
@@ -235,8 +319,8 @@ signaling an error. Zero makes a single nonblocking attempt."
         (right-path (%->pathname right)))
     (and (equal (pathname-host left-path) (pathname-host right-path))
          (equal (pathname-device left-path) (pathname-device right-path))
-         (equal (pathname-directory left-path)
-                (pathname-directory right-path)))))
+         (equal (pathname-directory-list left-path)
+                (pathname-directory-list right-path)))))
 
 (defun %direct-file-child-p (directory file)
   (%same-pathname-location-p
@@ -250,7 +334,7 @@ signaling an error. Zero makes a single nonblocking attempt."
   (let* ((parent (or (directory-exists-p directory)
                      (%directory-pathname directory)))
          (child-path (%directory-pathname child))
-         (child-directory (pathname-directory child-path)))
+         (child-directory (pathname-directory-list child-path)))
     (and (cdr child-directory)
          (%same-pathname-location-p
           parent
@@ -314,22 +398,42 @@ signaling an error. Zero makes a single nonblocking attempt."
 (defparameter *default-executable-search-paths*
   '("/usr/local/bin" "/usr/bin" "/bin" "/usr/sbin" "/sbin"
     "/opt/homebrew/bin" "/opt/local/bin")
-  "Fallback executable search paths used by host internals.")
+  "Unix directories searched after the entries in PATH.")
 
-(defun %find-executable (program)
+(defun %find-executable (program &key all)
   (let ((search-dirs (append
                       (let ((path (getenv "PATH")))
                         (when path
                           (%split-string path #\:)))
-                      *default-executable-search-paths*)))
-    (loop for dir-path in search-dirs
-          for dir = (directory-exists-p
-                     (if (string= dir-path "") "." dir-path))
-          when dir
-            do (let ((found (file-exists-p
-                             (merge-pathnames program dir))))
-                 (when found
-                   (return (namestring found)))))))
+                      *default-executable-search-paths*))
+        (matches '()))
+    (dolist (entry search-dirs)
+      (let* ((dir (directory-exists-p (if (string= entry "") "." entry)))
+             (file (and dir (file-exists-p (merge-pathnames program dir)))))
+        (when file
+          (unless all
+            (return-from %find-executable (namestring file)))
+          (pushnew (namestring file) matches :test #'string=))))
+    (when matches (values-list (nreverse matches)))))
+
+(defun find-executable (program)
+  "Return existing files named PROGRAM as separate namestring values, or NIL.
+A path containing a slash or backslash is tried directly first. Otherwise
+search PATH, then the Unix fallback directories. Only file existence is tested."
+  (when (and (stringp program) (plusp (length program)))
+    (when (or (find #\/ program) (find #\\ program))
+      (let ((file (file-exists-p program)))
+        (when file (return-from find-executable (namestring file)))))
+    (%find-executable program :all t)))
+
+(defun shell-command-argv (command &optional shell)
+  "Build an argument list for running COMMAND with SHELL.
+When SHELL is NIL, search for bash first, then sh. An explicit SHELL names a file."
+  (let ((shell-path (or shell (find-executable "bash") (find-executable "sh")
+                        (error "No shell executable found."))))
+    (unless (file-exists-p shell-path)
+      (error "Shell executable does not exist: ~A" shell-path))
+    (list shell-path "-c" command)))
 
 (defun delete-directory-tree (directory &key (validate t) (if-does-not-exist :ignore))
   "Delete DIRECTORY recursively."
@@ -380,20 +484,7 @@ signaling an error. Zero makes a single nonblocking attempt."
       (write-char #\' out))))
 
 (defun %host-temp-file (prefix type)
-  (labels ((call-symbol (package-name symbol-name)
-             (let ((package (find-package package-name)))
-               (when package
-                 (multiple-value-bind (symbol status)
-                     (find-symbol symbol-name package)
-                   (declare (ignore status))
-                   (when (and symbol (fboundp symbol))
-                     (ignore-errors (funcall symbol)))))))
-           (process-token ()
-             (or
-              #+sbcl (call-symbol "SB-UNIX" "UNIX-GETPID")
-              #+lispworks (call-symbol "SYSTEM" "GETPID")
-              0))
-           (urandom-token ()
+  (labels ((urandom-token ()
              (ignore-errors
                (with-open-file (in "/dev/urandom"
                                    :direction :input
@@ -405,12 +496,12 @@ signaling an error. Zero makes a single nonblocking attempt."
            (unique-token ()
              (or (urandom-token)
                  (random 1000000000))))
-    (loop repeat 1000
+    (loop for attempt below 1000
           for path = (merge-pathnames
                       (make-pathname
                        :name (format nil "~A-~36R-~A-~36R-~36R-~36R"
                                      prefix
-                                     (or (process-token) 0)
+                                     (or (ignore-errors (current-process-id)) 0)
                                      (gensym "TMP")
                                      (get-universal-time)
                                      (get-internal-real-time)
@@ -433,7 +524,7 @@ signaling an error. Zero makes a single nonblocking attempt."
 
 (defun %read-file-to-string (path)
   (if (file-exists-p path)
-      (with-open-file (in path :direction :input)
+      (with-open-file (in path :direction :input #+ccl :external-format #+ccl :utf-8)
         (with-output-to-string (out)
           (loop for char = (read-char in nil nil)
                 while char
@@ -442,6 +533,7 @@ signaling an error. Zero makes a single nonblocking attempt."
 
 (defun %copy-stream-to-file (stream path)
   (with-open-file (out path :direction :output
+                            #+ccl :external-format #+ccl :utf-8
                             :if-exists :supersede
                             :if-does-not-exist :create)
     (loop for char = (read-char stream nil nil)
@@ -459,11 +551,11 @@ signaling an error. Zero makes a single nonblocking attempt."
          (declare (ignorable out)))
        (values path (cons path temp-files))))
     ((eq input t)
-     #+lispworks
+     #+(or lispworks ecl (and ccl 64-bit-target (or darwin linux)))
      (let ((path (%host-temp-file "han-host-stdin" "tmp")))
        (%copy-stream-to-file *standard-input* path)
        (values path (cons path temp-files)))
-     #-lispworks
+     #-(or lispworks ecl (and ccl 64-bit-target (or darwin linux)))
      (values *standard-input* temp-files))
     ((streamp input)
      (let ((path (%host-temp-file "han-host-input" "tmp")))
@@ -511,10 +603,10 @@ signaling an error. Zero makes a single nonblocking attempt."
     (%delete-file-safely file)))
 
 (defun %signal-exit-code (exit-code signal-code)
-  (cond
-    ((integerp exit-code) exit-code)
-    ((integerp signal-code) (+ 128 signal-code))
-    (t exit-code)))
+  ;; LispWorks can return (values 0 signal) for a child killed by a signal.
+  (if (typep signal-code '(integer 1))
+      (+ 128 signal-code)
+      exit-code))
 
 (defun %check-sync-exit-code (command exit-code ignore-error-status)
   (when (and (not ignore-error-status)

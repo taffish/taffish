@@ -2,8 +2,8 @@
   :description "TAFFISH project (core + cli)"
   :author "Kaiyuan Han"
   :license "Apache-2.0"
-  :version "0.11.0"
-  :depends-on ("han")
+  :version "0.12.0"
+  :depends-on ((:version "han" "0.3.0"))
   :serial t
   :components
   (;; -------------------------

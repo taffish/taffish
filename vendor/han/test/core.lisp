@@ -48,14 +48,12 @@
      t))
 
 (defmacro check-error ((condition-type) &body body)
-  `(handler-case
-       (progn
-         ,@body
-         (error "Expected error of type ~S, but no error was signaled."
-                ',condition-type))
-     (,condition-type (c)
-       (declare (ignore c))
-       t)))
+  `(handler-case (progn ,@body)
+     (,condition-type () t)
+     (:no-error (&rest values)
+       (declare (ignore values))
+       (error "Expected error of type ~S, but no error was signaled."
+              ',condition-type))))
 
 (defun run-test (name)
   (let ((test (find name *tests* :key #'test-case-name :test #'eq)))
